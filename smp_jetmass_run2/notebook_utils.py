@@ -717,3 +717,110 @@ def get_group_tag(index: int, era: str, group_mode: str) -> str:
             return era_tags[index] if index < len(era_tags) else f"group{index}"
         return era
     return era if era != "all" else "all"
+
+
+def run_from_config(cfg, *, client=None, repo_root=None, log=print):
+    """Build fileset(s) for cfg, run the matching channel processor, save pickles
+    under outputs/, and return (output_paths, last_out).
+
+    Single source of truth shared by scripts/run_analysis_cli.py and
+    notebooks/run_analysis.ipynb. `cfg` should already be validated
+    (validate_analysis_config). If `client` is None one is created from cfg and
+    closed at the end; if a client is passed it is reused and left open (so a
+    notebook can keep one dask client across runs).
+    """
+    import dask
+
+    cfg = validate_analysis_config(cfg)
+    paths = get_analysis_paths(repo_root)
+    samplePath = SamplePath(cfg["era"])
+    prependstr = cfg["prependstr"]
+    dataset = cfg["dataset"]
+    group_mode = cfg["group_mode"]
+
+    NanoAODSchema.warn_missing_crossrefs = False
+    dask.config.set({
+        "distributed.logging.distributed": "error",
+        "distributed.logging.bokeh": "error",
+        "distributed.logging.tornado": "error",
+    })
+
+    log("Configuration:")
+    for key in sorted(cfg):
+        log(f"  {key} = {cfg[key]}")
+
+    own_client = client is None
+    if own_client:
+        client = ensure_client(
+            casa=cfg["casa"], test=cfg["test"],
+            useDefault=cfg["useDefault"], executor_mode=cfg["executor_mode"],
+        )
+        upload_package_if_casa(client, casa=cfg["casa"])
+
+    outputs: list[str] = []
+    last_out = None
+
+    def _run_and_save(fileset, index):
+        nonlocal last_out
+        out = run_once(
+            fileset, client=client, test=cfg["test"], data=dataset == "data",
+            mode=cfg["mode"], channel=cfg["channel"],
+            systematic_profile=cfg["systematic_profile"],
+            chunksize=cfg["chunksize"], chunksize_test=cfg["chunksize_test"],
+            executor_mode=cfg["executor_mode"],
+        )
+        tag = get_group_tag(index, cfg["era"], group_mode)
+        fout = make_output_filename(
+            data=dataset == "data", dataset=dataset, tag=tag, mode=cfg["mode"],
+            channel=cfg["channel"], test=cfg["test"],
+            output_dir=paths.repo_root / "outputs",
+        )
+        save_output(out, fout)
+        log(f"[{index + 1}] Saved: {fout}")
+        last_out = out
+        outputs.append(fout)
+
+    try:
+        if cfg["channel"] in ("dijet", "trijet"):
+            fileset = build_hadronic_fileset(
+                paths.samples_hadronic_dir, dataset=dataset, era=cfg["era"],
+                redirector=cfg["redirector"], prepend=prependstr,
+            )
+            _run_and_save(fileset, 0)
+        elif dataset == "data":
+            for i, group in enumerate(iter_groups(samplePath.data, group_mode)):
+                _run_and_save(build_fileset_from_txts(
+                    group, paths.samples_data_dir, prependstr, split_ht=False), i)
+        elif dataset == "pythia":
+            for i, group in enumerate(iter_groups(samplePath.pythia, group_mode)):
+                _run_and_save(build_fileset_from_txts(
+                    group, paths.samples_mc_dir, prependstr,
+                    split_ht=True, ht_bins=HT_BINS), i)
+        elif dataset == "pythia_local":
+            _run_and_save(build_local_pythia_fileset(
+                paths.samples_mc_local_dir, cfg["era"]), 0)
+        elif dataset == "pythia2":
+            _run_and_save(build_fileset_from_txts(
+                ["inclusive_UL16NanoAODv9.txt"], paths.samples_mc_dir, prependstr,
+                split_ht=False), 0)
+        elif dataset == "herwig":
+            for i, group in enumerate(iter_groups(samplePath.herwig, group_mode)):
+                _run_and_save(build_fileset_from_txts(
+                    group, paths.samples_mc_dir, prependstr, split_ht=False), i)
+        elif dataset == "powheg":
+            _run_and_save(build_fileset_from_txts(
+                ["powheg_UL18NanoAODv9_inclusive.txt"], paths.samples_mc_dir,
+                prependstr, split_ht=False), 0)
+        elif dataset == "st":
+            _run_and_save(build_fileset_from_txts(
+                ST_FILES, paths.samples_mc_dir, prependstr, split_ht=False), 0)
+        elif dataset == "backgrounds":
+            _run_and_save(build_backgrounds_fileset(paths.samples_bkg_dir, prependstr), 0)
+        else:
+            log(f"Dataset is {dataset} and it is not in the list")
+    finally:
+        if own_client and client is not None:
+            client.close()
+
+    log(f"Number of group outputs: {len(outputs)}")
+    return outputs, last_out

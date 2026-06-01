@@ -38,7 +38,15 @@ pip install -e ".[dask]"    # + dask/distributed + fsspec-xrootd for cluster run
 
 ## Running
 
-### CLI (recommended) — all three channels, one entry point
+### Notebook (interactive tuning) — `notebooks/run_analysis.ipynb`
+
+`ipywidgets` UI to pick channel / dataset / era / mode / systematics / executor,
+**lock** them to `configs/last_run.json`, then run + plot inline. The channel
+dropdown updates the allowed dataset/mode options automatically. It runs through the
+exact same `notebook_utils.run_from_config` path as the CLI, so a notebook-tuned
+config can be replayed headlessly: `--config configs/last_run.json`.
+
+### CLI — all three channels, one entry point
 
 ```bash
 python scripts/run_analysis_cli.py --config configs/dijet_pythia_2018.json
