@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "smp-jetmass-run2"
+version = "0.1.0"
+dependencies = [
+    "coffea>=2025.7.0",
+    "correctionlib>=2.7",
+    "hist>=2.8",
+    "numpy>=1.26",
+    "pandas>=2.0",
+    "uproot>=5",
+    "vector>=1.4",
+]
+
+[project.optional-dependencies]
+dask = [
+    "dask[distributed]>=2025.5.0",
+    "dask-awkward",
+    "fsspec-xrootd>=0.5.1",
+]
+test = [
+    "pytest>=8",
+]
+
+[tool.setuptools.packages.find]
+include = ["smp_jetmass_run2*"]
+
+[tool.setuptools.package-data]
+"smp_jetmass_run2" = ["corrections/**/*"]

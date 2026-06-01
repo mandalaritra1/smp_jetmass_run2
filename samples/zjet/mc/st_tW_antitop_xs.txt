@@ -1,0 +1,4 @@
+st_tW_antitop 34.97
+st_tW_top 34.91	
+st_t-channel_antitop 67.93
+st_t-channel_top   69.09	
