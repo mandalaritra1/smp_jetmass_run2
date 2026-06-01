@@ -93,7 +93,12 @@ class DijetProcessor(processor.ProcessorABC):
         #### jk axis only present in jackknife modes (mirrors zjet)
         jk_axes = [jk_axis] if self._do_jk else []
 
-        self.hists = processor.dict_accumulator({})
+        # NOTE: keep this a PLAIN dict (not processor.dict_accumulator). coffea
+        # reduces a plain-dict accumulator with recursive MutableMapping merging,
+        # which correctly handles the nested plain `cutflow` dict; a dict_accumulator
+        # would instead do `cutflow += cutflow` and crash on multi-chunk reduction.
+        # Hist / column_accumulator / defaultdict_accumulator leaves are Addable.
+        self.hists = {}
         self.hists['cutflow'] = {}
         self.hists['jkflow'] = processor.defaultdict_accumulator(int)
         #### DATA only: log (run, lumi, event) of finally selected events so the
