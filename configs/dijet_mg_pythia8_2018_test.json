@@ -1,0 +1,17 @@
+{
+  "channel": "dijet",
+  "dataset": "mg_pythia8",
+  "era": "2018",
+  "dataset_filter": "HT1000to1500",
+  "mode": "minimal",
+  "systematic_profile": "no_syst",
+  "executor_mode": "futures",
+  "casa": false,
+  "test": true,
+  "useDefault": false,
+  "chunksize": 50000,
+  "chunksize_test": 50000,
+  "group_mode": "all_in_one",
+  "redirector": "lpc",
+  "prependstr": "root://cmsxrootd.fnal.gov/"
+}

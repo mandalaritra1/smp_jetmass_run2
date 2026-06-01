@@ -65,6 +65,12 @@ Key fields (defaults filled in by `validate_analysis_config`):
 | `executor_mode` | where it runs | `iterative` · `futures` · `dask-local` · `dask-lpc` · `dask-casa` |
 | `casa` / `redirector` / `prependstr` | file access | `dask-casa` uses `casa`+`root://xcache/`; LPC/local use a redirector like `root://cmsxrootd.fnal.gov/` |
 | `test` | 1 file / 1 chunk smoke run | `true`/`false` |
+| `dataset_filter` | hadronic only: keep DAS names containing this substring | e.g. `"HT1000to1500"` |
+
+> **Hadronic test tip:** the HT-binned MG+pythia / herwig samples start at low HT
+> (HT200to300, …) where nothing passes the dijet/trijet `pt>200` / 3-jet selection,
+> so `test: true` on the first bin is vacuous. Set `dataset_filter` to a high-HT bin
+> (e.g. `HT1000to1500`) for a meaningful test — see `configs/dijet_mg_pythia8_2018_test.json`.
 
 Channel → processor dispatch is `notebook_utils.get_processor_class(mode, channel)`;
 hadronic filesets are built by `build_hadronic_fileset` from `samples/hadronic/*.json`

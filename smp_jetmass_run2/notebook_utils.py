@@ -123,6 +123,9 @@ ANALYSIS_CONFIG_DEFAULTS = {
     "redirector": "casa",
     "prependstr": "root://xcache/",
     "systematic_profile": "all_syst",
+    # optional DAS-name substring filter (hadronic): e.g. "HT1000to1500" to point a
+    # quick test at a high-HT bin (low-HT bins select nothing in dijet/trijet).
+    "dataset_filter": "",
 }
 
 
@@ -388,7 +391,15 @@ def build_hadronic_fileset(
     era: str,
     redirector: str = "casa",
     prepend: str = "root://xcache/",
+    name_filter: str | None = None,
 ) -> dict[str, list[str]]:
+    """Build a hadronic fileset from samples/hadronic/*.json.
+
+    `name_filter`, if given, keeps only datasets whose DAS name contains that
+    substring (e.g. "HT1000to1500") — useful to point a quick test at a high-HT
+    bin, since the low-HT bins (HT200to300, ...) yield no events passing the
+    dijet/trijet pt>200 / 3-jet selection.
+    """
     if dataset not in HADRONIC_FILESETS:
         raise ValueError(
             f"Unsupported hadronic dataset '{dataset}'. "
@@ -417,6 +428,8 @@ def build_hadronic_fileset(
             continue
         for das, files in datasets.items():
             if qualifier and qualifier not in das:
+                continue
+            if name_filter and name_filter not in das:
                 continue
             urls = []
             for path in files:
@@ -785,6 +798,7 @@ def run_from_config(cfg, *, client=None, repo_root=None, log=print):
             fileset = build_hadronic_fileset(
                 paths.samples_hadronic_dir, dataset=dataset, era=cfg["era"],
                 redirector=cfg["redirector"], prepend=prependstr,
+                name_filter=(cfg.get("dataset_filter") or None),
             )
             _run_and_save(fileset, 0)
         elif dataset == "data":
