@@ -88,6 +88,14 @@ class TrijetProcessor(processor.ProcessorABC):
         self.hists = processor.dict_accumulator({})
         self.hists['cutflow'] = {}
         self.hists['jkflow'] = processor.defaultdict_accumulator(int)
+        #### DATA only: log (run, lumi, event) of finally selected events so the
+        #### three channels (zjet/dijet/trijet) can be checked for orthogonality.
+        if not self.do_gen:
+            self.hists['event_id'] = processor.dict_accumulator({
+                'run': processor.column_accumulator(np.array([], dtype=np.int64)),
+                'luminosityBlock': processor.column_accumulator(np.array([], dtype=np.int64)),
+                'event': processor.column_accumulator(np.array([], dtype=np.int64)),
+            })
 
         mass_modes = ("minimal", "mass_jk", "validation", "full")
         rho_modes = ("minimal_rho", "rho_jk", "validation", "full")
@@ -599,7 +607,15 @@ class TrijetProcessor(processor.ProcessorABC):
                 #######################
                 final_weights = weights_obj.weight()[sel.all("final_seq")]
                 jet = events_corr[sel.all("final_seq")].FatJet[:,2]
-                    
+
+                #### Orthogonality log: record (run, lumi, event) of finally selected
+                #### DATA events (one row per event). data forces nominal, so no dup.
+                if not self.do_gen:
+                    _fin = events_corr[sel.all("final_seq")]
+                    out['event_id']['run'] += processor.column_accumulator(ak.to_numpy(_fin.run).astype(np.int64))
+                    out['event_id']['luminosityBlock'] += processor.column_accumulator(ak.to_numpy(_fin.luminosityBlock).astype(np.int64))
+                    out['event_id']['event'] += processor.column_accumulator(ak.to_numpy(_fin.event).astype(np.int64))
+
                 ##################
                 #### Apply final selections to GEN and fill any plots requiring gen, including resp. matrices
                 ##################

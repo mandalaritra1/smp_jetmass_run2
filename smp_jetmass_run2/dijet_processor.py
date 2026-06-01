@@ -96,6 +96,14 @@ class DijetProcessor(processor.ProcessorABC):
         self.hists = processor.dict_accumulator({})
         self.hists['cutflow'] = {}
         self.hists['jkflow'] = processor.defaultdict_accumulator(int)
+        #### DATA only: log (run, lumi, event) of finally selected events so the
+        #### three channels (zjet/dijet/trijet) can be checked for orthogonality.
+        if not self.do_gen:
+            self.hists['event_id'] = processor.dict_accumulator({
+                'run': processor.column_accumulator(np.array([], dtype=np.int64)),
+                'luminosityBlock': processor.column_accumulator(np.array([], dtype=np.int64)),
+                'event': processor.column_accumulator(np.array([], dtype=np.int64)),
+            })
 
         mass_modes = ("minimal", "mass_jk", "validation", "full")
         rho_modes  = ("minimal_rho", "rho_jk", "validation", "full")
@@ -679,7 +687,15 @@ class DijetProcessor(processor.ProcessorABC):
                 dijet = ak.flatten(events_corr[sel.all("final_seq")].FatJet[:,:2], axis=1)
                 ##### define final dijet weights for filling nominal MC or data
                 dijet_weights = np.repeat(final_weights, 2)
-                
+
+                #### Orthogonality log: record (run, lumi, event) of finally selected
+                #### DATA events (one row per event). data forces nominal, so no dup.
+                if not self.do_gen:
+                    _fin = events_corr[sel.all("final_seq")]
+                    out['event_id']['run'] += processor.column_accumulator(ak.to_numpy(_fin.run).astype(np.int64))
+                    out['event_id']['luminosityBlock'] += processor.column_accumulator(ak.to_numpy(_fin.luminosityBlock).astype(np.int64))
+                    out['event_id']['event'] += processor.column_accumulator(ak.to_numpy(_fin.event).astype(np.int64))
+
                 #### Make eta phi plot to check effects of cuts
                 # if not self.jk: fill_hist(out, "jet_eta_phi_preveto", dataset=dataset, systematic=jetsyst, phi=dijet.phi, eta=dijet.eta, weight=dijet_weights)      
                 #### Apply jet veto map

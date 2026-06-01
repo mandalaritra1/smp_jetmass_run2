@@ -92,6 +92,23 @@ out = cls(do_gen=True, mode="minimal").postprocess(out)   # applies xs*lumi/sumw
 `mode="minimal"` → mass + `response_matrix_{u,g}`; `mode="minimal_rho"` → rho +
 `response_matrix_rho_{u,g}`; `*_jk` modes add the `jk` axis.
 
+## Channel orthogonality (DATA)
+
+Each channel's data processor logs the `(run, luminosityBlock, event)` of every
+**finally selected** data event into an `event_id` accumulator
+(`processor.column_accumulator`). To check whether the three channels select
+disjoint events, run each on the same data and compare:
+
+```python
+from smp_jetmass_run2.notebook_utils import event_id_set, channel_overlap
+channel_overlap({"dijet": out_dijet, "trijet": out_trijet, "zjet": out_zjet})
+# -> {'n[dijet]': ..., 'n[trijet]': ..., 'overlap[dijet&trijet]': ..., ...}
+```
+
+A non-zero `overlap[...]` means the selections share events (e.g. dijet and trijet
+overlap because a ≥3-jet event whose leading two jets are back-to-back passes both
+topologies). Only present for data runs (`do_gen=False`).
+
 ## Corrections reconciliation (key decisions)
 
 The hadronic processors reuse the Z+jet correction functions

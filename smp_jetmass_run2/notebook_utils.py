@@ -824,3 +824,33 @@ def run_from_config(cfg, *, client=None, repo_root=None, log=print):
 
     log(f"Number of group outputs: {len(outputs)}")
     return outputs, last_out
+
+
+def event_id_set(out):
+    """Set of (run, lumi, event) tuples logged for finally-selected DATA events.
+
+    The dijet/trijet (and, when added, zjet) data processors record an `event_id`
+    accumulator. Returns an empty set if the output has none (e.g. an MC run).
+    """
+    eid = out.get("event_id") if hasattr(out, "get") else None
+    if eid is None:
+        return set()
+    run = eid["run"].value
+    lumi = eid["luminosityBlock"].value
+    evt = eid["event"].value
+    return set(zip(run.tolist(), lumi.tolist(), evt.tolist()))
+
+
+def channel_overlap(outs: dict):
+    """Pairwise orthogonality report for DATA outputs.
+
+    `outs` maps a channel label -> processor output. Returns a dict with the
+    per-channel final-event counts and the size of each pairwise intersection
+    (0 everywhere == fully orthogonal selections).
+    """
+    import itertools
+    sets = {k: event_id_set(v) for k, v in outs.items()}
+    report = {f"n[{k}]": len(s) for k, s in sets.items()}
+    for a, b in itertools.combinations(sets, 2):
+        report[f"overlap[{a}&{b}]"] = len(sets[a] & sets[b])
+    return report
