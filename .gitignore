@@ -78,3 +78,5 @@ tests/.analysis_widget_config.json
 .analysis_widget_config.json
 outputs/
 .claude/
+# notebook scratch (rewritten each "lock")
+configs/last_run.json
