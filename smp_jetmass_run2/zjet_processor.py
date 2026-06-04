@@ -25,6 +25,7 @@ from coffea.jetmet_tools import JetResolutionScaleFactor
 from coffea.jetmet_tools import FactorizedJetCorrector, JetCorrectionUncertainty
 from coffea.jetmet_tools import JECStack, CorrectedJetsFactory
 from .hist_utils import *
+from . import smp_utils as zjet_smp_utils
 from .smp_utils import *
 
 
@@ -1055,7 +1056,7 @@ class QJetMassProcessor(processor.ProcessorABC):
                 twoGen_mm_sel = sel.require(twoGen_mm = True)
 
 
-                gen_jet, z_jet_dphi_gen = get_dphi( z_gen, events0.GenJetAK8 )
+                gen_jet, z_jet_dphi_gen = zjet_smp_utils.get_dphi( z_gen, events0.GenJetAK8 )
                 z_jet_dr_gen = gen_jet.delta_r(z_gen)
 
                 gensubjets = events0.SubGenJetAK8
@@ -1331,7 +1332,7 @@ class QJetMassProcessor(processor.ProcessorABC):
                     ak.sum((recojets.pt > 0) & (np.abs(recojets.eta) < 2.5) & (recojets.jetId == 6) & hem_sel, axis=1) >= 1 )
 
 
-                reco_jet, z_jet_dphi_reco = get_dphi( z_reco, recojets )
+                reco_jet, z_jet_dphi_reco = zjet_smp_utils.get_dphi( z_reco, recojets )
                 
             
                 #reco_jet = ak.firsts(recojets)
