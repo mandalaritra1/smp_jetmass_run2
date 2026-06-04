@@ -236,6 +236,7 @@ class QJetMassProcessor(processor.ProcessorABC):
             
             register_hist(self.hists, "pt_jet0", [dataset_axis, pt_axis, syst_axis])
             register_hist(self.hists, "pt_flavor_jet0_gen", [dataset_axis, pt_axis, n_axis])
+            register_hist(self.hists, "y_flavor_jet0_gen", [dataset_axis, y_axis, n_axis])
             register_hist(self.hists, "eta_jet0", [dataset_axis, eta_axis, syst_axis])
             register_hist(self.hists, "phi_jet0", [dataset_axis, phi_axis, syst_axis])
             register_hist(self.hists, "mass_jet0", [dataset_axis, mass_axis, syst_axis])
@@ -2079,6 +2080,7 @@ class QJetMassProcessor(processor.ProcessorABC):
                                               mpt_gen = 2*np.log10(mgen_g/(ptgen*jetR)), weight = weights_gen, systematic = syst)
 
                                     fill_hist(self.hists, "pt_flavor_jet0_gen", dataset = dataset, pt = ptgen, n = parton_flavor )
+                                    fill_hist(self.hists, "y_flavor_jet0_gen", dataset = dataset, y = gen_jet_truth.rapidity, n = parton_flavor )
 
                                     
 
