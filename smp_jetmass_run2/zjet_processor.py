@@ -1970,8 +1970,6 @@ class QJetMassProcessor(processor.ProcessorABC):
                             self.logging.debug(f"Processing systematic {syst}")
                             if syst == "nominal":
                                 if self._do_gen:
-                                    
-                                    weights_gen =  weights.partial_weight(include=['genWeight'])[sel_gen]
                                     weights_both = weights.weight()[sel_both]
                                 weights_reco = weights.weight()[sel_reco]
                                 
@@ -1988,8 +1986,16 @@ class QJetMassProcessor(processor.ProcessorABC):
                             if self._do_gen:
                                 gen_jet_truth = gen_jet[sel_gen]
                                 groomed_gen_jet_truth = groomed_gen_jet[sel_gen]
-                                weights_gen = weights.weight( )[sel_gen]
-                                
+                                #### GEN-truth distributions must carry the generator
+                                #### weight ONLY -- no detector effects (pu, L1 prefiring,
+                                #### lepton SFs, HEM). Those belong on the response matrix /
+                                #### reco hists (weights_both / weights_reco) so that the
+                                #### unfolding efficiency = matched(full) / all_gen(genWeight)
+                                #### carries the detector-correction SFs and 1/eff properly
+                                #### corrects data back to the true gen-level spectrum.
+                                #### This matches the dijet/trijet convention.
+                                weights_gen = weights.partial_weight(include=['genWeight'])[sel_gen]
+
 
                                 ptgen = gen_jet_truth.pt
                                 ptgen = ptgen[~ak.is_none(ptgen)]

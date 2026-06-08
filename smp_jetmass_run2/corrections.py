@@ -114,7 +114,7 @@ def _resolve_jec_tags(iov: str):
         )
     if iov == "2016APV":
         return (
-            "Summer19UL16_V7_MC",
+            "Summer19UL16APV_V7_MC",
             {
                 "Run2016B": "Summer19UL16APV_RunBCD_V7_DATA",
                 "Run2016C": "Summer19UL16APV_RunBCD_V7_DATA",
@@ -619,17 +619,28 @@ def jmrsf(IOV, FatJet, var = ''):
     return FatJet
 
 
-def GetJetCorrections(FatJets, events, era, IOV, isData=False, uncertainties = None, mode = 'AK8' ):
+@lru_cache(maxsize=None)
+def _get_jet_factory(IOV, isData, mode, era, uncertainties_key):
+    """Build (and cache) the CorrectedJetsFactory for a given correction setup.
+
+    Everything here — parsing the JEC/JER text files, building the evaluator,
+    JECStack, and CorrectedJetsFactory — depends only on the correction *setup*
+    (IOV, data-vs-MC, AK4/AK8, data era, uncertainty list), never on the actual
+    jets. Constructing it parses ~30 text files from disk, so doing it per chunk
+    dominated the hadronic runtime. The factory is reusable across chunks: only
+    the lazy ``jet_factory.build(jets)`` in GetJetCorrections is per-event work.
+    ``uncertainties_key`` is a tuple (or None) so the args stay hashable.
+    """
     AK_str = 'AK8PFPuppi'
     if mode == 'AK4':
         AK_str = 'AK4PFPuppi'
 
     print(f"Using TAG {AK_str}")
-    if uncertainties == None:
+    if uncertainties_key is None:
         uncertainty_sources = ["AbsoluteMPFBias","AbsoluteScale","AbsoluteStat","FlavorQCD","Fragmentation","PileUpDataMC","PileUpPtBB","PileUpPtEC1","PileUpPtEC2","PileUpPtHF",
 "PileUpPtRef","RelativeFSR","RelativeJEREC1","RelativeJEREC2","RelativeJERHF","RelativePtBB","RelativePtEC1","RelativePtEC2","RelativePtHF","RelativeBal","RelativeSample", "RelativeStatEC","RelativeStatFSR","RelativeStatHF","SinglePionECAL","SinglePionHCAL","TimePtEta"]
     else:
-        uncertainty_sources = uncertainties
+        uncertainty_sources = list(uncertainties_key)
     # original code https://gitlab.cern.ch/gagarwal/ttbardileptonic/-/blob/master/jmeCorrections.py
     jec_tag, jec_tag_data, jer_tag = _resolve_jec_tags(IOV)
 
@@ -732,32 +743,8 @@ def GetJetCorrections(FatJets, events, era, IOV, isData=False, uncertainties = N
 
     # print("jec_input", jec_inputs)
     jec_stack = JECStack(jec_inputs)
-    
-    
-    if not isData:
-        if mode == 'AK8':
-            FatJets['pt_gen'] = ak.values_astype(ak.fill_none(FatJets.matched_gen.pt, 0), np.float32)
-        if mode == 'AK4':        
-            SubGenJetAK8 = events.SubGenJetAK8
-            SubGenJetAK8['p4'] = ak.with_name(SubGenJetAK8[["pt", "eta", "phi", "mass"]],"PtEtaPhiMLorentzVector")
-            FatJets["p4"] = ak.with_name(FatJets[["pt", "eta", "phi", "mass"]],"PtEtaPhiMLorentzVector")
-            FatJets['pt_gen'] = ak.values_astype(ak.fill_none(FatJets.p4.nearest(SubGenJetAK8.p4, threshold=0.4).pt, 0), np.float32)
-    if mode == 'AK4':          
-        FatJets['area'] = ak.full_like( FatJets.pt, 0.503)
-    
-    FatJets['pt_raw'] = (1 - FatJets['rawFactor']) * FatJets['pt']
-    FatJets['mass_raw'] = (1 - FatJets['rawFactor']) * FatJets['mass']
-    FatJets['jec_rho'] = ak.broadcast_arrays(events.fixedGridRhoFastjetAll, FatJets.pt)[0]
-    #print("Rho value for jets ", events.fixedGridRhoFastjetAll)
 
-    
-
-        
-
-        # if not isData:
-        #     SubJets['pt_gen'] = ak.values_astype(ak.fill_none(SubJets.matched_gen.pt, 0), np.float32)
     name_map = jec_stack.blank_name_map
-    #print("N events missing pt entry ", ak.sum(ak.num(FatJets.pt)<1))
     name_map['JetPt'] = 'pt'
     name_map['JetMass'] = 'mass'
     name_map['JetEta'] = 'eta'
@@ -767,14 +754,33 @@ def GetJetCorrections(FatJets, events, era, IOV, isData=False, uncertainties = N
     name_map['ptGenJet'] = 'pt_gen'
     name_map['Rho'] = 'jec_rho'
 
-    jet_factory = CorrectedJetsFactory(name_map, jec_stack)
+    return CorrectedJetsFactory(name_map, jec_stack)
 
 
-    corrected_jets = jet_factory.build(FatJets)
-    # print("Available uncertainties: ", jet_factory.uncertainties())
-    # print("Corrected jets object: ", corrected_jets.fields)
-    #print("pt and mass before correction ", FatJets['pt_raw'], ", ", FatJets['mass_raw'], " and after correction ", corrected_jets["pt"], ", ", corrected_jets["mass"])
-    return corrected_jets    
+def GetJetCorrections(FatJets, events, era, IOV, isData=False, uncertainties=None, mode='AK8'):
+    #### The expensive evaluator/JECStack/factory build is cached in
+    #### _get_jet_factory (it depends only on the correction setup). Here we only
+    #### attach the per-event input fields the factory's name_map expects and run
+    #### the lazy build, which is the actual per-chunk work.
+    uncertainties_key = None if uncertainties is None else tuple(uncertainties)
+    jet_factory = _get_jet_factory(IOV, isData, mode, era, uncertainties_key)
+
+    if not isData:
+        if mode == 'AK8':
+            FatJets['pt_gen'] = ak.values_astype(ak.fill_none(FatJets.matched_gen.pt, 0), np.float32)
+        if mode == 'AK4':
+            SubGenJetAK8 = events.SubGenJetAK8
+            SubGenJetAK8['p4'] = ak.with_name(SubGenJetAK8[["pt", "eta", "phi", "mass"]],"PtEtaPhiMLorentzVector")
+            FatJets["p4"] = ak.with_name(FatJets[["pt", "eta", "phi", "mass"]],"PtEtaPhiMLorentzVector")
+            FatJets['pt_gen'] = ak.values_astype(ak.fill_none(FatJets.p4.nearest(SubGenJetAK8.p4, threshold=0.4).pt, 0), np.float32)
+    if mode == 'AK4':
+        FatJets['area'] = ak.full_like( FatJets.pt, 0.503)
+
+    FatJets['pt_raw'] = (1 - FatJets['rawFactor']) * FatJets['pt']
+    FatJets['mass_raw'] = (1 - FatJets['rawFactor']) * FatJets['mass']
+    FatJets['jec_rho'] = ak.broadcast_arrays(events.fixedGridRhoFastjetAll, FatJets.pt)[0]
+
+    return jet_factory.build(FatJets)
 
 def pad_none_lep(array):
     """Pad an awkward array of leptons to have exactly two entries per event, filling with None."""
