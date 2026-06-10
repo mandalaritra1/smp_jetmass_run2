@@ -156,6 +156,11 @@ class QJetMassProcessor(processor.ProcessorABC):
 
         ht_axis = hist.axis.StrCategory([],growth = True, name = "ht_bin", label = "h_T bin")
         channel_axis = hist.axis.StrCategory([],growth = True, name = "channel", label = "Channel")
+        parton_flavor_axis = hist.axis.StrCategory(
+            ["quark", "gluon", "other"],
+            name="parton_flavor",
+            label="Initiating parton flavor",
+        )
         
         weight_axis = hist.axis.Regular(100, 0, 10, name="corrWeight", label=r"Weight")
         met_pt_axis = hist.axis.Regular(20, 0, 200, name = "pt", label = r"$p_T$")
@@ -238,6 +243,8 @@ class QJetMassProcessor(processor.ProcessorABC):
             register_hist(self.hists, "pt_jet0", [dataset_axis, pt_axis, syst_axis])
             register_hist(self.hists, "pt_flavor_jet0_gen", [dataset_axis, pt_axis, n_axis])
             register_hist(self.hists, "y_flavor_jet0_gen", [dataset_axis, y_axis, n_axis])
+            register_hist(self.hists, "mass_flavor_jet0_gen", [dataset_axis, mass_axis, parton_flavor_axis])
+            register_hist(self.hists, "mpt_flavor_jet0_gen", [dataset_axis, mgen_over_pt_axis, parton_flavor_axis])
             register_hist(self.hists, "eta_jet0", [dataset_axis, eta_axis, syst_axis])
             register_hist(self.hists, "phi_jet0", [dataset_axis, phi_axis, syst_axis])
             register_hist(self.hists, "mass_jet0", [dataset_axis, mass_axis, syst_axis])
@@ -2106,6 +2113,50 @@ class QJetMassProcessor(processor.ProcessorABC):
 
                                     fill_hist(self.hists, "pt_flavor_jet0_gen", dataset = dataset, pt = ptgen, n = parton_flavor )
                                     fill_hist(self.hists, "y_flavor_jet0_gen", dataset = dataset, y = gen_jet_truth.rapidity, n = parton_flavor )
+
+                                    valid_validation_jet = (
+                                        ~ak.is_none(gen_jet_truth.pt)
+                                        & ~ak.is_none(gen_jet_truth.mass)
+                                        & ~ak.is_none(gen_jet_truth.partonFlavour)
+                                    )
+                                    validation_gen_jet = gen_jet_truth[valid_validation_jet]
+                                    validation_abs_pdg = abs(validation_gen_jet.partonFlavour)
+                                    validation_mpt = 2 * np.log10(
+                                        validation_gen_jet.mass / (validation_gen_jet.pt * jetR)
+                                    )
+
+                                    validation_flavor_masks = {
+                                        "quark": (
+                                            (validation_abs_pdg >= 1)
+                                            & (validation_abs_pdg <= 5)
+                                        ),
+                                        "gluon": validation_abs_pdg == 21,
+                                        "other": (
+                                            ~(
+                                                (validation_abs_pdg >= 1)
+                                                & (validation_abs_pdg <= 5)
+                                            )
+                                            & (validation_abs_pdg != 21)
+                                        ),
+                                    }
+                                    # These validation histograms intentionally have no
+                                    # systematic axis, so fill them only once.
+                                    if syst == "nominal":
+                                        for flavor_name, flavor_mask in validation_flavor_masks.items():
+                                            fill_hist(
+                                                self.hists,
+                                                "mass_flavor_jet0_gen",
+                                                dataset=dataset,
+                                                mass=validation_gen_jet.mass[flavor_mask],
+                                                parton_flavor=flavor_name,
+                                            )
+                                            fill_hist(
+                                                self.hists,
+                                                "mpt_flavor_jet0_gen",
+                                                dataset=dataset,
+                                                mpt_gen=validation_mpt[flavor_mask],
+                                                parton_flavor=flavor_name,
+                                            )
 
                                     
 
