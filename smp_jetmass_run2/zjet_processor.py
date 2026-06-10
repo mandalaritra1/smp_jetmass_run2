@@ -979,8 +979,11 @@ class QJetMassProcessor(processor.ProcessorABC):
                 try:
                     weights.add(name = "isr", weight = isr_nom, weightUp = isr_up, weightDown = isr_down)
                     weights.add(name = "fsr", weight = fsr_nom, weightUp = fsr_up, weightDown = fsr_down)
-                except:
-                    pass
+                except Exception as e:
+                    # e.g. Herwig samples have no/odd PSWeight branch -> isr/fsr not
+                    # registered. The systematics loop filters on weights.variations,
+                    # so this just means ISR/FSR variations are skipped for this sample.
+                    self.logging.warning(f"Could not add ISR/FSR PS weights, skipping them: {e}")
 
                 
             
@@ -1973,7 +1976,18 @@ class QJetMassProcessor(processor.ProcessorABC):
                     print(f"JET SYST {jet_syst}")
                     if jet_syst == "nominal":
                         self.logging.debug(f"list of systematics {self.systematics}")
+                        # Some weight variations (e.g. ISR/FSR from PSWeight, q2, pdf)
+                        # are absent in certain samples -- Herwig has no PSWeight branch,
+                        # so "isr"/"fsr" never get registered above. Skip any weight
+                        # systematic whose modifier isn't actually present rather than
+                        # letting weights.weight(modifier=...) raise a KeyError.
+                        available_variations = set(weights.variations)
                         for syst in self.systematics:
+                            if syst != "nominal" and syst not in available_variations:
+                                self.logging.debug(
+                                    f"Skipping systematic {syst}: not available for this sample"
+                                )
+                                continue
                             self.logging.debug(f"Processing systematic {syst}")
                             if syst == "nominal":
                                 if self._do_gen:
@@ -2016,8 +2030,15 @@ class QJetMassProcessor(processor.ProcessorABC):
                                     "q2Up", "q2Down", "pdfUp", "pdfDown",
                                 }
                                 _gen_modifier = syst if syst in _theory_gen_systs else None
+                                # Only include theory weights actually registered for this
+                                # sample (Herwig lacks ISR/FSR PSWeights, so "isr"/"fsr"
+                                # may be absent); partial_weight raises on unknown names.
+                                _gen_include = [
+                                    n for n in ['genWeight', 'isr', 'fsr', 'q2', 'pdf']
+                                    if n in weights._weights
+                                ]
                                 weights_gen = weights.partial_weight(
-                                    include=['genWeight', 'isr', 'fsr', 'q2', 'pdf'],
+                                    include=_gen_include,
                                     modifier=_gen_modifier,
                                 )[sel_gen]
 
