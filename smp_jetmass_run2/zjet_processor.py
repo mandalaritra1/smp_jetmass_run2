@@ -1986,15 +1986,33 @@ class QJetMassProcessor(processor.ProcessorABC):
                             if self._do_gen:
                                 gen_jet_truth = gen_jet[sel_gen]
                                 groomed_gen_jet_truth = groomed_gen_jet[sel_gen]
-                                #### GEN-truth distributions must carry the generator
-                                #### weight ONLY -- no detector effects (pu, L1 prefiring,
-                                #### lepton SFs, HEM). Those belong on the response matrix /
-                                #### reco hists (weights_both / weights_reco) so that the
-                                #### unfolding efficiency = matched(full) / all_gen(genWeight)
-                                #### carries the detector-correction SFs and 1/eff properly
-                                #### corrects data back to the true gen-level spectrum.
-                                #### This matches the dijet/trijet convention.
-                                weights_gen = weights.partial_weight(include=['genWeight'])[sel_gen]
+                                #### GEN-truth distributions carry the generator weight
+                                #### plus *theory* reweightings (ISR/FSR/q2/PDF), but NOT
+                                #### detector effects (pu, L1 prefiring, lepton SFs, HEM).
+                                #### Detector SFs belong on the response matrix / reco
+                                #### hists (weights_both / weights_reco) so that the
+                                #### unfolding efficiency = matched(full) / all_gen carries
+                                #### the detector-correction SFs and 1/eff properly corrects
+                                #### data back to the true gen-level spectrum.
+                                ####
+                                #### Theory weights, by contrast, are per-event reweightings
+                                #### of the physics itself: under an ISR/FSR/q2/PDF variation
+                                #### the *gen-level* prediction genuinely changes, so the gen
+                                #### truth, the matched response and the misses must all move
+                                #### consistently. Their nominal weight is 1.0 (see
+                                #### GetPSweights / GetQ2weights / GetPDFweights), so including
+                                #### them leaves the nominal gen spectrum unchanged -- only the
+                                #### Up/Down modifier shifts it. Detector systematics pass
+                                #### modifier=None here and so the gen truth stays nominal.
+                                _theory_gen_systs = {
+                                    "isrUp", "isrDown", "fsrUp", "fsrDown",
+                                    "q2Up", "q2Down", "pdfUp", "pdfDown",
+                                }
+                                _gen_modifier = syst if syst in _theory_gen_systs else None
+                                weights_gen = weights.partial_weight(
+                                    include=['genWeight', 'isr', 'fsr', 'q2', 'pdf'],
+                                    modifier=_gen_modifier,
+                                )[sel_gen]
 
 
                                 ptgen = gen_jet_truth.pt
