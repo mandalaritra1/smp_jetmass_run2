@@ -41,6 +41,8 @@ class Log:
     def info(self, msg):
         if self.mode in ["info", "debug"]:
             print("[INFO]", msg)
+    def warning(self, msg):
+        print("[WARNING]", msg)
     def debug(self, msg):
         if self.mode == "debug":
             print("[DEBUG]", msg)

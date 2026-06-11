@@ -80,3 +80,8 @@ outputs/
 .claude/
 # notebook scratch (rewritten each "lock")
 configs/last_run.json
+
+# corrections/ is a DATA dir (EGM/JEC files), NOT a Python package.
+# A stray __init__.py here turns it into a package that shadows
+# corrections.py on import -> breaks get_pu_weights etc. Never track it.
+smp_jetmass_run2/corrections/__init__.py

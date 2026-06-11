@@ -625,6 +625,36 @@ def upload_package_if_casa(client, casa: bool, package_dir: Path | None = None):
     print("Uploaded smp_jetmass_run2.zip to workers.")
 
 
+def dump_dask_worker_logs(client, *, log=print, max_entries: int = 200):
+    """Print recent worker/nanny logs without masking the processing exception."""
+    if client is None:
+        return
+
+    log("\n===== Dask worker logs after failed test run =====")
+    for source, nanny in (("worker", False), ("nanny", True)):
+        try:
+            logs_by_worker = client.get_worker_logs(n=max_entries, nanny=nanny)
+        except Exception as exc:
+            log(f"[diagnostic] Could not retrieve Dask {source} logs: {exc}")
+            continue
+
+        if not logs_by_worker:
+            log(f"[diagnostic] No Dask {source} logs were returned.")
+            continue
+
+        for worker, entries in logs_by_worker.items():
+            log(f"\n--- {source}: {worker} ---")
+            # Dask returns newest entries first; chronological order is easier
+            # to read when following the exception and its traceback.
+            for entry in reversed(entries):
+                if isinstance(entry, (tuple, list)) and len(entry) == 2:
+                    level, message = entry
+                    log(f"{level}: {message}")
+                else:
+                    log(str(entry))
+    log("===== End Dask worker logs =====\n")
+
+
 def run_once(
     fileset: dict[str, list[str]],
     *,
@@ -832,6 +862,14 @@ def run_from_config(cfg, *, client=None, repo_root=None, log=print):
             _run_and_save(build_backgrounds_fileset(paths.samples_bkg_dir, prependstr), 0)
         else:
             log(f"Dataset is {dataset} and it is not in the list")
+    except Exception:
+        resolved_mode = _resolve_executor_mode(
+            executor_mode=cfg["executor_mode"],
+            casa=cfg["casa"],
+        )
+        if cfg["test"] and resolved_mode != "futures":
+            dump_dask_worker_logs(client, log=log)
+        raise
     finally:
         if own_client and client is not None:
             client.close()
