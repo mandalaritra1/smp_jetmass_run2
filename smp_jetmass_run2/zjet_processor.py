@@ -243,10 +243,10 @@ class QJetMassProcessor(processor.ProcessorABC):
             
             
             register_hist(self.hists, "pt_jet0", [dataset_axis, pt_axis, syst_axis])
-            register_hist(self.hists, "pt_flavor_jet0_gen", [dataset_axis, pt_axis, n_axis])
-            register_hist(self.hists, "y_flavor_jet0_gen", [dataset_axis, y_axis, n_axis])
-            register_hist(self.hists, "mass_flavor_jet0_gen", [dataset_axis, mass_axis, parton_flavor_axis])
-            register_hist(self.hists, "mpt_flavor_jet0_gen", [dataset_axis, mgen_over_pt_axis, parton_flavor_axis])
+            register_hist(self.hists, "pt_flavor_jet0_gen", [dataset_axis, pt_axis, n_axis, syst_axis])
+            register_hist(self.hists, "y_flavor_jet0_gen", [dataset_axis, y_axis, n_axis, syst_axis])
+            register_hist(self.hists, "mass_flavor_jet0_gen", [dataset_axis, mass_axis, parton_flavor_axis, syst_axis])
+            register_hist(self.hists, "mpt_flavor_jet0_gen", [dataset_axis, mgen_over_pt_axis, parton_flavor_axis, syst_axis])
             register_hist(self.hists, "eta_jet0", [dataset_axis, eta_axis, syst_axis])
             register_hist(self.hists, "phi_jet0", [dataset_axis, phi_axis, syst_axis])
             register_hist(self.hists, "mass_jet0", [dataset_axis, mass_axis, syst_axis])
@@ -2134,8 +2134,8 @@ class QJetMassProcessor(processor.ProcessorABC):
                                     fill_hist(self.hists, "ptjet_rhojet_g_gen", dataset = dataset, ptgen = ptgen,
                                               mpt_gen = 2*np.log10(mgen_g/(ptgen*jetR)), weight = weights_gen, systematic = syst)
 
-                                    fill_hist(self.hists, "pt_flavor_jet0_gen", dataset = dataset, pt = ptgen, n = parton_flavor )
-                                    fill_hist(self.hists, "y_flavor_jet0_gen", dataset = dataset, y = gen_jet_truth.rapidity, n = parton_flavor )
+                                    fill_hist(self.hists, "pt_flavor_jet0_gen", dataset = dataset, pt = ptgen, n = parton_flavor, systematic = syst, weight = weights_gen )
+                                    fill_hist(self.hists, "y_flavor_jet0_gen", dataset = dataset, y = gen_jet_truth.rapidity, n = parton_flavor, systematic = syst, weight = weights_gen )
 
                                     valid_validation_jet = (
                                         ~ak.is_none(gen_jet_truth.pt)
@@ -2162,24 +2162,31 @@ class QJetMassProcessor(processor.ProcessorABC):
                                             & (validation_abs_pdg != 21)
                                         ),
                                     }
-                                    # These validation histograms intentionally have no
-                                    # systematic axis, so fill them only once.
-                                    if syst == "nominal":
-                                        for flavor_name, flavor_mask in validation_flavor_masks.items():
-                                            fill_hist(
-                                                self.hists,
-                                                "mass_flavor_jet0_gen",
-                                                dataset=dataset,
-                                                mass=validation_gen_jet.mass[flavor_mask],
-                                                parton_flavor=flavor_name,
-                                            )
-                                            fill_hist(
-                                                self.hists,
-                                                "mpt_flavor_jet0_gen",
-                                                dataset=dataset,
-                                                mpt_gen=validation_mpt[flavor_mask],
-                                                parton_flavor=flavor_name,
-                                            )
+                                    # Carry the theory-varied gen weight (weights_gen picks
+                                    # up ISR/FSR/q2/PDF via the syst modifier) onto the
+                                    # systematic axis so the flavor split can be compared
+                                    # Up/Down. Detector systematics leave the gen weight
+                                    # nominal, matching the other gen-truth histograms.
+                                    validation_weights = weights_gen[valid_validation_jet]
+                                    for flavor_name, flavor_mask in validation_flavor_masks.items():
+                                        fill_hist(
+                                            self.hists,
+                                            "mass_flavor_jet0_gen",
+                                            dataset=dataset,
+                                            mass=validation_gen_jet.mass[flavor_mask],
+                                            parton_flavor=flavor_name,
+                                            systematic=syst,
+                                            weight=validation_weights[flavor_mask],
+                                        )
+                                        fill_hist(
+                                            self.hists,
+                                            "mpt_flavor_jet0_gen",
+                                            dataset=dataset,
+                                            mpt_gen=validation_mpt[flavor_mask],
+                                            parton_flavor=flavor_name,
+                                            systematic=syst,
+                                            weight=validation_weights[flavor_mask],
+                                        )
 
                                     
 
