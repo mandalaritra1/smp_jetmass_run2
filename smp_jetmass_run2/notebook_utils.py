@@ -66,6 +66,11 @@ REDIRECTOR_PREPENDS = {
 }
 REDIRECTOR_OPTIONS = list(REDIRECTOR_PREPENDS)
 
+OUTPUT_MODE_TAGS = {
+    # Shorter filename tag for the opt-in data-prior rho closure/stress test.
+    "reweight_data_prior_rho": "data_prior_weighted",
+}
+
 _MASS_MODE_ALIASES = {
     "minimal",
     "reweight_pythia",
@@ -755,7 +760,8 @@ def make_output_filename(
         base = f"{channel}_{base}"
     mode_token = ""
     if mode:
-        safe_mode = "".join(ch if ch.isalnum() else "_" for ch in mode).strip("_")
+        output_mode = OUTPUT_MODE_TAGS.get(mode, mode)
+        safe_mode = "".join(ch if ch.isalnum() else "_" for ch in output_mode).strip("_")
         if safe_mode:
             mode_token = f"{safe_mode}_"
     filename = f"{mode_token}{base}_{tag}{'_TEST' if test else ''}.pkl"

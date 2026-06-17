@@ -29,7 +29,7 @@ smp_jetmass_run2/            <- repo root
   scripts/run_analysis_cli.py
 ```
 
-## Install
+## Install (Only for local environment, Ignore if running on coffea-casa of LPC)
 
 ```bash
 pip install -e .            # core deps
@@ -85,13 +85,7 @@ an LPC coffea Singularity helper, start a coffea-2025 image, for example:
 ./shell coffeateam/coffea-dask-almalinux9:2025.12.0-py3.12
 ```
 
-Inside the active environment/container, install the package and the LPC Dask
-queue plugin:
 
-```bash
-python -m pip install -e ".[dask,notebook]"
-python -m pip install lpcjobqueue
-```
 
 For LPC runs, use configs with:
 
