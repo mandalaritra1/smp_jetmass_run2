@@ -165,28 +165,93 @@ class PtVarWeighter:
 PtRhoWeighter = PtVarWeighter
 
 
-def _get_herwig_weight_resource(is_groomed: bool, mode: str) -> tuple[str, str]:
+class PtBinnedVarWeighter:
+    def __init__(self, npz_path: str):
+        dat = np.load(npz_path, allow_pickle=True)
+        self.pt_edges = np.asarray(dat["pt_edges"], dtype=float)
+        self.var_edges = dat["rho_edges"]
+        self.w_grids = dat["w_grids"]
+
+    def weight_array(self, pt_arr, value_arr):
+        pt_arr = np.asarray(pt_arr, dtype=float)
+        value_arr = np.asarray(value_arr, dtype=float)
+        out = np.ones_like(value_arr, dtype=float)
+
+        finite = np.isfinite(pt_arr) & np.isfinite(value_arr)
+        if not np.any(finite):
+            return out
+
+        pt_bin = np.searchsorted(self.pt_edges, pt_arr[finite], side="right") - 1
+        pt_bin = np.clip(pt_bin, 0, len(self.pt_edges) - 2)
+        finite_indices = np.flatnonzero(finite)
+
+        for k in range(len(self.pt_edges) - 1):
+            mask = pt_bin == k
+            if not np.any(mask):
+                continue
+            target = finite_indices[mask]
+            edges = np.asarray(self.var_edges[k], dtype=float)
+            weights = np.asarray(self.w_grids[k], dtype=float)
+            value_bin = np.searchsorted(edges, value_arr[target], side="right") - 1
+            value_bin = np.clip(value_bin, 0, len(weights) - 1)
+            out[target] = weights[value_bin]
+
+        return out
+
+
+def _get_herwig_weight_resource(is_groomed: bool, mode: str, channel: str = "zjet") -> tuple[str, str]:
+    # Splines are channel-specific (different pt binning / generators). The
+    # zjet files keep their historical names; other channels get a prefix.
+    # Only the zjet channel currently ships mass splines.
+    prefix = "" if channel == "zjet" else f"{channel}_"
     if mode == "rho":
-        filename = "spline_groomed.npz" if is_groomed else "spline_ungroomed.npz"
+        filename = f"{prefix}spline_groomed.npz" if is_groomed else f"{prefix}spline_ungroomed.npz"
         return filename, "rho_grids"
     if mode == "mass":
+        if channel != "zjet":
+            raise ValueError(f"Mass reweighting splines are not available for channel '{channel}'.")
         filename = "mass_spline_groomed.npz" if is_groomed else "mass_spline_ungroomed.npz"
         return filename, "mass_grids"
     raise ValueError(f"Unsupported reweight mode '{mode}'. Expected 'rho' or 'mass'.")
 
+
+def _get_data_prior_rho_weight_resource(is_groomed: bool) -> tuple[str, str]:
+    filename = (
+        "data_prior_rho_binned_groomed.npz"
+        if is_groomed
+        else "data_prior_rho_binned_ungroomed.npz"
+    )
+    return filename, "rho_edges"
+
 @lru_cache(maxsize=None)
-def get_herwig_weight_g(mode: str = "rho") -> PtVarWeighter:
-    filename, grid_key = _get_herwig_weight_resource(is_groomed=True, mode=mode)
+def get_herwig_weight_g(mode: str = "rho", channel: str = "zjet") -> PtVarWeighter:
+    filename, grid_key = _get_herwig_weight_resource(is_groomed=True, mode=mode, channel=channel)
     resource = files("smp_jetmass_run2") / "corrections" / filename
     with as_file(resource) as p:          # p is a real pathlib.Path on disk
         return PtVarWeighter(p, grid_key)
 
 @lru_cache(maxsize=None)
-def get_herwig_weight_u(mode: str = "rho") -> PtVarWeighter:
-    filename, grid_key = _get_herwig_weight_resource(is_groomed=False, mode=mode)
+def get_herwig_weight_u(mode: str = "rho", channel: str = "zjet") -> PtVarWeighter:
+    filename, grid_key = _get_herwig_weight_resource(is_groomed=False, mode=mode, channel=channel)
     resource = files("smp_jetmass_run2") / "corrections" / filename
     with as_file(resource) as p:
         return PtVarWeighter(p, grid_key)
+
+
+@lru_cache(maxsize=None)
+def get_data_prior_rho_weight_g() -> PtBinnedVarWeighter:
+    filename, _ = _get_data_prior_rho_weight_resource(is_groomed=True)
+    resource = files("smp_jetmass_run2") / "corrections" / filename
+    with as_file(resource) as p:
+        return PtBinnedVarWeighter(p)
+
+
+@lru_cache(maxsize=None)
+def get_data_prior_rho_weight_u() -> PtBinnedVarWeighter:
+    filename, _ = _get_data_prior_rho_weight_resource(is_groomed=False)
+    resource = files("smp_jetmass_run2") / "corrections" / filename
+    with as_file(resource) as p:
+        return PtBinnedVarWeighter(p)
 
 @lru_cache(maxsize=None)
 def get_rocc_corrections(iov=None) -> RoccoR:

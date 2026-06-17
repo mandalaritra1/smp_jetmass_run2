@@ -36,6 +36,123 @@ pip install -e .            # core deps
 pip install -e ".[dask]"    # + dask/distributed + fsspec-xrootd for cluster running
 ```
 
+For notebook-driven running, also install the notebook extras:
+
+```bash
+pip install -e ".[dask,notebook]"
+```
+
+## Run Environments
+
+This repository can run locally, on the LPC, or on
+[coffea.casa](https://coffea.casa). For large Run 2 jobs, prefer `dask-casa` or
+`dask-lpc` rather than the local/futures executors. The actual analysis behavior is
+still controlled by the JSON config: `executor_mode`, `redirector`, `prependstr`,
+and `casa` decide where the job runs and how input files are resolved.
+
+### LPC Setup
+
+Log in with a forwarded port if you plan to use JupyterLab or the Dask dashboard:
+
+```bash
+ssh -Y -L 8XXX:127.0.0.1:8XXX LPCUSERNAME@cmslpc-el9.fnal.gov
+```
+
+It is usually best to work in your LPC `nobackup` area:
+
+```bash
+cd nobackup
+```
+
+Create a CMS proxy before reading remote NanoAOD files:
+
+```bash
+voms-proxy-init --rfc --voms cms -valid 192:00
+```
+
+Clone this repository:
+
+```bash
+git clone https://github.com/mandalaritra1/smp_jetmass_run2.git
+cd smp_jetmass_run2
+```
+
+Follow the `lpcjobqueue` setup instructions from
+[CoffeaTeam/lpcjobqueue](https://github.com/CoffeaTeam/lpcjobqueue). If you use
+an LPC coffea Singularity helper, start a coffea-2025 image, for example:
+
+```bash
+./shell coffeateam/coffea-dask-almalinux9:2025.12.0-py3.12
+```
+
+Inside the active environment/container, install the package and the LPC Dask
+queue plugin:
+
+```bash
+python -m pip install -e ".[dask,notebook]"
+python -m pip install lpcjobqueue
+```
+
+For LPC runs, use configs with:
+
+```json
+"executor_mode": "dask-lpc",
+"casa": false,
+"redirector": "lpc",
+"prependstr": "root://cmsxrootd.fnal.gov/"
+```
+
+Example:
+
+```bash
+python scripts/run_analysis_cli.py --config configs/dijet_pythia_2018.json
+```
+
+Optional JupyterLab from inside the environment/container:
+
+```bash
+jupyter lab --no-browser --ip=127.0.0.1 --port=8XXX
+```
+
+Then open the forwarded Jupyter link in your local browser.
+
+### coffea.casa Setup
+
+Go to [coffea.casa](https://coffea.casa), log in, choose a recent coffea-2025
+image, and press **Start**.
+
+Clone this repository in the terminal:
+
+```bash
+git clone https://github.com/mandalaritra1/smp_jetmass_run2.git
+cd smp_jetmass_run2
+python -m pip install -e ".[dask,notebook]"
+```
+
+If a default Dask cluster is already running from the coffea.casa side panel, shut
+it down before using this repo's `dask-casa` path. The runner creates its own
+`CoffeaCasaCluster` unless `useDefault` is set in the config.
+
+For coffea.casa runs, use configs with:
+
+```json
+"executor_mode": "dask-casa",
+"casa": true,
+"redirector": "casa",
+"prependstr": "root://xcache/"
+```
+
+Example:
+
+```bash
+python scripts/run_analysis_cli.py --config configs/zjet_pythia_2018.json
+```
+
+For interactive configuration, open `notebooks/run_analysis.ipynb`, select
+`executor = dask-casa`, lock the config, and run from the notebook. The notebook
+and CLI both call the same `notebook_utils.run_from_config` path, so a
+notebook-generated `configs/last_run.json` can be replayed headlessly.
+
 ## Running
 
 ### Notebook (interactive tuning) — `notebooks/run_analysis.ipynb`

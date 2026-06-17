@@ -58,6 +58,9 @@ class DijetProcessor(processor.ProcessorABC):
         self.jk_range = jk_range
         # jackknife active either via the jk flag or the *_jk modes (mirrors zjet)
         self._do_jk = bool(self.jk) or self._mode in ("mass_jk", "rho_jk")
+        # Herwig/Pythia rho reweighting (mirrors zjet's "reweight_pythia_rho").
+        # Only rho is available for dijet (no mass herwig inputs). Requires gen.
+        self._do_reweight = self._mode == "reweight_pythia_rho"
         if jet_systematics is None:
             jet_systematics = ['nominal', 'JERUp', 'JERDown', 'JMSUp', 'JMSDown',
                                'JMRUp', 'JMRDown']
@@ -111,7 +114,7 @@ class DijetProcessor(processor.ProcessorABC):
             })
 
         mass_modes = ("minimal", "mass_jk", "validation", "full")
-        rho_modes  = ("minimal_rho", "rho_jk", "validation", "full")
+        rho_modes  = ("minimal_rho", "rho_jk", "reweight_pythia_rho", "validation", "full")
 
         #### Mass unfolding inputs
         if self._mode in mass_modes:
@@ -162,6 +165,18 @@ class DijetProcessor(processor.ProcessorABC):
         #### rho = 2*log10(m/(pt*R)) -- matches the zjet QJetMassProcessor definition
         #### (includes the jet radius R), not the bare 2*log10(m/pt).
         return 2 * np.log10(mass / (pt * self._jetR))
+
+    def _herwig_rho_weights(self, pt, ungroomed_mass, groomed_mass):
+        #### Per-jet Herwig/Pythia weights vs rho for the dijet channel,
+        #### mirroring zjet's QJetMassProcessor._get_herwig_reweights (rho mode).
+        #### `pt`/`mass` are (possibly awkward) flat per-jet arrays; jets whose
+        #### rho is non-finite (e.g. msoftdrop<0) get a neutral weight of 1.
+        pt = ak.to_numpy(pt)
+        rho_u = ak.to_numpy(self._rho(ungroomed_mass, pt))
+        rho_g = ak.to_numpy(self._rho(groomed_mass, pt))
+        w_u = get_herwig_weight_u(mode="rho", channel="dijet").weight_array(pt, rho_u)
+        w_g = get_herwig_weight_g(mode="rho", channel="dijet").weight_array(pt, rho_g)
+        return np.nan_to_num(w_u, nan=1.0), np.nan_to_num(w_g, nan=1.0)
 
     def _rapidity(self, p4):
         #### Preserve the original GluonJetMass selection helper exactly.
@@ -636,8 +651,13 @@ class DijetProcessor(processor.ProcessorABC):
                     groomed_gen_dijet = ak.flatten(groomed_gen_dijet, axis=1)
                     fill_hist(out, "ptjet_mjet_u_gen", dataset=dataset, systematic=jetsyst, **jkkw, ptgen=gen_dijet.pt, mgen=gen_dijet.mass, weight=gen_weights )
                     fill_hist(out, "ptjet_mjet_g_gen", dataset=dataset, systematic=jetsyst, **jkkw, ptgen=gen_dijet.pt, mgen=groomed_gen_dijet.mass, weight=gen_weights )
-                    fill_hist(out, "ptjet_rhojet_u_gen", dataset=dataset, systematic=jetsyst, **jkkw, ptgen=gen_dijet.pt, mpt_gen=self._rho(gen_dijet.mass, gen_dijet.pt), weight=gen_weights )
-                    fill_hist(out, "ptjet_rhojet_g_gen", dataset=dataset, systematic=jetsyst, **jkkw, ptgen=gen_dijet.pt, mpt_gen=self._rho(groomed_gen_dijet.mass, gen_dijet.pt), weight=gen_weights )
+                    #### rho reweight: weight gen rho hists by the gen-rho Herwig/Pythia ratio
+                    gen_rw_u, gen_rw_g = gen_weights, gen_weights
+                    if self._do_reweight:
+                        hw_u, hw_g = self._herwig_rho_weights(gen_dijet.pt, gen_dijet.mass, groomed_gen_dijet.mass)
+                        gen_rw_u, gen_rw_g = gen_weights * hw_u, gen_weights * hw_g
+                    fill_hist(out, "ptjet_rhojet_u_gen", dataset=dataset, systematic=jetsyst, **jkkw, ptgen=gen_dijet.pt, mpt_gen=self._rho(gen_dijet.mass, gen_dijet.pt), weight=gen_rw_u )
+                    fill_hist(out, "ptjet_rhojet_g_gen", dataset=dataset, systematic=jetsyst, **jkkw, ptgen=gen_dijet.pt, mpt_gen=self._rho(groomed_gen_dijet.mass, gen_dijet.pt), weight=gen_rw_g )
                     #######################
                     #### Check jec's with selection
                     #######################
@@ -750,12 +770,20 @@ class DijetProcessor(processor.ProcessorABC):
                                                   weight=dijet_weights)
                     fill_hist(out, "response_matrix_g", dataset=dataset, systematic=jetsyst, **jkkw,ptreco=dijet.pt, mreco=dijet.msoftdrop,
                                                   ptgen=gen_dijet.pt, mgen=groomed_gen_dijet.mass, weight=dijet_weights)
-                    fill_hist(out, "response_matrix_rho_u", dataset=dataset, systematic=jetsyst, **jkkw,  mpt_reco=self._rho(dijet.mass, dijet.pt), mpt_gen=self._rho(gen_dijet.mass, gen_dijet.pt), ptreco=dijet.pt, ptgen=gen_dijet.pt, weight=dijet_weights)
-                    fill_hist(out, "response_matrix_rho_g", dataset=dataset, systematic=jetsyst, **jkkw, mpt_reco=self._rho(dijet.msoftdrop, dijet.pt), mpt_gen=self._rho(groomed_gen_dijet.mass, gen_dijet.pt), ptreco=dijet.pt, ptgen=gen_dijet.pt, weight=dijet_weights)
+                    #### rho reweight: weight rho response/reco by the reco-rho Herwig/Pythia ratio
+                    resp_rw_u, resp_rw_g = dijet_weights, dijet_weights
+                    reco_rw_u, reco_rw_g = reco_weights, reco_weights
+                    if self._do_reweight:
+                        hw_resp_u, hw_resp_g = self._herwig_rho_weights(dijet.pt, dijet.mass, dijet.msoftdrop)
+                        resp_rw_u, resp_rw_g = dijet_weights * hw_resp_u, dijet_weights * hw_resp_g
+                        hw_reco_u, hw_reco_g = self._herwig_rho_weights(reco_dijet.pt, reco_dijet.mass, reco_dijet.msoftdrop)
+                        reco_rw_u, reco_rw_g = reco_weights * hw_reco_u, reco_weights * hw_reco_g
+                    fill_hist(out, "response_matrix_rho_u", dataset=dataset, systematic=jetsyst, **jkkw,  mpt_reco=self._rho(dijet.mass, dijet.pt), mpt_gen=self._rho(gen_dijet.mass, gen_dijet.pt), ptreco=dijet.pt, ptgen=gen_dijet.pt, weight=resp_rw_u)
+                    fill_hist(out, "response_matrix_rho_g", dataset=dataset, systematic=jetsyst, **jkkw, mpt_reco=self._rho(dijet.msoftdrop, dijet.pt), mpt_gen=self._rho(groomed_gen_dijet.mass, gen_dijet.pt), ptreco=dijet.pt, ptgen=gen_dijet.pt, weight=resp_rw_g)
                     fill_hist(out, "ptjet_mjet_u_reco", dataset=dataset, systematic=jetsyst, **jkkw, ptreco=reco_dijet.pt, mreco=reco_dijet.mass, weight=reco_weights )
                     fill_hist(out, "ptjet_mjet_g_reco", dataset=dataset, systematic=jetsyst, **jkkw, ptreco=reco_dijet.pt, mreco=reco_dijet.msoftdrop, weight=reco_weights )
-                    fill_hist(out, "ptjet_rhojet_u_reco", dataset=dataset, systematic=jetsyst, **jkkw, ptreco=reco_dijet.pt, mpt_reco=self._rho(reco_dijet.mass, reco_dijet.pt), weight=reco_weights)
-                    fill_hist(out, "ptjet_rhojet_g_reco", dataset=dataset, systematic=jetsyst, **jkkw, ptreco=reco_dijet.pt, mpt_reco=self._rho(reco_dijet.msoftdrop, reco_dijet.pt), weight=reco_weights )
+                    fill_hist(out, "ptjet_rhojet_u_reco", dataset=dataset, systematic=jetsyst, **jkkw, ptreco=reco_dijet.pt, mpt_reco=self._rho(reco_dijet.mass, reco_dijet.pt), weight=reco_rw_u)
+                    fill_hist(out, "ptjet_rhojet_g_reco", dataset=dataset, systematic=jetsyst, **jkkw, ptreco=reco_dijet.pt, mpt_reco=self._rho(reco_dijet.msoftdrop, reco_dijet.pt), weight=reco_rw_g )
                     if not self.do_minimal:
                         fill_hist(out, "jet_pt_eta_phi", dataset=dataset, systematic=jetsyst, ptreco=dijet.pt, phi=dijet.phi, eta=dijet.eta, weight=dijet_weights)
                         
@@ -774,12 +802,18 @@ class DijetProcessor(processor.ProcessorABC):
                                                           ptgen=gen_dijet.pt, mgen=gen_dijet.mass, weight= dijet_weights)
                             fill_hist(out, "response_matrix_g", dataset=dataset,systematic=syst, **jkkw, ptreco=dijet.pt, mreco=dijet.msoftdrop,
                                                           ptgen=gen_dijet.pt, mgen=groomed_gen_dijet.mass, weight= dijet_weights)
-                            fill_hist(out, "response_matrix_rho_u", dataset=dataset, systematic=syst, **jkkw, mpt_reco=self._rho(dijet.mass, dijet.pt), mpt_gen=self._rho(gen_dijet.mass, gen_dijet.pt), ptreco=dijet.pt, ptgen=gen_dijet.pt, weight= dijet_weights)
-                            fill_hist(out, "response_matrix_rho_g", dataset=dataset, systematic=syst, **jkkw, mpt_reco=self._rho(dijet.msoftdrop, dijet.pt), mpt_gen=self._rho(groomed_gen_dijet.mass, gen_dijet.pt), ptreco=dijet.pt, ptgen=gen_dijet.pt, weight= dijet_weights)
+                            #### reuse the per-jet reco-rho Herwig/Pythia ratios from above
+                            resp_rw_u_v, resp_rw_g_v = dijet_weights, dijet_weights
+                            reco_rw_u_v, reco_rw_g_v = reco_weights, reco_weights
+                            if self._do_reweight:
+                                resp_rw_u_v, resp_rw_g_v = dijet_weights * hw_resp_u, dijet_weights * hw_resp_g
+                                reco_rw_u_v, reco_rw_g_v = reco_weights * hw_reco_u, reco_weights * hw_reco_g
+                            fill_hist(out, "response_matrix_rho_u", dataset=dataset, systematic=syst, **jkkw, mpt_reco=self._rho(dijet.mass, dijet.pt), mpt_gen=self._rho(gen_dijet.mass, gen_dijet.pt), ptreco=dijet.pt, ptgen=gen_dijet.pt, weight= resp_rw_u_v)
+                            fill_hist(out, "response_matrix_rho_g", dataset=dataset, systematic=syst, **jkkw, mpt_reco=self._rho(dijet.msoftdrop, dijet.pt), mpt_gen=self._rho(groomed_gen_dijet.mass, gen_dijet.pt), ptreco=dijet.pt, ptgen=gen_dijet.pt, weight= resp_rw_g_v)
                             fill_hist(out, "ptjet_mjet_u_reco", dataset=dataset,systematic=syst, **jkkw, ptreco=reco_dijet.pt, mreco=reco_dijet.mass, weight= reco_weights )
-                            fill_hist(out, "ptjet_mjet_g_reco", dataset=dataset,systematic=syst, **jkkw, ptreco=reco_dijet.pt, mreco=reco_dijet.msoftdrop, weight= reco_weights )                 
-                            fill_hist(out, "ptjet_rhojet_u_reco", dataset=dataset, systematic=syst, **jkkw, ptreco=reco_dijet.pt, mpt_reco=self._rho(reco_dijet.mass, reco_dijet.pt), weight=reco_weights)
-                            fill_hist(out, "ptjet_rhojet_g_reco", dataset=dataset, systematic=syst, **jkkw, ptreco=reco_dijet.pt, mpt_reco=self._rho(reco_dijet.msoftdrop, reco_dijet.pt), weight=reco_weights )
+                            fill_hist(out, "ptjet_mjet_g_reco", dataset=dataset,systematic=syst, **jkkw, ptreco=reco_dijet.pt, mreco=reco_dijet.msoftdrop, weight= reco_weights )
+                            fill_hist(out, "ptjet_rhojet_u_reco", dataset=dataset, systematic=syst, **jkkw, ptreco=reco_dijet.pt, mpt_reco=self._rho(reco_dijet.mass, reco_dijet.pt), weight=reco_rw_u_v)
+                            fill_hist(out, "ptjet_rhojet_g_reco", dataset=dataset, systematic=syst, **jkkw, ptreco=reco_dijet.pt, mpt_reco=self._rho(reco_dijet.msoftdrop, reco_dijet.pt), weight=reco_rw_g_v )
                         #################
                         #### Gluon purity plots   
                         #################

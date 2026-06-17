@@ -71,7 +71,7 @@ class QJetMassProcessor(processor.ProcessorABC):
 
         if mode == "minimal":
             self._do_jk = False
-        elif mode == "reweight_pythia" or mode == "reweight_pythia_rho":
+        elif mode in ("reweight_pythia", "reweight_pythia_rho", "reweight_data_prior_rho"):
             self._do_reweight = True
         elif mode == "jk_mc" or mode == "jk_data" or mode == "rho_jk" or mode == "mass_jk":
             self._do_jk = True
@@ -194,7 +194,7 @@ class QJetMassProcessor(processor.ProcessorABC):
                 register_hist(self.hists, "ptjet_mjet_g_gen", [dataset_axis,channel_axis, ptgen_axis, mgen_axis, syst_axis])
                 register_hist(self.hists, "ptz_mz_reco" , [dataset_axis, zmass_axis, pt_axis])
 
-        if self._mode == "minimal_rho" or self._mode == "reweight_pythia_rho":
+        if self._mode in ("minimal_rho", "reweight_pythia_rho", "reweight_data_prior_rho"):
             register_hist(self.hists, "ptjet_rhojet_u_reco", [dataset_axis, ptreco_axis, mreco_over_pt_axis, syst_axis ])
             register_hist(self.hists, "ptjet_rhojet_g_reco", [dataset_axis, ptreco_axis, mreco_over_pt_axis, syst_axis ])
             register_hist(self.hists, "m_g_over_m_u_reco", [dataset_axis, channel_axis, ptreco_axis, mass_ratio_axis, syst_axis])
@@ -333,19 +333,33 @@ class QJetMassProcessor(processor.ProcessorABC):
             return "mass"
         if self._mode == "reweight_pythia_rho":
             return "rho"
+        if self._mode == "reweight_data_prior_rho":
+            return "data_prior_rho"
         return None
 
     def _is_mass_reweight(self):
         return self._reweight_mode() == "mass"
 
     def _is_rho_reweight(self):
-        return self._reweight_mode() == "rho"
+        return self._reweight_mode() in ("rho", "data_prior_rho")
+
+    def _is_data_prior_rho_reweight(self):
+        return self._reweight_mode() == "data_prior_rho"
+
+    @staticmethod
+    def _reweight_numpy(values):
+        try:
+            return ak.to_numpy(ak.fill_none(values, np.nan))
+        except Exception:
+            return np.asarray(values, dtype=float)
 
     def _reweight_value(self, mass, pt, jetR):
         mode = self._reweight_mode()
+        mass = self._reweight_numpy(mass)
+        pt = self._reweight_numpy(pt)
         if mode == "mass":
             return mass
-        if mode == "rho":
+        if mode in ("rho", "data_prior_rho"):
             return 2 * np.log10(mass / (pt * jetR))
         raise ValueError(f"Reweighting requested for unsupported mode '{self._mode}'.")
 
@@ -356,6 +370,15 @@ class QJetMassProcessor(processor.ProcessorABC):
 
         ungroomed_value = self._reweight_value(ungroomed_mass, pt, jetR)
         groomed_value = self._reweight_value(groomed_mass, pt, jetR)
+        pt = self._reweight_numpy(pt)
+        if mode == "data_prior_rho":
+            data_prior_weight_g = get_data_prior_rho_weight_g().weight_array(pt, groomed_value)
+            data_prior_weight_u = get_data_prior_rho_weight_u().weight_array(pt, ungroomed_value)
+            return (
+                np.nan_to_num(data_prior_weight_u, nan=1.0, posinf=1.0, neginf=1.0),
+                np.nan_to_num(data_prior_weight_g, nan=1.0, posinf=1.0, neginf=1.0),
+            )
+
         herwig_weight_g = get_herwig_weight_g(mode=mode).weight_array(pt, groomed_value)
         herwig_weight_u = get_herwig_weight_u(mode=mode).weight_array(pt, ungroomed_value)
         return herwig_weight_u, herwig_weight_g
@@ -2243,7 +2266,16 @@ class QJetMassProcessor(processor.ProcessorABC):
                                 weights_both_u = weights_both
                                 weights_both_reweighted_g = weights_both_g
 
-                                if self._do_reweight:
+                                if self._do_reweight and self._is_data_prior_rho_reweight():
+                                    herwig_weight_both_u, herwig_weight_both_g = self._get_herwig_reweights(
+                                        ptgen_both,
+                                        mgen_both,
+                                        mgen_both_g,
+                                        jetR,
+                                    )
+                                    weights_both_u = weights_both * herwig_weight_both_u
+                                    weights_both_reweighted_g = weights_both_g * herwig_weight_both_g
+                                elif self._do_reweight:
                                     herwig_weight_both_u, herwig_weight_both_g = self._get_herwig_reweights(
                                         ptreco_both,
                                         mreco_both,
@@ -2366,6 +2398,25 @@ class QJetMassProcessor(processor.ProcessorABC):
                             mreco = reco_jet_meas.mass
                             mreco_g = reco_jet_meas.msoftdrop
                             #mreco_g2 = reco_jet_meas.msoftdrop_orig
+                            reco_data_prior_weight_u = None
+                            reco_data_prior_weight_g = None
+                            if self._do_gen and self._is_data_prior_rho_reweight():
+                                gen_jet_for_reco = gen_jet[sel_reco]
+                                groomed_gen_jet_for_reco = groomed_gen_jet[sel_reco]
+                                matched_to_selected_gen = ak.to_numpy(
+                                    ak.fill_none(allsel_gen[sel_reco], False)
+                                )
+                                reco_data_prior_weight_u = np.ones(len(matched_to_selected_gen))
+                                reco_data_prior_weight_g = np.ones(len(matched_to_selected_gen))
+                                if np.any(matched_to_selected_gen):
+                                    prior_u, prior_g = self._get_herwig_reweights(
+                                        gen_jet_for_reco[matched_to_selected_gen].pt,
+                                        gen_jet_for_reco[matched_to_selected_gen].mass,
+                                        groomed_gen_jet_for_reco[matched_to_selected_gen].mass,
+                                        jetR,
+                                    )
+                                    reco_data_prior_weight_u[matched_to_selected_gen] = prior_u
+                                    reco_data_prior_weight_g[matched_to_selected_gen] = prior_g
 
                             self._fill_groomed_over_ungroomed_reco(
                                 dataset=dataset,
@@ -2404,13 +2455,23 @@ class QJetMassProcessor(processor.ProcessorABC):
                                     passes_both=(sel_reco & allsel_gen)[sel_reco] if self._do_gen else None,
                                 )
 
-                            ptreco = ptreco[~ak.is_none(mreco)]
-                            mreco = mreco[~ak.is_none(mreco)]
-                            mreco_g = mreco_g[~ak.is_none(mreco_g)]
+                            valid_reco_u = ~ak.is_none(mreco)
+                            valid_reco_g = ~ak.is_none(mreco_g)
+                            if reco_data_prior_weight_u is not None:
+                                reco_data_prior_weight_u = reco_data_prior_weight_u[
+                                    ak.to_numpy(valid_reco_u)
+                                ]
+                                reco_data_prior_weight_g = reco_data_prior_weight_g[
+                                    ak.to_numpy(valid_reco_g)
+                                ]
+
+                            ptreco = ptreco[valid_reco_u]
+                            mreco = mreco[valid_reco_u]
+                            mreco_g = mreco_g[valid_reco_g]
                             #mreco_g2 = mreco_g2[~ak.is_none(mreco_g2)]
-                            ptreco_g = ptreco_g[~ak.is_none(mreco_g)]
-                            weights_reco_g = weights_reco[~ak.is_none(mreco_g)]
-                            weights_reco = weights_reco[~ak.is_none(mreco)]
+                            ptreco_g = ptreco_g[valid_reco_g]
+                            weights_reco_g = weights_reco[valid_reco_g]
+                            weights_reco = weights_reco[valid_reco_u]
 
                             mpt_reco = 2*np.log10(mreco/(ptreco*jetR))
                             mpt_reco_g = 2*np.log10(mreco_g/(ptreco*jetR))
@@ -2510,7 +2571,10 @@ class QJetMassProcessor(processor.ProcessorABC):
                             weights_reco_u = weights_reco
                             weights_reco_reweighted_g = weights_reco_g
 
-                            if self._do_reweight:
+                            if self._do_reweight and self._is_data_prior_rho_reweight():
+                                weights_reco_u = weights_reco * reco_data_prior_weight_u
+                                weights_reco_reweighted_g = weights_reco_g * reco_data_prior_weight_g
+                            elif self._do_reweight:
                                 herwig_weight_reco_u, herwig_weight_reco_g = self._get_herwig_reweights(
                                     ptreco,
                                     mreco,

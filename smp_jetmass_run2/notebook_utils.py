@@ -36,7 +36,12 @@ DATASET_OPTIONS = [
 ERA_OPTIONS = ["2016", "2016APV", "2017", "2018", "all"]
 CHANNEL_OPTIONS = ["zjet", "dijet", "trijet"]
 
-RHO_MODE_OPTIONS = ["minimal_rho", "rho_jk", "reweight_pythia_rho"]
+RHO_MODE_OPTIONS = [
+    "minimal_rho",
+    "rho_jk",
+    "reweight_pythia_rho",
+    "reweight_data_prior_rho",
+]
 MASS_MODE_OPTIONS = [
     "minimal",
     "mass",
@@ -369,17 +374,22 @@ HADRONIC_MODE_ALIASES = {
     "mass_jk_mc": "mass_jk",
     "mass_jk_data": "mass_jk",
 }
-HADRONIC_MODES = {"minimal", "minimal_rho", "validation", "full", "mass_jk", "rho_jk"}
+HADRONIC_MODES = {"minimal", "minimal_rho", "validation", "full", "mass_jk", "rho_jk", "reweight_pythia_rho"}
+# Modes only available for some hadronic channels. reweight_pythia_rho needs a
+# Herwig sample to build the h/p splines; that exists for dijet but not trijet.
+HADRONIC_CHANNEL_EXCLUDED_MODES = {"trijet": {"reweight_pythia_rho"}}
 
 
 def normalize_mode_for_channel(mode: str, channel: str) -> str:
     if channel not in ("dijet", "trijet"):
         return mode
     resolved = HADRONIC_MODE_ALIASES.get(mode, mode)
-    if resolved not in HADRONIC_MODES:
+    excluded = HADRONIC_CHANNEL_EXCLUDED_MODES.get(channel, set())
+    if resolved not in HADRONIC_MODES or resolved in excluded:
+        allowed = sorted(HADRONIC_MODES - excluded)
         raise ValueError(
             f"Hadronic channel '{channel}' does not support mode '{mode}'. "
-            f"Choose from {', '.join(sorted(HADRONIC_MODES))}."
+            f"Choose from {', '.join(allowed)}."
         )
     return resolved
 
