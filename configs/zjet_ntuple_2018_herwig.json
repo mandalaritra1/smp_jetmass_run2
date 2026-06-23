@@ -1,6 +1,6 @@
 {
   "channel": "zjet",
-  "dataset": "data",
+  "dataset": "herwig",
   "era": "2018",
   "mode": "mass_diagnostic_ntuple",
   "systematic_profile": "no_syst",
@@ -8,7 +8,7 @@
   "casa": true,
   "test": false,
   "useDefault": false,
-  "chunksize": 500000,
+  "chunksize": 50000,
   "chunksize_test": 200000,
   "group_mode": "all_in_one",
   "redirector": "casa",
