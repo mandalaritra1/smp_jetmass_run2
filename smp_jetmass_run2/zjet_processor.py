@@ -465,9 +465,20 @@ class QJetMassProcessor(processor.ProcessorABC):
         if "reco_jet_ntuple" not in self.hists:
             return
 
-        nrows = len(reco_jet.pt)
+        # reco_jet may be None for MISS rows (gen-fiducial jet whose reco failed):
+        # all reco columns are then filled with NaN, nrows comes from the gen jet.
+        if reco_jet is None:
+            if gen_jet is None:
+                return
+            nrows = len(gen_jet.pt)
+        else:
+            nrows = len(reco_jet.pt)
         if nrows == 0:
             return
+
+        def _reco(attr):
+            return (np.full(nrows, np.nan) if reco_jet is None
+                    else self._to_numpy_column(getattr(reco_jet, attr)))
 
         ntuple = self.hists["reco_jet_ntuple"]
         ntuple["dataset"] += processor.column_accumulator(np.full(nrows, dataset, dtype=object))
@@ -481,27 +492,21 @@ class QJetMassProcessor(processor.ProcessorABC):
         )
         ntuple["event"] += processor.column_accumulator(self._to_numpy_column(events.event, dtype=np.uint64))
 
-        ntuple["pt"] += processor.column_accumulator(self._to_numpy_column(reco_jet.pt))
-        ntuple["mass"] += processor.column_accumulator(self._to_numpy_column(reco_jet.mass))
-        ntuple["msoftdrop"] += processor.column_accumulator(self._to_numpy_column(reco_jet.msoftdrop))
-        ntuple["eta"] += processor.column_accumulator(self._to_numpy_column(reco_jet.eta))
-        ntuple["phi"] += processor.column_accumulator(self._to_numpy_column(reco_jet.phi))
-        ntuple["rapidity"] += processor.column_accumulator(self._to_numpy_column(reco_jet.rapidity))
+        ntuple["pt"] += processor.column_accumulator(_reco("pt"))
+        ntuple["mass"] += processor.column_accumulator(_reco("mass"))
+        ntuple["msoftdrop"] += processor.column_accumulator(_reco("msoftdrop"))
+        ntuple["eta"] += processor.column_accumulator(_reco("eta"))
+        ntuple["phi"] += processor.column_accumulator(_reco("phi"))
+        ntuple["rapidity"] += processor.column_accumulator(_reco("rapidity"))
 
-        ntuple["pt_nanoaod"] += processor.column_accumulator(self._to_numpy_column(reco_jet.pt_nanoaod))
-        ntuple["mass_nanoaod"] += processor.column_accumulator(self._to_numpy_column(reco_jet.mass_nanoaod))
-        ntuple["msoftdrop_nanoaod"] += processor.column_accumulator(
-            self._to_numpy_column(reco_jet.msoftdrop_nanoaod)
-        )
+        ntuple["pt_nanoaod"] += processor.column_accumulator(_reco("pt_nanoaod"))
+        ntuple["mass_nanoaod"] += processor.column_accumulator(_reco("mass_nanoaod"))
+        ntuple["msoftdrop_nanoaod"] += processor.column_accumulator(_reco("msoftdrop_nanoaod"))
 
-        ntuple["pt_raw"] += processor.column_accumulator(self._to_numpy_column(reco_jet.pt_raw_diagnostic))
-        ntuple["mass_raw"] += processor.column_accumulator(self._to_numpy_column(reco_jet.mass_raw_diagnostic))
-        ntuple["msoftdrop_raw"] += processor.column_accumulator(
-            self._to_numpy_column(reco_jet.msoftdrop_raw_diagnostic)
-        )
-        ntuple["msoftdrop_raw_fatjet"] += processor.column_accumulator(
-            self._to_numpy_column(reco_jet.msoftdrop_raw_fatjet_diagnostic)
-        )
+        ntuple["pt_raw"] += processor.column_accumulator(_reco("pt_raw_diagnostic"))
+        ntuple["mass_raw"] += processor.column_accumulator(_reco("mass_raw_diagnostic"))
+        ntuple["msoftdrop_raw"] += processor.column_accumulator(_reco("msoftdrop_raw_diagnostic"))
+        ntuple["msoftdrop_raw_fatjet"] += processor.column_accumulator(_reco("msoftdrop_raw_fatjet_diagnostic"))
 
         if gen_jet is None:
             gen_pt = gen_eta = gen_phi = gen_mass = gen_rapidity = np.full(nrows, np.nan)
@@ -512,7 +517,8 @@ class QJetMassProcessor(processor.ProcessorABC):
             gen_phi = self._to_numpy_column(gen_jet.phi)
             gen_mass = self._to_numpy_column(gen_jet.mass)
             gen_rapidity = self._to_numpy_column(gen_jet.rapidity)
-            reco_gen_dr = self._to_numpy_column(reco_jet.delta_r(gen_jet))
+            reco_gen_dr = (np.full(nrows, np.nan) if reco_jet is None
+                           else self._to_numpy_column(reco_jet.delta_r(gen_jet)))
 
         if groomed_gen_jet is None:
             gen_msoftdrop = np.full(nrows, np.nan)
@@ -1503,6 +1509,12 @@ class QJetMassProcessor(processor.ProcessorABC):
                     sel.add("is_matched_gen", is_matched_gen)
                     allsel_gen = sel.all("kinsel_gen", "toposel_gen" , "is_matched_gen" )
                     sel.add("allsel_gen", allsel_gen)
+                    # gen FIDUCIAL selection WITHOUT the reco-match requirement, so that
+                    # gen-fiducial jets whose reco failed ("misses") can be counted for
+                    # the OmniFold efficiency. allsel_gen (above, with the match) stays the
+                    # signal/response definition.
+                    allsel_gen_fid = sel.all("kinsel_gen", "toposel_gen")
+                    sel.add("allsel_gen_fid", allsel_gen_fid)
                     #sel.add("fakes", sel.require(allsel_reco = True, allsel_gen = False))
                 else:
                     allsel_reco = sel.all("npv", "MET", "kinsel_reco", "toposel_reco", "trigsel" )
@@ -2493,13 +2505,49 @@ class QJetMassProcessor(processor.ProcessorABC):
                                     gen_jet=gen_jet[sel_reco] if self._do_gen else None,
                                     groomed_gen_jet=groomed_gen_jet[sel_reco] if self._do_gen else None,
                                     has_gen_match=is_matched_reco[sel_reco] if self._do_gen else None,
-                                    passes_gen_selection=allsel_gen[sel_reco] if self._do_gen else None,
+                                    # pure gen-fiducial (no match) so eff = N(passes_both)/N(passes_gen_selection)
+                                    passes_gen_selection=allsel_gen_fid[sel_reco] if self._do_gen else None,
                                     passes_both=(sel_reco & allsel_gen)[sel_reco] if self._do_gen else None,
                                     weight_variations=(
                                         self._ntuple_weight_variation_ratios(weights, sel_reco)
                                         if self._do_gen else None
                                     ),
                                 )
+                                # --- MISSES: gen-fiducial jets whose reco failed (efficiency) ---
+                                # These are absent from a reco-driven skim; emit them with
+                                # reco_jet=None (NaN reco columns) so OmniFold can build the
+                                # gen denominator. Weight = gen-level (generator + theory,
+                                # NO detector SFs), matching the gen-truth convention above.
+                                # NOTE: weight_variations left as nominal (=1.0) for misses for
+                                # now; refine if the gen weight systematics on misses matter.
+                                if self._do_gen:
+                                    gen_chan = "twoGen_mm" if channel == "mm" else "twoGen_ee"
+                                    miss_mask = sel.require(allsel_gen_fid=True, **{gen_chan: True}) & (
+                                        ~sel.require(allsel_reco=True)
+                                    )
+                                    if ak.any(miss_mask):
+                                        n_miss = int(ak.sum(miss_mask))
+                                        _gen_inc = [
+                                            n for n in ['genWeight', 'isr', 'fsr', 'q2', 'pdf']
+                                            if n in weights._weights
+                                        ]
+                                        w_gen_miss = weights.partial_weight(
+                                            include=_gen_inc, modifier=None
+                                        )[miss_mask]
+                                        self._fill_reco_jet_ntuple(
+                                            dataset=dataset,
+                                            channel=channel,
+                                            systematic=syst,
+                                            events=events_j[miss_mask],
+                                            reco_jet=None,
+                                            weight=w_gen_miss,
+                                            gen_jet=gen_jet[miss_mask],
+                                            groomed_gen_jet=groomed_gen_jet[miss_mask],
+                                            has_gen_match=np.zeros(n_miss, dtype=bool),
+                                            passes_gen_selection=np.ones(n_miss, dtype=bool),
+                                            passes_both=np.zeros(n_miss, dtype=bool),
+                                            weight_variations=None,
+                                        )
 
                             valid_reco_u = ~ak.is_none(mreco)
                             valid_reco_g = ~ak.is_none(mreco_g)
