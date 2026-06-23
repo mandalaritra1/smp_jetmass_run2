@@ -1,0 +1,18 @@
+{
+  "executor_mode": "dask-lpc",
+  "redirector": "lpc",
+  "worker_memory": "2GB",
+  "min_workers": 1,
+  "max_workers": 600,
+  "dashboard_port": 8915,
+  "chunksize": 50000,
+  "maxchunks": null,
+  "output_mode": "accumulator",
+  "outdir": "/srv/omnifold_skims/2018",
+  "pt_min": 150.0,
+  "skipbadfiles": true,
+  "samples": [
+    {"dataset": "DYJetsToLL_pythia_UL18", "filelist": "samples/zjet/mc/pythia_UL18NanoAODv9.txt"},
+    {"dataset": "SingleMuon_UL2018",      "filelist": "samples/zjet/data/SingleMuon_UL2018.txt"}
+  ]
+}

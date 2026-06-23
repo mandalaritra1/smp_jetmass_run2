@@ -1,0 +1,18 @@
+{
+  "executor_mode": "dask-casa",
+  "redirector": "casa",
+  "worker_memory": "6 GiB",
+  "min_workers": 1,
+  "max_workers": 200,
+  "chunksize": 50000,
+  "maxchunks": null,
+  "output_mode": "parquet",
+  "outdir": "/home/cms-jovyan/omnifold_skims",
+  "pt_min": 150.0,
+  "skipbadfiles": true,
+  "samples": [
+    {"dataset": "DYJetsToLL_pythia_UL18", "filelist": "samples/zjet/mc/pythia_UL18NanoAODv9.txt"},
+    {"dataset": "DYJetsToLL_herwig_UL18", "filelist": "samples/zjet/mc/herwig7_UL18NanoAODv9_inclusive.txt"},
+    {"dataset": "SingleMuon_UL2018",      "filelist": "samples/zjet/data/SingleMuon_UL2018.txt"}
+  ]
+}

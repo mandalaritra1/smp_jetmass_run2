@@ -383,6 +383,10 @@ class QJetMassProcessor(processor.ProcessorABC):
         herwig_weight_u = get_herwig_weight_u(mode=mode).weight_array(pt, ungroomed_value)
         return herwig_weight_u, herwig_weight_g
 
+    # weight systematics stored as (varied/nominal) ratios in the ntuple
+    NTUPLE_WEIGHT_SYSTS = ["pu", "q2", "pdf", "isr", "fsr", "l1prefiring",
+                           "mureco", "muid", "muiso", "mutrig"]
+
     def _register_reco_jet_ntuple(self):
         float_columns = [
             "weight",
@@ -406,6 +410,11 @@ class QJetMassProcessor(processor.ProcessorABC):
             "gen_rapidity",
             "gen_msoftdrop",
             "reco_gen_dr",
+        ]
+        # per-systematic weight RATIOS (varied/nominal); xsec-scale invariant, so
+        # postprocess scaling of `weight` carries them: w_syst = weight * w_<s><Dir>
+        float_columns += [
+            f"w_{s}{d}" for s in self.NTUPLE_WEIGHT_SYSTS for d in ("Up", "Down")
         ]
         uint64_columns = ["event"]
         uint32_columns = ["run", "luminosityBlock"]
@@ -451,6 +460,7 @@ class QJetMassProcessor(processor.ProcessorABC):
         has_gen_match=None,
         passes_gen_selection=None,
         passes_both=None,
+        weight_variations=None,
     ):
         if "reco_jet_ntuple" not in self.hists:
             return
@@ -528,6 +538,38 @@ class QJetMassProcessor(processor.ProcessorABC):
             else:
                 column = self._to_numpy_flag_column(values)
             ntuple[name] += processor.column_accumulator(column)
+
+        # per-systematic weight ratios (1.0 where unavailable, e.g. data)
+        for s in self.NTUPLE_WEIGHT_SYSTS:
+            for d in ("Up", "Down"):
+                col = f"w_{s}{d}"
+                if weight_variations is not None and col in weight_variations:
+                    vals = self._to_numpy_column(weight_variations[col])
+                else:
+                    vals = np.ones(nrows, dtype=np.float64)
+                ntuple[col] += processor.column_accumulator(vals)
+
+    def _ntuple_weight_variation_ratios(self, weights, sel):
+        """{f'w_{syst}{Up/Down}': (varied/nominal) ratio} for the OmniFold ntuple.
+
+        Ratios are invariant under the per-dataset xsec*lumi/sumw scale applied to
+        the ``weight`` column in postprocess, so the offline systematic weight is
+        simply ``weight * w_<syst><Dir>``. Missing modifiers (data) -> 1.0.
+        """
+        sel = sel if isinstance(sel, np.ndarray) else ak.to_numpy(sel)
+        nominal = np.asarray(weights.weight(), dtype=np.float64)[sel]
+        safe = np.where(nominal != 0.0, nominal, 1.0)
+        avail = weights.variations
+        out = {}
+        for s in self.NTUPLE_WEIGHT_SYSTS:
+            for d in ("Up", "Down"):
+                mod = f"{s}{d}"
+                if mod in avail:
+                    varied = np.asarray(weights.weight(modifier=mod), dtype=np.float64)[sel]
+                    out[f"w_{s}{d}"] = np.where(nominal != 0.0, varied / safe, 1.0)
+                else:
+                    out[f"w_{s}{d}"] = np.ones(len(nominal), dtype=np.float64)
+        return out
 
     @staticmethod
     def _postprocess_scale_for_dataset(dataset, sumw):
@@ -2453,6 +2495,10 @@ class QJetMassProcessor(processor.ProcessorABC):
                                     has_gen_match=is_matched_reco[sel_reco] if self._do_gen else None,
                                     passes_gen_selection=allsel_gen[sel_reco] if self._do_gen else None,
                                     passes_both=(sel_reco & allsel_gen)[sel_reco] if self._do_gen else None,
+                                    weight_variations=(
+                                        self._ntuple_weight_variation_ratios(weights, sel_reco)
+                                        if self._do_gen else None
+                                    ),
                                 )
 
                             valid_reco_u = ~ak.is_none(mreco)

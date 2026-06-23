@@ -1,0 +1,18 @@
+{
+  "executor_mode": "futures",
+  "redirector": "local",
+  "workers": 4,
+  "chunksize": 50000,
+  "maxchunks": null,
+  "output_mode": "parquet",
+  "outdir": "outputs/skims",
+  "pt_min": 150.0,
+  "samples": [
+    {
+      "dataset": "DYJetsToLL_pythia_HT400to600_UL18",
+      "files": [
+        "/Users/aritra/Projects/omnifold/data/nanoaod/DYJetsToLL_HT400to600_UL18_test.root"
+      ]
+    }
+  ]
+}
