@@ -27,6 +27,7 @@ DATASET_OPTIONS = [
     "mg_pythia8",
     "pythia_local",
     "pythia2",
+    "nlo",
     "herwig",
     "st",
     "powheg",
@@ -208,22 +209,36 @@ class SamplePath:
                 ["herwig7_UL17NanoAODv9_inclusive.txt"],
                 ["herwig7_UL18NanoAODv9_inclusive.txt"],
             ]
+            # NLO (amcatnloFXFX) DY. Order matches get_group_tag's era_tags
+            # (["2016","2016APV","2017","2018"]) so per_group output tags are
+            # correct. The non-2016 lists are produced by samples/zjet/mc/
+            # make_nlo_lists.sh (dasgoclient) before running era="all".
+            self.nlo = [
+                ["inclusive_UL16NanoAODv9.txt"],
+                ["inclusive_UL16NanoAODAPVv9.txt"],
+                ["inclusive_UL17NanoAODv9.txt"],
+                ["inclusive_UL18NanoAODv9.txt"],
+            ]
         elif era == "2018":
             self.data = [["SingleMuon_UL2018.txt", "EGamma_UL2018.txt"]]
             self.pythia = [["pythia_UL18NanoAODv9.txt"]]
             self.herwig = [["herwig7_UL18NanoAODv9_inclusive.txt"]]
+            self.nlo = [["inclusive_UL18NanoAODv9.txt"]]
         elif era == "2017":
             self.data = [["SingleMuon_UL2017.txt", "SingleElectron_UL2017.txt"]]
             self.pythia = [["pythia_UL17NanoAODv9.txt"]]
             self.herwig = [["herwig7_UL17NanoAODv9_inclusive.txt"]]
+            self.nlo = [["inclusive_UL17NanoAODv9.txt"]]
         elif era == "2016APV":
             self.data = [["SingleMuon_UL2016APV.txt", "SingleElectron_UL2016APV.txt"]]
             self.pythia = [["pythia_UL16NanoAODAPVv9.txt"]]
             self.herwig = [["herwig7_UL16NanoAODAPVv9_inclusive.txt"]]
+            self.nlo = [["inclusive_UL16NanoAODAPVv9.txt"]]
         elif era == "2016":
             self.data = [["SingleMuon_UL2016.txt", "SingleElectron_UL2016.txt"]]
             self.pythia = [["pythia_UL16NanoAODv9.txt"]]
             self.herwig = [["herwig7_UL16NanoAODv9_inclusive.txt"]]
+            self.nlo = [["inclusive_UL16NanoAODv9.txt"]]
         else:
             raise ValueError(f"Unknown era: {era}")
 
@@ -865,10 +880,11 @@ def run_from_config(cfg, *, client=None, repo_root=None, log=print):
         elif dataset == "pythia_local":
             _run_and_save(build_local_pythia_fileset(
                 paths.samples_mc_local_dir, cfg["era"]), 0)
-        elif dataset == "pythia2":
-            _run_and_save(build_fileset_from_txts(
-                ["inclusive_UL16NanoAODv9.txt"], paths.samples_mc_dir, prependstr,
-                split_ht=False), 0)
+        elif dataset in ("nlo", "pythia2"):
+            # NLO (amcatnloFXFX) DY inclusive, era-aware like pythia/herwig.
+            for i, group in enumerate(iter_groups(samplePath.nlo, group_mode)):
+                _run_and_save(build_fileset_from_txts(
+                    group, paths.samples_mc_dir, prependstr, split_ht=False), i)
         elif dataset == "herwig":
             for i, group in enumerate(iter_groups(samplePath.herwig, group_mode)):
                 _run_and_save(build_fileset_from_txts(
