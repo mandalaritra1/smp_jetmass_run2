@@ -1,0 +1,42 @@
+# MadGraph5 LO Z(->ll)+jets with MLM merging, up to 2 ME jets (nJetMax=2).
+# Matches the analysis nominal madgraphMLM baseline for the leading-jet jet-mass
+# modelling study. Showered with MLM matching by pythia_rivet (which registers the
+# JetMatchingMadgraph UserHook when the shower cmnd sets JetMatching:merge=on;
+# JetMatching:setMad reads xqcut/nJetMax from the LHE header).
+#
+# pT>200 fiducial note: with merging you CANNOT use a hard ptj cut (it biases the
+# merging veto). Instead enrich via ptllmin -- a cut on the Z (dilepton-system) pT,
+# which "always applies" independent of jet merging and, since the Z balances the
+# recoil jet, populates jet pT >~ ptllmin without touching the jet multiplicity.
+# ptllmin=100 is below the minimum accepted Z pT (~0.54*200 at the balance-cut edge)
+# so it does NOT bias the 200-290 bin acceptance; raise it (e.g. 150) for better
+# efficiency only after verifying the lowest pT bin shows no turn-on. For an exact
+# nominal match, HT-slice with htjmin/htjmax instead.
+#
+# Heavy step: the j j ME + low pT>200 efficiency make this much slower than the
+# single-mult card -- prefer generating on LPC (native), then shower locally.
+import model sm
+define l+ = e+ mu+
+define l- = e- mu-
+define j = g u c d s u~ c~ d~ s~ b b~
+generate p p > l+ l- j
+add process p p > l+ l- j j
+
+output zjet_mglo_mlm
+
+launch zjet_mglo_mlm
+shower=OFF
+analysis=OFF
+done
+# --- run_card: MLM merging (ickkw=1), merging scale xqcut, Z-pT enrichment ---
+set nevents     50000
+set iseed       12345
+set ebeam1      6500
+set ebeam2      6500
+set ickkw       1
+set xqcut       30.0
+set ptllmin     100.0
+set mmll        60.0
+set mmllmax     120.0
+set ptl         0.0
+set etal        -1.0

@@ -14,8 +14,8 @@
 # NOTE: written for the macOS stock /bin/bash 3.2 (no associative arrays).
 set -euo pipefail
 
-N=30000; REGEN=0
-for a in "$@"; do case "$a" in --regen) REGEN=1 ;; *[0-9]*) N=$a ;; esac; done
+N=30000; REGEN=0; MLM=0
+for a in "$@"; do case "$a" in --regen) REGEN=1 ;; --mlm) MLM=1 ;; *[0-9]*) N=$a ;; esac; done
 HERE=$(cd "$(dirname "$0")" && pwd); cd "$HERE"
 MG5_IMG=scailfin/madgraph5-amc-nlo:mg5_amc3.5.1
 RIV_IMG=hepstore/rivet-pythia:latest
@@ -23,7 +23,17 @@ DRUN=(docker run --rm --platform linux/amd64 -v "$HERE":/work -w /work)
 # scailfin's ENTRYPOINT is mg5_aMC, so override it to bash to run our own command.
 MGRUN=(docker run --rm --platform linux/amd64 -v "$HERE":/work -w /work --entrypoint bash "$MG5_IMG")
 mkdir -p out
-LHE=zjet_mglo/Events/run_01/unweighted_events.lhe
+
+# single-mult (default) vs MLM-merged (--mlm): pick the MG5 card + the matching block
+# prepended to every shower cmnd (pythia_rivet activates the JetMatchingMadgraph hook
+# when JetMatching:merge=on; setMad reads xqcut/nJetMax from the merged LHE header).
+if [ "$MLM" -eq 1 ]; then
+  MG5CARD=gen/madgraph/mg5_zjet_mlm.dat; OUTDIR_MG=zjet_mglo_mlm
+  MATCH=$'JetMatching:merge = on\nJetMatching:scheme = 1\nJetMatching:setMad = on\nJetMatching:nJetMax = 2'
+else
+  MG5CARD=gen/madgraph/mg5_zjet.dat; OUTDIR_MG=zjet_mglo; MATCH=""
+fi
+LHE=$OUTDIR_MG/Events/run_01/unweighted_events.lhe
 
 # extra Pythia settings per variation (deltas only; the ME is fixed by the LHE).
 # Mirrors the standalone gen/pythia_{cr1,cr2,fragsoft,fraghard}.cmnd cards.
@@ -43,12 +53,12 @@ if [ "$REGEN" -eq 0 ] && [ -f "$LHE" ]; then
   echo "### [1/2] reusing existing LHE: $LHE  (--regen to rebuild) ###"
 else
   echo "### [1/2] MadGraph LHE (scailfin) ###"
-  rm -rf zjet_mglo                     # MG5 'output' refuses to overwrite an existing dir
+  rm -rf "$OUTDIR_MG"                   # MG5 'output' refuses to overwrite an existing dir
   # MG5's recursive make (GNU make 4.4+) hits a jobserver 'Bad file descriptor'
   # bug when compiling in parallel under amd64 emulation -> force serial builds.
   mg5card=out/_mg5_local.dat
   # serial build (nb_core=1) + size the LHE to N events (the LHE caps shower stats)
-  { echo "set nb_core 1"; sed "s/^set nevents.*/set nevents     $N/" gen/madgraph/mg5_zjet.dat; } > "$mg5card"
+  { echo "set nb_core 1"; sed "s/^set nevents.*/set nevents     $N/" "$MG5CARD"; } > "$mg5card"
   "${MGRUN[@]}" -c "mg5_aMC $mg5card"
   [ -f "$LHE.gz" ] && gunzip -f "$LHE.gz"
   [ -f "$LHE" ] || { echo "no LHE produced at $LHE" >&2; exit 1; }
@@ -60,8 +70,10 @@ echo "LHE: $LHE"
 "${DRUN[@]}" "$RIV_IMG" bash -lc '
   export RIVET_ANALYSIS_PATH=/work:${RIVET_ANALYSIS_PATH:-}
   [ -f RivetCMS_ZJET_JETMASS.so ] || rivet-build RivetCMS_ZJET_JETMASS.so CMS_ZJET_JETMASS.cc
-  [ -x pythia_rivet ] || g++ gen/pythia_rivet.cc $(pythia8-config --cxxflags --libs) \
-      $(rivet-config --cppflags --ldflags --libs) -std=c++17 -o pythia_rivet
+  if [ ! -x pythia_rivet ] || [ gen/pythia_rivet.cc -nt pythia_rivet ]; then
+    g++ gen/pythia_rivet.cc $(pythia8-config --cxxflags --libs) \
+        $(rivet-config --cppflags --ldflags --libs) -std=c++17 -o pythia_rivet
+  fi
 '
 for name in pythia pythia_vincia pythia_cr1 pythia_cr2 pythia_fragsoft pythia_fraghard; do
   cmnd="out/_mglo_${name}.cmnd"
@@ -69,6 +81,7 @@ for name in pythia pythia_vincia pythia_cr1 pythia_cr2 pythia_fragsoft pythia_fr
     echo "Beams:LHEF = $LHE"
     echo "PartonLevel:MPI = on"
     echo "HadronLevel:all = on"
+    [ -n "$MATCH" ] && printf '%b\n' "$MATCH"
     var_settings "$name"; } > "$cmnd"
   out="out/mglo_${name}.yoda"
   echo "### shower: $name -> $out ###"
