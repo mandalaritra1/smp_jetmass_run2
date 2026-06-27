@@ -594,7 +594,11 @@ def ensure_client(
         from coffea_casa import CoffeaCasaCluster
 
         cluster = CoffeaCasaCluster(memory="6 GiB", cores=1)
-        cluster.adapt(minimum=0, maximum=300)
+        # Keep a worker floor: with minimum=0 the cluster scales to zero during the
+        # idle gap between preprocessing and processing (heavy/many-file datasets like
+        # data), which retires the workers holding the preprocessed data and drops the
+        # scheduler<->client comm ("CommClosedError: Scheduler->Client already closed").
+        cluster.adapt(minimum=2, maximum=300)
         client = Client(cluster)
         print("Created CoffeaCasaCluster client.")
         return client
