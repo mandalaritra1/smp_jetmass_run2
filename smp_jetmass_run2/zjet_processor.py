@@ -597,6 +597,12 @@ class QJetMassProcessor(processor.ProcessorABC):
             iov = dataset.split("_")[-2]
             return scale_from(1976.0, iov)
 
+        if dataset.startswith("inclusive_"):
+            # NLO amcatnloFXFX DY M-50; xsdb GenXSecAnalyzer value (UL ~6404 pb).
+            # NLO matrix element, so no LO->NNLO k-factor (unlike the pythia path).
+            iov = dataset.split("_")[-1]
+            return scale_from(6404.0, iov)
+
         if ("st" in dataset) or ("ST" in dataset):
             xsdb = {
                 "st_tW_antitop": 34.97,
@@ -3091,6 +3097,20 @@ class QJetMassProcessor(processor.ProcessorABC):
                         continue
                     if sw == 0.0:
                         print(f"[postprocess] WARNING: sumw==0 for dataset '{name}'. Skipping normalization.")
+                        continue
+                    scale = (xs * lumi_fb * 1000) / sw
+                    h.view(flow=True)[i] *= scale
+                    if i==0:
+                        self.logging.info(f"Scaled {hname} for dataset {ds} by {scale:.6f} = {xs} * {lumi_fb*1000} / {sw}")
+                elif ds.startswith('inclusive_'):
+                    # NLO amcatnloFXFX DY M-50; xsdb GenXSecAnalyzer (UL ~6404 pb), no k-factor.
+                    xs = 6404.0
+                    lumi_db = {'UL16NanoAODv9':19.52 , 'UL16NanoAODAPVv9': 16.81 ,'UL17NanoAODv9': 41.48 , 'UL18NanoAODv9': 59.83}
+                    iov = ds.split('_')[-1]
+                    lumi_fb = lumi_db[iov]
+                    sw = sumw[ds]
+                    if sw == 0.0:
+                        print(f"[postprocess] WARNING: sumw==0 for dataset '{ds}'. Skipping normalization.")
                         continue
                     scale = (xs * lumi_fb * 1000) / sw
                     h.view(flow=True)[i] *= scale
