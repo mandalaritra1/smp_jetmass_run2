@@ -97,6 +97,9 @@ herwig-S*.*
 mglo_herwig-S*.*
 rivet/Process/
 rivet/Results/
+rivet/Results.zip*
+rivet/Settings_Report
+rivet/pythia_rivet
 rivet/Status__*
 rivet/zjet_mglo/
 rivet/**/_lhe_pythia.cmnd

@@ -1,0 +1,29 @@
+! Pythia8 colour-reconnection variation: QCD-inspired CR (mode 1).
+! Identical ME + default (simple, pT-ordered) shower as gen/pythia.cmnd; ONLY the
+! colour-reconnection model differs, so the jet-mass shape change isolates CR.
+! NOTE: this flips the CR mode on the default (Monash) tune -- it is NOT the fully
+! retuned CMS CP5-CR1 tune. For a publication-grade CR uncertainty (a la TOP-20-001),
+! substitute the retuned CP5-CR1 parameter set (CP5 tune paper, arXiv:1903.12179).
+
+Beams:eCM = 13000.
+Main:numberOfEvents = 20000
+Random:setSeed = on
+Random:seed = 12345
+
+! Z/gamma* + parton (recoil jet at ME level)
+WeakBosonAndParton:qqbar2gmZg = on
+WeakBosonAndParton:qg2gmZq   = on
+PhaseSpace:pTHatMin = 150.
+PhaseSpace:mHatMin  = 60.
+
+! Z -> e e / mu mu only
+23:onMode = off
+23:onIfAny = 11 13
+
+PartonLevel:MPI = on
+HadronLevel:all = on
+
+! --- colour-reconnection variation: QCD-inspired model ---
+ColourReconnection:reconnect = on
+ColourReconnection:mode      = 1    ! 0=MPI-based (default), 1=QCD-inspired
+BeamRemnants:remnantMode     = 1    ! required companion setting for CR mode 1

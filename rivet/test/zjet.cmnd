@@ -1,0 +1,26 @@
+! Pythia8 card: Z(->ee/mumu) + jet for testing CMS_ZJET_JETMASS.
+! Z+parton at matrix-element level with a hard recoil so the pT>200 GeV
+! fiducial region is populated efficiently.
+
+Beams:eCM = 13000.
+Main:numberOfEvents = 5000
+
+Random:setSeed = on
+Random:seed = 12345
+
+! Write HepMC; Rivet is run as a separate step on the .hepmc file
+Main:writeHepMC = on
+
+! Z/gamma* + parton (recoil jet at ME level)
+WeakBosonAndParton:qqbar2gmZg = on
+WeakBosonAndParton:qg2gmZq   = on
+PhaseSpace:pTHatMin = 200.
+PhaseSpace:mHatMin  = 60.
+
+! Z -> e e / mu mu only
+23:onMode = off
+23:onIfAny = 11 13
+
+! Standard shower + hadronisation + MPI (defaults are fine)
+PartonLevel:MPI = on
+HadronLevel:all = on

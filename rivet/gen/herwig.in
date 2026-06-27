@@ -1,0 +1,35 @@
+# Herwig 7.3 standalone: Z(->ll)+jet, leading-order internal matrix element.
+# usage:  Herwig read gen/herwig.in   then   Herwig run herwig.run -N <nevents>
+# The Rivet analysis runs in-process (no HepMC needed); the .so must be on
+# RIVET_ANALYSIS_PATH.
+
+read snippets/PPCollider.in
+
+cd /Herwig/Generators
+# sqrt(s) = 13 TeV
+set EventGenerator:EventHandler:LuminosityFunction:Energy 13000.0
+
+##################################################
+# Matrix element: Z + jet, Z -> charged leptons.
+# (tau pairs are produced too but are removed by the routine's prompt-lepton
+#  selection, so the measured sample is effectively ee + mumu.)
+##################################################
+cd /Herwig/MatrixElements/
+insert SubProcess:MatrixElements[0] MEZJet
+set MEZJet:ZDecay ChargedLeptons
+
+# Recoil-jet pT cut at ME level, kept below the 200 GeV fiducial threshold so
+# the lowest measured pT bin is unbiased by the generation cut.
+set /Herwig/Cuts/JetKtCut:MinKT 150.0*GeV
+# Dilepton invariant-mass window around the Z.
+set /Herwig/Cuts/MassCut:MinM 60.*GeV
+set /Herwig/Cuts/MassCut:MaxM 120.*GeV
+
+##################################################
+# Rivet analysis hook (with shower/hadronisation)
+##################################################
+read snippets/Rivet.in
+insert /Herwig/Analysis/Rivet:Analyses 0 CMS_ZJET_JETMASS
+
+cd /Herwig/Generators
+saverun herwig EventGenerator

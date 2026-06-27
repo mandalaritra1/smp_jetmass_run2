@@ -1,0 +1,32 @@
+! Pythia8 hadronization variation: HARDER Lund fragmentation.
+! Identical ME + default (simple) shower + CR as gen/pythia.cmnd; ONLY the Lund
+! string fragmentation function is varied, so the jet-mass shape change isolates
+! hadronization. Smaller aLund/bLund -> weaker suppression of high-z -> harder
+! fragmentation (fewer, higher-z hadrons).
+! Monash defaults: StringZ:aLund=0.68, StringZ:bLund=0.98, StringPT:sigma=0.335.
+! NOTE: the +/- magnitudes here are an exploratory bracket of the hadronization
+! model; for the final modelling systematic replace them with the CP5 eigentune
+! (Lund-parameter) uncertainties.
+
+Beams:eCM = 13000.
+Main:numberOfEvents = 20000
+Random:setSeed = on
+Random:seed = 12345
+
+! Z/gamma* + parton (recoil jet at ME level)
+WeakBosonAndParton:qqbar2gmZg = on
+WeakBosonAndParton:qg2gmZq   = on
+PhaseSpace:pTHatMin = 150.
+PhaseSpace:mHatMin  = 60.
+
+! Z -> e e / mu mu only
+23:onMode = off
+23:onIfAny = 11 13
+
+PartonLevel:MPI = on
+HadronLevel:all = on
+
+! --- hadronization variation: harder Lund fragmentation function ---
+StringZ:aLund  = 0.58    ! Monash 0.68
+StringZ:bLund  = 0.78    ! Monash 0.98
+StringPT:sigma = 0.305   ! Monash 0.335

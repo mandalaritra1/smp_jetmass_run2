@@ -1,0 +1,42 @@
+# MadGraph5_aMC@NLO script: LO Z(->ee/mumu)+jet, LHE output only.
+# Run on cvmfs/LPC:   mg5_aMC gen/madgraph/mg5_zjet.dat
+# Produces an LHE file under  zjet_mglo/Events/run_01/  that is then showered
+# two ways (Pythia8, Herwig7) -- see shower_pythia.cmnd / shower_herwig.in.
+#
+# This is a single-multiplicity LO Z+1jet sample with a hard jet cut, kept
+# consistent with the Herwig (MEZJet) and Sherpa (LO Z+1j) setups in this dir.
+# To make a proper MLM-merged madgraphMLM sample instead, add the higher
+# multiplicities and turn on matching, e.g.:
+#     generate p p > l+ l- j
+#     add process p p > l+ l- j j
+#     add process p p > l+ l- j j j
+#   and in the run_card set  ickkw 1  and  xqcut 30  (then enable MLM in the
+#   shower with the JetMatching settings noted in shower_pythia.cmnd).
+
+import model sm
+define l+ = e+ mu+
+define l- = e- mu-
+define j = g u c d s u~ c~ d~ s~ b b~
+generate p p > l+ l- j
+
+output zjet_mglo
+
+launch zjet_mglo
+shower=OFF
+analysis=OFF
+done
+# --- run_card settings ---
+set nevents     30000
+set iseed       12345
+set ebeam1      6500
+set ebeam2      6500
+# leading-jet phase space: cut below the 200 GeV fiducial threshold
+set ptj         150.0
+set etaj        5.0
+# dilepton mass window around the Z
+set mmll        60.0
+set mmllmax     120.0
+set ptl         0.0
+set etal        -1.0
+# LO PDF (MG default nn23lo1); swap to a CMS set via pdlabel/lhaid if desired
+done

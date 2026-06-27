@@ -1,0 +1,24 @@
+! Pythia8 with the VINCIA shower, Z(->ee/mumu)+jet, pThat ENHANCEMENT.
+! Same enhanced single-run setup as gen/biased/pythia.cmnd; only the shower
+! model differs, so the comparison stays apples-to-apples.
+
+Beams:eCM = 13000.
+Random:setSeed = on
+Random:seed = 12345
+
+PartonShowers:model = 2
+
+WeakBosonAndParton:qqbar2gmZg = on
+WeakBosonAndParton:qg2gmZq   = on
+PhaseSpace:pTHatMin = 120.
+PhaseSpace:mHatMin  = 60.
+
+PhaseSpace:bias2Selection      = on
+PhaseSpace:bias2SelectionPow   = 4.0
+PhaseSpace:bias2SelectionRef   = 200.0
+
+23:onMode = off
+23:onIfAny = 11 13
+
+PartonLevel:MPI = on
+HadronLevel:all = on

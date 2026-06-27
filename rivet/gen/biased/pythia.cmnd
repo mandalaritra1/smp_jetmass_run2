@@ -1,0 +1,27 @@
+! Pythia8 (simple shower) Z(->ee/mumu)+jet with pThat ENHANCEMENT.
+! One run, weighted events: high-pThat is oversampled and given a compensating
+! (smaller) weight, so statistics are roughly flat across the steeply-falling
+! jet-pT spectrum while the cross section is preserved. Rivet uses the weights.
+
+Beams:eCM = 13000.
+Random:setSeed = on
+Random:seed = 12345
+
+! Z/gamma* + parton (2->2, recoil jet at ME level)
+WeakBosonAndParton:qqbar2gmZg = on
+WeakBosonAndParton:qg2gmZq   = on
+PhaseSpace:pTHatMin = 120.
+PhaseSpace:mHatMin  = 60.
+
+! Enhance the pThat selection ~ (pThat/ref)^pow, compensated by 1/that in the
+! event weight. pow=4 roughly flattens the ~pThat^-5..-6 fall.
+PhaseSpace:bias2Selection      = on
+PhaseSpace:bias2SelectionPow   = 4.0
+PhaseSpace:bias2SelectionRef   = 200.0
+
+! Z -> e e / mu mu only
+23:onMode = off
+23:onIfAny = 11 13
+
+PartonLevel:MPI = on
+HadronLevel:all = on

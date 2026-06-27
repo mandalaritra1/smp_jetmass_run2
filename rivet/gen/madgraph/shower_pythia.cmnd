@@ -1,0 +1,27 @@
+! Pythia8 shower of the MadGraph LO Z+jet LHE file -> "mglo+pythia".
+! Run with main144, pointing Beams:LHEF at the unzipped MadGraph LHE, e.g.:
+!   pythia8-main144 -c gen/madgraph/shower_pythia.cmnd \
+!       gen/madgraph/lhe.cmnd -o out/mglo_pythia
+! where lhe.cmnd just sets:  Beams:LHEF = <path>/unweighted_events.lhe
+! (kept separate so this card is reusable across runs).
+
+! Read events from the Les Houches event file
+Beams:frameType = 4
+
+! The hard process (Z->ll + jet) and decay are already in the LHE
+PartonLevel:MPI = on
+HadronLevel:all = on
+
+! --- MLM matching ---
+! For the single-multiplicity LO Z+1jet sample above, NO merging is needed.
+! If you instead generated a multi-jet MLM sample (see mg5_zjet.dat), enable:
+!   JetMatching:merge        = on
+!   JetMatching:scheme       = 1        ! MadGraph MLM
+!   JetMatching:setMad       = on       ! take qCut/etc. from the LHE header
+!   JetMatching:qCut         = 30.0
+!   JetMatching:nJetMax      = 2
+! and load the MLM UserHook (main144 supports it via the LHEF header for
+! recent Pythia; otherwise use the dedicated main89-style driver).
+
+Main:numberOfEvents = 0    ! 0 = process all events in the LHE file
+Main:writeHepMC = on

@@ -1,0 +1,36 @@
+Name: CMS_ZJET_JETMASS
+Year: 2025
+Summary: Z(ll)+jet groomed and ungroomed AK8 jet-mass cross sections (Run 2)
+Experiment: CMS
+Collider: LHC
+Status: UNVALIDATED
+Authors:
+ - Aritra Mandal <mandalaritra1@gmail.com>
+References:
+ - 'smp_jetmass_run2 (zjet channel), placeholder until paper/HepData ID exists'
+RunInfo:
+  Drell-Yan Z -> ee / mu mu + jets at sqrt(s) = 13 TeV. Generate inclusive or
+  HT/pT-sliced DY samples; both Z decay channels (ee, mumu) are combined.
+NeedCrossSection: yes
+Beams: [p+, p+]
+Energies: [13000]
+Description:
+  'Particle-level (fiducial) measurement of the mass of the AK8 jet recoiling
+  against a Z boson in Z(ll)+jet events, both ungroomed and after soft-drop
+  grooming (beta = 0, z_cut = 0.1). The fiducial region is defined by exactly
+  two same-flavour opposite-sign dressed leptons (electrons pT > 40 GeV, muons
+  pT > 29 GeV, |eta| < 2.4), with pT(Z) > 90 GeV and 71 < m(ll) < 111 GeV. The
+  candidate jet is the highest-pT anti-kT R = 0.8 jet with |y| < 2.4, separated
+  from both leptons by dR > 0.4, back-to-back with the Z (dphi > 1.57) and
+  balanced in pT (|pTZ - pTjet|/(pTZ + pTjet) < 0.3). Jet mass and
+  rho = 2*log10(m/(pT*R)) are measured in jet-pT bins [200, 290, 400, inf] GeV.
+  This routine reproduces the generator-level selection of the coffea
+  QJetMassProcessor used in the analysis.'
+Keywords:
+ - zjet
+ - jetmass
+ - softdrop
+ - groomed
+ - drell-yan
+BibKey: ''
+BibTeX: ''

@@ -1,0 +1,62 @@
+# MadGraph5 LO Z(->ee/mumu)+jet, generated in JET-PT SLICES (ptj/ptjmax windows)
+# for flat statistics across the steeply-falling spectrum. One process, four
+# launches -> run_01..run_04, each LHE carrying its own slice cross section.
+# systematics off so the LHE has a single weight (avoids thousands of AUX
+# weight copies being propagated by the shower's Rivet interface).
+#
+#   mg5_aMC gen/madgraph/mg5_zjet_sliced.dat
+#
+# Slice edges match the Pythia/Vincia pThat slices: 120/200/300/450/inf GeV.
+
+import model sm
+define l+ = e+ mu+
+define l- = e- mu-
+define j = g u c d s u~ c~ d~ s~ b b~
+generate p p > l+ l- j
+output zjet_mglo_sliced
+
+# ---- slice 0: ptj in [120,200] ----
+launch zjet_mglo_sliced
+shower=OFF
+analysis=OFF
+done
+set nevents 8000
+set iseed 1001
+set ebeam1 6500
+set ebeam2 6500
+set ptj 120
+set ptjmax 200
+set mmll 60
+set mmllmax 120
+set systematics_program none
+done
+
+# ---- slice 1: ptj in [200,300] ----
+launch zjet_mglo_sliced
+shower=OFF
+done
+set nevents 8000
+set iseed 1002
+set ptj 200
+set ptjmax 300
+done
+
+# ---- slice 2: ptj in [300,450] ----
+launch zjet_mglo_sliced
+shower=OFF
+done
+set nevents 8000
+set iseed 1003
+set ptj 300
+set ptjmax 450
+done
+
+# ---- slice 3: ptj in [450,inf] ----
+launch zjet_mglo_sliced
+shower=OFF
+done
+set nevents 8000
+set iseed 1004
+set ptj 450
+set ptjmax -1
+done

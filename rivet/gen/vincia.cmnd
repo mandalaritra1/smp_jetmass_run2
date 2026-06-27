@@ -1,0 +1,23 @@
+! Pythia8 with the VINCIA antenna shower (PartonShowers:model = 2).
+! Identical hard process to pythia.cmnd so the comparison isolates the shower.
+
+Beams:eCM = 13000.
+Main:numberOfEvents = 20000
+Random:setSeed = on
+Random:seed = 12345
+
+! Select the Vincia shower
+PartonShowers:model = 2
+
+! Z/gamma* + parton (recoil jet at ME level)
+WeakBosonAndParton:qqbar2gmZg = on
+WeakBosonAndParton:qg2gmZq   = on
+PhaseSpace:pTHatMin = 150.
+PhaseSpace:mHatMin  = 60.
+
+! Z -> e e / mu mu only
+23:onMode = off
+23:onIfAny = 11 13
+
+PartonLevel:MPI = on
+HadronLevel:all = on
