@@ -30,6 +30,7 @@ LHE=zjet_mglo/Events/run_01/unweighted_events.lhe
 var_settings() {
   case "$1" in
     pythia) : ;;   # nominal -- no extra settings
+    pythia_vincia) printf 'PartonShowers:model = 2\n' ;;   # shower source (Vincia)
     pythia_cr1) printf 'ColourReconnection:reconnect = on\nColourReconnection:mode = 1\nBeamRemnants:remnantMode = 1\n' ;;
     pythia_cr2) printf 'ColourReconnection:reconnect = on\nColourReconnection:mode = 2\n' ;;
     pythia_fragsoft) printf 'StringZ:aLund = 0.78\nStringZ:bLund = 1.18\nStringPT:sigma = 0.365\n' ;;
@@ -46,7 +47,8 @@ else
   # MG5's recursive make (GNU make 4.4+) hits a jobserver 'Bad file descriptor'
   # bug when compiling in parallel under amd64 emulation -> force serial builds.
   mg5card=out/_mg5_local.dat
-  { echo "set nb_core 1"; cat gen/madgraph/mg5_zjet.dat; } > "$mg5card"
+  # serial build (nb_core=1) + size the LHE to N events (the LHE caps shower stats)
+  { echo "set nb_core 1"; sed "s/^set nevents.*/set nevents     $N/" gen/madgraph/mg5_zjet.dat; } > "$mg5card"
   "${MGRUN[@]}" -c "mg5_aMC $mg5card"
   [ -f "$LHE.gz" ] && gunzip -f "$LHE.gz"
   [ -f "$LHE" ] || { echo "no LHE produced at $LHE" >&2; exit 1; }
@@ -61,7 +63,7 @@ echo "LHE: $LHE"
   [ -x pythia_rivet ] || g++ gen/pythia_rivet.cc $(pythia8-config --cxxflags --libs) \
       $(rivet-config --cppflags --ldflags --libs) -std=c++17 -o pythia_rivet
 '
-for name in pythia pythia_cr1 pythia_cr2 pythia_fragsoft pythia_fraghard; do
+for name in pythia pythia_vincia pythia_cr1 pythia_cr2 pythia_fragsoft pythia_fraghard; do
   cmnd="out/_mglo_${name}.cmnd"
   { echo "Beams:frameType = 4"
     echo "Beams:LHEF = $LHE"
