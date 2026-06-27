@@ -554,9 +554,11 @@ class QJetMassProcessor(processor.ProcessorABC):
     @staticmethod
     def _postprocess_scale_for_dataset(dataset, sumw):
         dataset = str(dataset)
+        # 2016 UL: preVFP (APV) = 19.52 fb-1, postVFP = 16.81 fb-1.
+        # UL16NanoAODv9 = postVFP, UL16NanoAODAPVv9 = preVFP/APV.
         lumi_db = {
-            "UL16NanoAODv9": 19.52,
-            "UL16NanoAODAPVv9": 16.81,
+            "UL16NanoAODv9": 16.81,
+            "UL16NanoAODAPVv9": 19.52,
             "UL17NanoAODv9": 41.48,
             "UL18NanoAODv9": 59.83,
         }
@@ -3015,7 +3017,7 @@ class QJetMassProcessor(processor.ProcessorABC):
 
     def postprocess(self, accumulator):
         hname_list = [key for key in accumulator.keys() if key not in ("cutflow", "nev", "sumw")]
-        lumi_db = {'UL16NanoAODv9':19.52 , 'UL16NanoAODAPVv9': 16.81 ,'UL17NanoAODv9': 41.48 , 'UL18NanoAODv9': 59.83}
+        lumi_db = {'UL16NanoAODv9':16.81 , 'UL16NanoAODAPVv9': 19.52 ,'UL17NanoAODv9': 41.48 , 'UL18NanoAODv9': 59.83}
         #hname_list = ["ptjet_mjet_u_reco", 'ptjet_mjet_g_reco', "ptjet_mjet_u_gen", "ptjet_mjet_g_gen", "response_matrix_u", "response_matrix_g"]
         sumw = accumulator["sumw"]
         
@@ -3043,7 +3045,7 @@ class QJetMassProcessor(processor.ProcessorABC):
                         
                     }
                     
-                    lumi_db = {'UL16NanoAODv9':19.52 , 'UL16NanoAODAPVv9': 16.81 ,'UL17NanoAODv9': 41.48 , 'UL18NanoAODv9': 59.83}
+                    lumi_db = {'UL16NanoAODv9':16.81 , 'UL16NanoAODAPVv9': 19.52 ,'UL17NanoAODv9': 41.48 , 'UL18NanoAODv9': 59.83}
                     ht_bin = ds.split('_')[-1]
                     iov = ds.split('_')[-2]
                     xs = xsdb[ht_bin]
@@ -3072,7 +3074,7 @@ class QJetMassProcessor(processor.ProcessorABC):
                     
                 elif 'herwig' in ds:
                     xs = 5.036
-                    lumi_db = {'UL16NanoAODv9':19.52 , 'UL16NanoAODAPVv9': 16.81 ,'UL17NanoAODv9': 41.48 , 'UL18NanoAODv9': 59.83}
+                    lumi_db = {'UL16NanoAODv9':16.81 , 'UL16NanoAODAPVv9': 19.52 ,'UL17NanoAODv9': 41.48 , 'UL18NanoAODv9': 59.83}
                     iov = ds.split('_')[-2]
                     lumi_fb = lumi_db[iov]
                     sw = sumw[ds]
@@ -3088,7 +3090,7 @@ class QJetMassProcessor(processor.ProcessorABC):
                         self.logging.info(f"Scaled {hname} for dataset {ds} by {scale:.6f} = {xs} * {lumi_fb*1000} / {sw}")
                 elif 'powheg' in ds:
                     xs = 1976.0
-                    lumi_db = {'UL16NanoAODv9':19.52 , 'UL16NanoAODAPVv9': 16.81 ,'UL17NanoAODv9': 41.48 , 'UL18NanoAODv9': 59.83}
+                    lumi_db = {'UL16NanoAODv9':16.81 , 'UL16NanoAODAPVv9': 19.52 ,'UL17NanoAODv9': 41.48 , 'UL18NanoAODv9': 59.83}
                     iov = ds.split('_')[-2]
                     lumi_fb = lumi_db[iov]
                     sw = sumw[ds]
@@ -3105,7 +3107,7 @@ class QJetMassProcessor(processor.ProcessorABC):
                 elif ds.startswith('inclusive_'):
                     # NLO amcatnloFXFX DY M-50; xsdb GenXSecAnalyzer (UL ~6404 pb), no k-factor.
                     xs = 6404.0
-                    lumi_db = {'UL16NanoAODv9':19.52 , 'UL16NanoAODAPVv9': 16.81 ,'UL17NanoAODv9': 41.48 , 'UL18NanoAODv9': 59.83}
+                    lumi_db = {'UL16NanoAODv9':16.81 , 'UL16NanoAODAPVv9': 19.52 ,'UL17NanoAODv9': 41.48 , 'UL18NanoAODv9': 59.83}
                     iov = ds.split('_')[-1]
                     lumi_fb = lumi_db[iov]
                     sw = sumw[ds]
@@ -3129,7 +3131,7 @@ class QJetMassProcessor(processor.ProcessorABC):
                         xs = xsdb['ST_t-channel_antitop']
                     else:
                         xs = xsdb['ST_t-channel_top']
-                    lumi_db = {'UL16NanoAODv9':19.52 , 'UL16NanoAODAPVv9': 16.81 ,'UL17NanoAODv9': 41.48 , 'UL18NanoAODv9': 59.83}
+                    lumi_db = {'UL16NanoAODv9':16.81 , 'UL16NanoAODAPVv9': 19.52 ,'UL17NanoAODv9': 41.48 , 'UL18NanoAODv9': 59.83}
                     iov = ds.split('_')[-1]
                     # self.logging.debug(f"{iov}")
                     lumi_fb = lumi_db[iov]
@@ -3146,7 +3148,7 @@ class QJetMassProcessor(processor.ProcessorABC):
                         self.logging.info(f"Scaled {hname} for dataset {ds} by {scale:.6f} = {xs} * {lumi_fb*1000} / {sw}")
                 elif ('ww' in ds):
                     xs = 75.95
-                    lumi_db = {'UL16NanoAODv9':19.52 , 'UL16NanoAODAPVv9': 16.81 ,'UL17NanoAODv9': 41.48 , 'UL18NanoAODv9': 59.83}
+                    lumi_db = {'UL16NanoAODv9':16.81 , 'UL16NanoAODAPVv9': 19.52 ,'UL17NanoAODv9': 41.48 , 'UL18NanoAODv9': 59.83}
                     iov = ds.split('_')[-1]
                     # self.logging.debug(f"{iov}")
                     lumi_fb = lumi_db[iov]
@@ -3163,7 +3165,7 @@ class QJetMassProcessor(processor.ProcessorABC):
                         self.logging.info(f"Scaled {hname} for dataset {ds} by {scale:.6f} = {xs} * {lumi_fb*1000} / {sw}")
                 elif ('wz' in ds):
                     xs = 27.6
-                    lumi_db = {'UL16NanoAODv9':19.52 , 'UL16NanoAODAPVv9': 16.81 ,'UL17NanoAODv9': 41.48 , 'UL18NanoAODv9': 59.83}
+                    lumi_db = {'UL16NanoAODv9':16.81 , 'UL16NanoAODAPVv9': 19.52 ,'UL17NanoAODv9': 41.48 , 'UL18NanoAODv9': 59.83}
                     iov = ds.split('_')[-1]
                     # self.logging.debug(f"{iov}")
                     lumi_fb = lumi_db[iov]
@@ -3180,7 +3182,7 @@ class QJetMassProcessor(processor.ProcessorABC):
                         self.logging.info(f"Scaled {hname} for dataset {ds} by {scale:.6f} = {xs} * {lumi_fb*1000} / {sw}")
                 elif ('zz' in ds):
                     xs = 12.17
-                    lumi_db = {'UL16NanoAODv9':19.52 , 'UL16NanoAODAPVv9': 16.81 ,'UL17NanoAODv9': 41.48 , 'UL18NanoAODv9': 59.83}
+                    lumi_db = {'UL16NanoAODv9':16.81 , 'UL16NanoAODAPVv9': 19.52 ,'UL17NanoAODv9': 41.48 , 'UL18NanoAODv9': 59.83}
                     iov = ds.split('_')[-1]
                     # self.logging.debug(f"{iov}")
                     lumi_fb = lumi_db[iov]
@@ -3197,7 +3199,7 @@ class QJetMassProcessor(processor.ProcessorABC):
                         self.logging.info(f"Scaled {hname} for dataset {ds} by {scale:.6f} = {xs} * {lumi_fb*1000} / {sw}")
                 elif ('ttjets' in ds):
                     xs = 471.7
-                    lumi_db = {'UL16NanoAODv9':19.52 , 'UL16NanoAODAPVv9': 16.81 ,'UL17NanoAODv9': 41.48 , 'UL18NanoAODv9': 59.83}
+                    lumi_db = {'UL16NanoAODv9':16.81 , 'UL16NanoAODAPVv9': 19.52 ,'UL17NanoAODv9': 41.48 , 'UL18NanoAODv9': 59.83}
                     iov = ds.split('_')[-1]
                     # self.logging.debug(f"{iov}")
                     lumi_fb = lumi_db[iov]
