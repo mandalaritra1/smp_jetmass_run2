@@ -56,7 +56,8 @@ Treat raw sources, PDFs, and other linked repositories as read-only unless asked
    `channel` axis**; the `jk` axis appears only in `mass_jk`/`rho_jk` modes.
 8. **Modes** gate registration; `fill_hist` no-ops on unregistered hists, so a fill
    call left in `process` is safe even when its hist isn't registered for that mode.
-   `minimal`=mass, `minimal_rho`=rho, `validation`/`full`=diagnostics, `*_jk`=+jk.
+   `minimal`=mass, `minimal_rho`=rho, `validation`/`full`=diagnostics, `*_jk`=+jk,
+   `mass_cov`=joint gen groomed×ungroomed **mass and rho** per pT (groomed↔ungroomed covariance).
 9. **2017 JEC uses V6 for all** (`_resolve_jec_tags`).
 
 ## Verify after changes (local files)

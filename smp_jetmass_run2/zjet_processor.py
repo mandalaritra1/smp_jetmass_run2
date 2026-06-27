@@ -146,6 +146,10 @@ class QJetMassProcessor(processor.ProcessorABC):
         mass_ratio_axis = binning.mass_ratio_axis
         m_u_reco_5gev_axis = binning.m_u_reco_5gev_axis
         m_g_reco_5gev_axis = binning.m_g_reco_5gev_axis
+        m_u_gen_cov_axis = binning.m_u_gen_cov_axis
+        m_g_gen_cov_axis = binning.m_g_gen_cov_axis
+        mpt_u_gen_cov_axis = binning.mpt_u_gen_cov_axis
+        mpt_g_gen_cov_axis = binning.mpt_g_gen_cov_axis
         dr_axis = binning.dr_axis
         dr_fine_axis = binning.dr_fine_axis
         dphi_axis = binning.dphi_axis    
@@ -234,6 +238,17 @@ class QJetMassProcessor(processor.ProcessorABC):
 
                 #register_hist(self.hists, 'm_u_jet_reco_over_gen', [dataset_axis, ptgen_axis, mgen_axis, frac_axis])
                 #register_hist(self.hists, 'm_g_jet_reco_over_gen', [dataset_axis, ptgen_axis, mgen_axis, frac_axis])
+
+        if self._mode == "mass_cov":
+            # Joint gen-level (groomed mass) x (ungroomed mass) per pT bin, filled
+            # from the SAME events -> gives the statistical correlation between the
+            # groomed and ungroomed mass spectra (ARC Scope#3 / simultaneous fit).
+            if self._do_gen:
+                register_hist(self.hists, "ptjet_mjet_g_vs_u_gen",
+                              [dataset_axis, channel_axis, ptgen_axis, m_g_gen_cov_axis, m_u_gen_cov_axis, syst_axis])
+                register_hist(self.hists, "ptjet_rhojet_g_vs_u_gen",
+                              [dataset_axis, channel_axis, ptgen_axis, mpt_g_gen_cov_axis, mpt_u_gen_cov_axis, syst_axis])
+
         if self._mode == "validation":
             register_hist(self.hists, "pt_mupos", [dataset_axis, pt_axis, syst_axis])
             register_hist(self.hists, "eta_mupos", [dataset_axis, eta_axis, syst_axis])
@@ -2100,6 +2115,43 @@ class QJetMassProcessor(processor.ProcessorABC):
                                     include=_gen_include,
                                     modifier=_gen_modifier,
                                 )[sel_gen]
+
+                                # Joint gen groomed-vs-ungroomed mass (same events) for the
+                                # groomed<->ungroomed covariance. Built here while gen_jet_truth,
+                                # groomed_gen_jet_truth and weights_gen are all aligned to sel_gen,
+                                # with a SINGLE common valid mask so the two masses stay paired.
+                                # No-ops unless the hist is registered ("mass_cov" mode).
+                                if self._mode == "mass_cov":
+                                    _mu_cov = gen_jet_truth.mass
+                                    _mg_cov = groomed_gen_jet_truth.mass
+                                    _pt_cov = gen_jet_truth.pt
+                                    _ok_cov = ~(ak.is_none(_pt_cov) | ak.is_none(_mu_cov) | ak.is_none(_mg_cov))
+                                    _pt_c = _pt_cov[_ok_cov]
+                                    _mu_c = _mu_cov[_ok_cov]
+                                    _mg_c = _mg_cov[_ok_cov]
+                                    _w_c = weights_gen[_ok_cov]
+                                    fill_hist(
+                                        self.hists,
+                                        "ptjet_mjet_g_vs_u_gen",
+                                        dataset=dataset,
+                                        channel=channel,
+                                        ptgen=_pt_c,
+                                        m_g_gen=_mg_c,
+                                        m_u_gen=_mu_c,
+                                        weight=_w_c,
+                                        systematic=syst,
+                                    )
+                                    fill_hist(
+                                        self.hists,
+                                        "ptjet_rhojet_g_vs_u_gen",
+                                        dataset=dataset,
+                                        channel=channel,
+                                        ptgen=_pt_c,
+                                        mpt_g_gen=2*np.log10(_mg_c/(_pt_c*jetR)),
+                                        mpt_u_gen=2*np.log10(_mu_c/(_pt_c*jetR)),
+                                        weight=_w_c,
+                                        systematic=syst,
+                                    )
 
 
                                 ptgen = gen_jet_truth.pt

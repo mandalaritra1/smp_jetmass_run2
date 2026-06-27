@@ -172,6 +172,18 @@ class util_binning :
         self.mass_ratio_axis = hist.axis.Regular(200, 0, 2, name="mass_ratio", label=r"$m_{groomed}/m_{ungroomed}$")
         self.m_u_reco_5gev_axis = hist.axis.Regular(40, 0, 200, name="m_u_reco", label=r"$m_{ungroomed,RECO}$ [GeV]", underflow=False, overflow=True)
         self.m_g_reco_5gev_axis = hist.axis.Regular(40, 0, 200, name="m_g_reco", label=r"$m_{groomed,RECO}$ [GeV]", underflow=False, overflow=True)
+        # Coarse gen groomed/ungroomed mass axes for the groomed<->ungroomed
+        # covariance (joint gen-mass histogram, "mass_cov" mode). Same coarse mass
+        # binning for both, distinct names so a single 2D (m_g_gen x m_u_gen) hist
+        # can carry both; coarse enough to be a fit-ready covariance matrix.
+        _m_gen_cov_edges = [0.0, 10.0, 20.0, 30.0, 50.0, 70.0, 90.0, 110.0, 130.0, 150.0, 170.0, 200.0, 1000.0]
+        self.m_u_gen_cov_axis = hist.axis.Variable(_m_gen_cov_edges, name="m_u_gen", label=r"$m_{ungroomed,GEN}$ [GeV]")
+        self.m_g_gen_cov_axis = hist.axis.Variable(_m_gen_cov_edges, name="m_g_gen", label=r"$m_{groomed,GEN}$ [GeV]")
+        # Same idea for rho = 2 log10(m/(pt R)): joint gen groomed/ungroomed rho axes
+        # (production rho binning, distinct names) for the rho covariance.
+        _rho_gen_cov_edges = [-10, -6, -5, -4.5, -4, -3.5, -3, -2.5, -2, -1.5, -1, -0.5, 0]
+        self.mpt_u_gen_cov_axis = hist.axis.Variable(_rho_gen_cov_edges, name="mpt_u_gen", label=r"$\log_{10}(\rho^2)_{ungroomed,GEN}$")
+        self.mpt_g_gen_cov_axis = hist.axis.Variable(_rho_gen_cov_edges, name="mpt_g_gen", label=r"$\log_{10}(\rho^2)_{groomed,GEN}$")
         self.dr_axis = hist.axis.Regular(150, 0, 6.0, name="dr", label=r"$\Delta R$")
         self.dr_fine_axis = hist.axis.Regular(150, 0, 1.5, name="dr", label=r"$\Delta R$")
         self.dphi_axis = hist.axis.Regular(150, -2*np.pi, 2*np.pi, name="dphi", label=r"$\Delta \phi$")
