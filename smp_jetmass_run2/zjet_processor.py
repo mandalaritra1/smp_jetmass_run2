@@ -150,6 +150,10 @@ class QJetMassProcessor(processor.ProcessorABC):
         m_g_gen_cov_axis = binning.m_g_gen_cov_axis
         mpt_u_gen_cov_axis = binning.mpt_u_gen_cov_axis
         mpt_g_gen_cov_axis = binning.mpt_g_gen_cov_axis
+        m_u_reco_cov_axis = binning.m_u_reco_cov_axis
+        m_g_reco_cov_axis = binning.m_g_reco_cov_axis
+        mpt_u_reco_cov_axis = binning.mpt_u_reco_cov_axis
+        mpt_g_reco_cov_axis = binning.mpt_g_reco_cov_axis
         dr_axis = binning.dr_axis
         dr_fine_axis = binning.dr_fine_axis
         dphi_axis = binning.dphi_axis    
@@ -243,6 +247,10 @@ class QJetMassProcessor(processor.ProcessorABC):
             # Joint gen-level (groomed mass) x (ungroomed mass) per pT bin, filled
             # from the SAME events -> gives the statistical correlation between the
             # groomed and ungroomed mass spectra (ARC Scope#3 / simultaneous fit).
+            register_hist(self.hists, "ptjet_mjet_g_vs_u_reco",
+                          [dataset_axis, channel_axis, ptreco_axis, m_g_reco_cov_axis, m_u_reco_cov_axis, syst_axis])
+            register_hist(self.hists, "ptjet_rhojet_g_vs_u_reco",
+                          [dataset_axis, channel_axis, ptreco_axis, mpt_g_reco_cov_axis, mpt_u_reco_cov_axis, syst_axis])
             if self._do_gen:
                 register_hist(self.hists, "ptjet_mjet_g_vs_u_gen",
                               [dataset_axis, channel_axis, ptgen_axis, m_g_gen_cov_axis, m_u_gen_cov_axis, syst_axis])
@@ -2152,6 +2160,31 @@ class QJetMassProcessor(processor.ProcessorABC):
                                         weight=_w_c,
                                         systematic=syst,
                                     )
+                                    # reco-level counterpart (Scope#3 asks gen AND reco
+                                    # separately): same-event reco groomed×ungroomed, nominal
+                                    # weight only (one fill/event/channel; jet_syst is nominal
+                                    # in this branch). reco_jet is the JEC-corrected selected jet.
+                                    if syst == "nominal":
+                                        _rj = reco_jet[sel_reco]
+                                        _ptr = _rj.pt
+                                        _mur = _rj.mass
+                                        _mgr = _rj.msoftdrop
+                                        _okr = ~(ak.is_none(_ptr) | ak.is_none(_mur) | ak.is_none(_mgr))
+                                        _ptr_c = _ptr[_okr]; _mur_c = _mur[_okr]; _mgr_c = _mgr[_okr]
+                                        _wr_c = weights_reco[_okr]
+                                        fill_hist(
+                                            self.hists, "ptjet_mjet_g_vs_u_reco",
+                                            dataset=dataset, channel=channel, ptreco=_ptr_c,
+                                            m_g_reco=_mgr_c, m_u_reco=_mur_c,
+                                            weight=_wr_c, systematic=syst,
+                                        )
+                                        fill_hist(
+                                            self.hists, "ptjet_rhojet_g_vs_u_reco",
+                                            dataset=dataset, channel=channel, ptreco=_ptr_c,
+                                            mpt_g_reco=2*np.log10(_mgr_c/(_ptr_c*jetR)),
+                                            mpt_u_reco=2*np.log10(_mur_c/(_ptr_c*jetR)),
+                                            weight=_wr_c, systematic=syst,
+                                        )
 
 
                                 ptgen = gen_jet_truth.pt

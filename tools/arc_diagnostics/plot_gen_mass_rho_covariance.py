@@ -37,8 +37,13 @@ FAKE = ("/eos/cms/store/mc/RunIISummer20UL18NanoAODv9/"
 
 
 def cross_corr(h):
-    """(corr, var_g, var_u) cross block from a joint hist with sumw2 cells."""
-    h2 = h[{"dataset": sum, "channel": sum, "ptgen": sum, "systematic": sum}]
+    """(corr, var_g, var_u, axes) cross block from a joint hist with sumw2 cells.
+
+    Axis order is [dataset, channel, pt(gen|reco), groomed_obs, ungroomed_obs,
+    systematic]; we sum over everything except the two observable axes (3, 4).
+    """
+    drop = {a.name for i, a in enumerate(h.axes) if i not in (3, 4)}
+    h2 = h[{n: sum for n in drop}]
     sw2 = h2.variances()                 # Cov(N^g_a, N^u_b) = sumw2[a,b]
     var_g = sw2.sum(axis=1)              # groomed marginal variance (rows)
     var_u = sw2.sum(axis=0)              # ungroomed marginal variance (cols)
@@ -47,7 +52,7 @@ def cross_corr(h):
     return corr, var_g, var_u, h2.axes
 
 
-def panel(ax, corr, var_g, var_u, axes, obs_label, unit):
+def panel(ax, corr, var_g, var_u, axes, obs_label, unit, level=""):
     g_edges = axes[0].edges
     u_edges = axes[1].edges
     # keep only populated bins for a readable matrix
@@ -67,7 +72,11 @@ def panel(ax, corr, var_g, var_u, axes, obs_label, unit):
         if np.isfinite(val):
             ax.text(i, j, f"{val:.2f}", ha="center", va="center",
                     color="white" if val < 0.5 else "black", fontsize=8)
-    hep.cms.label("Private Work", data=False, com=13, ax=ax, fontsize=16)
+    if level:
+        ax.text(0.03, 0.94, level, transform=ax.transAxes, fontsize=16,
+                fontweight="bold", color="white",
+                bbox=dict(facecolor="black", alpha=0.5, pad=2, edgecolor="none"))
+    hep.cms.label("Private Work", data=False, com=13, ax=ax, fontsize=15)
     return im
 
 
@@ -88,26 +97,29 @@ def main():
     out = QJetMassProcessor(do_gen=True, mode="mass_cov",
                             systematics=["nominal"], jet_systematics=["nominal"]).process(ev)
 
-    cm, vg_m, vu_m, ax_m = cross_corr(out["ptjet_mjet_g_vs_u_gen"])
-    cr, vg_r, vu_r, ax_r = cross_corr(out["ptjet_rhojet_g_vs_u_gen"])
-
-    fig, (a1, a2) = plt.subplots(1, 2, figsize=(18, 8))
-    im1 = panel(a1, cm, vg_m, vu_m, ax_m, r"$m$", "GeV")
-    im2 = panel(a2, cr, vg_r, vu_r, ax_r, r"$\log_{10}(\rho^2)$", "")
-    for im, ax in ((im1, a1), (im2, a2)):
+    # rows = GEN / RECO, cols = mass / rho
+    specs = [
+        ("ptjet_mjet_g_vs_u_gen",   "GEN",  r"$m$",                  "GeV"),
+        ("ptjet_rhojet_g_vs_u_gen", "GEN",  r"$\log_{10}(\rho^2)$", ""),
+        ("ptjet_mjet_g_vs_u_reco",  "RECO", r"$m$",                  "GeV"),
+        ("ptjet_rhojet_g_vs_u_reco","RECO", r"$\log_{10}(\rho^2)$", ""),
+    ]
+    fig, axes = plt.subplots(2, 2, figsize=(18, 15))
+    for ax, (hname, level, obs, unit) in zip(axes.flat, specs):
+        corr, vg, vu, hax = cross_corr(out[hname])
+        im = panel(ax, corr, vg, vu, hax, obs, unit, level=level)
         cb = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.02)
-        cb.set_label("statistical correlation", fontsize=16)
-        cb.ax.tick_params(labelsize=12)
-    # gen-level, single-slice illustration note (kept low-key, CMS-style plots avoid suptitles)
-    fig.text(0.5, 0.005,
-             "Gen-level groomed$\\leftrightarrow$ungroomed correlation  ·  DY HT400-600 UL18 (single slice, TEMPORARY)",
-             ha="center", fontsize=13)
-    fig.tight_layout(rect=(0, 0.02, 1, 1))
+        cb.set_label("statistical correlation", fontsize=15)
+        cb.ax.tick_params(labelsize=11)
+        offdiag = np.nanmax(corr - np.eye(*corr.shape)[:corr.shape[0], :corr.shape[1]])
+        print(f"{hname}: max off-diag corr {offdiag:.3f}")
+    fig.text(0.5, 0.004,
+             "groomed$\\leftrightarrow$ungroomed statistical correlation  ·  "
+             "DY HT400-600 UL18 (single slice, TEMPORARY)", ha="center", fontsize=14)
+    fig.tight_layout(rect=(0, 0.015, 1, 1))
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
-    fig.savefig(args.out, dpi=140, bbox_inches="tight")
+    fig.savefig(args.out, dpi=130, bbox_inches="tight")
     print(f"wrote {args.out}")
-    print(f"mass max off-diag corr: {np.nanmax(cm - np.eye(*cm.shape)[:cm.shape[0], :cm.shape[1]]):.3f}; "
-          f"rho max off-diag corr: {np.nanmax(cr - np.eye(*cr.shape)[:cr.shape[0], :cr.shape[1]]):.3f}")
 
 
 if __name__ == "__main__":
