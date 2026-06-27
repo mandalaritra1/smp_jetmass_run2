@@ -14,6 +14,7 @@
 
 #include "Pythia8/Pythia.h"
 #include "Pythia8Plugins/Pythia8Rivet.h"
+#include "Pythia8Plugins/CombineMatchingInput.h"
 #include <string>
 
 using namespace Pythia8;
@@ -31,6 +32,13 @@ int main(int argc, char* argv[]) {
   Pythia pythia;
   pythia.readFile(cmnd);
   pythia.readString("Main:numberOfEvents = " + std::to_string(nEvents));
+
+  // MLM jet matching: register the matching UserHook (scheme=1 -> MadGraph MLM)
+  // before init, but only when the cmnd enabled JetMatching:merge. Declared here
+  // so it stays alive for the whole run; a no-op for unmatched (single-mult) runs.
+  CombineMatchingInput combined;
+  if (pythia.flag("JetMatching:merge")) combined.setHook(pythia);
+
   if (!pythia.init()) return 1;
 
   Pythia8Rivet rivet(pythia, yoda);
