@@ -112,8 +112,6 @@ rivet/**/_shower_herwig.in
 smp_jetmass_run2/corrections/__init__.py
 rivet/zjet_mglo_s*/
 
-# ARC review/: keep the reusable diagnostic SCRIPTS (review/*.py) for the future,
-# but do NOT track the working response documents or generated figures.
-review/*.md
-review/*.pdf
-review/figs/
+# ARC review/ is a local working area (response documents + generated figures),
+# not tracked. The reusable diagnostic scripts live in tools/arc_diagnostics/.
+review/

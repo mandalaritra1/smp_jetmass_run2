@@ -8,7 +8,7 @@ make_event_displays.build().
 import os
 import sys
 sys.path.insert(0, ".")
-sys.path.insert(0, "review")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # sibling import
 
 import awkward as ak
 import numpy as np
