@@ -14,8 +14,15 @@
 # NOTE: written for the macOS stock /bin/bash 3.2 (no associative arrays).
 set -euo pipefail
 
-N=30000; REGEN=0; MLM=0
-for a in "$@"; do case "$a" in --regen) REGEN=1 ;; --mlm) MLM=1 ;; *[0-9]*) N=$a ;; esac; done
+N=30000; REGEN=0; MLM=0; VARS=()
+for a in "$@"; do
+  case "$a" in
+    --regen) REGEN=1 ;;
+    --mlm)   MLM=1 ;;
+    ''|*[!0-9]*) VARS+=("$a") ;;   # any non-numeric token -> a variation name (subset)
+    *) N=$a ;;                     # all-digits -> event count
+  esac
+done
 HERE=$(cd "$(dirname "$0")" && pwd); cd "$HERE"
 MG5_IMG=scailfin/madgraph5-amc-nlo:mg5_amc3.5.1
 RIV_IMG=hepstore/rivet-pythia:latest
@@ -82,7 +89,16 @@ echo "LHE: $LHE"
         $(rivet-config --cppflags --ldflags --libs) -std=c++17 -o pythia_rivet
   fi
 '
-for name in pythia pythia_vincia pythia_cr1 pythia_cr2 pythia_fragsoft pythia_fraghard; do
+# variation set: explicit subset from the CLI (e.g. "cr1 fragsoft" or "vincia"),
+# else all six. Short names get the pythia_ prefix (nominal = pythia).
+norm_var() { case "$1" in pythia|nominal) echo pythia ;; pythia_*) echo "$1" ;; *) echo "pythia_$1" ;; esac; }
+if [ ${#VARS[@]} -gt 0 ]; then
+  ORDER=(); for v in "${VARS[@]}"; do ORDER+=("$(norm_var "$v")"); done
+else
+  ORDER=(pythia pythia_vincia pythia_cr1 pythia_cr2 pythia_fragsoft pythia_fraghard)
+fi
+echo "### variations: ${ORDER[*]}  (N=$N, reuse LHE=$([ "$REGEN" -eq 0 ] && echo yes || echo no)) ###"
+for name in "${ORDER[@]}"; do
   cmnd="out/_${TAG}_${name}.cmnd"
   { echo "Beams:frameType = 4"
     echo "Beams:LHEF = $LHE"
