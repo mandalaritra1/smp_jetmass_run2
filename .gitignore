@@ -102,6 +102,7 @@ rivet/Settings_Report
 rivet/pythia_rivet
 rivet/Status__*
 rivet/zjet_mglo/
+rivet/zjet_mglo_mlm/
 rivet/**/_lhe_pythia.cmnd
 rivet/**/_shower_herwig.in
 

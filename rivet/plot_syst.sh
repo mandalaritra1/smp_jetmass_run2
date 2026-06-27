@@ -30,7 +30,9 @@ add() {
 }
 
 # MG-LO+Pythia family if present, else standalone Pythia family.
-if ls out/mglo_pythia*.yoda >/dev/null 2>&1; then PFX="mglo_"; LBL="MGLO+Pythia8"; else PFX=""; LBL="Pythia8_nominal"; fi
+if ls out/mlm_pythia*.yoda >/dev/null 2>&1; then PFX="mlm_"; LBL="MLM+Pythia8"
+elif ls out/mglo_pythia*.yoda >/dev/null 2>&1; then PFX="mglo_"; LBL="MGLO+Pythia8"
+else PFX=""; LBL="Pythia8_nominal"; fi
 add "out/${PFX}pythia.yoda"          "$LBL"
 add "out/${PFX}pythia_cr1.yoda"      "CR_QCD"
 add "out/${PFX}pythia_cr2.yoda"      "CR_gluon-move"

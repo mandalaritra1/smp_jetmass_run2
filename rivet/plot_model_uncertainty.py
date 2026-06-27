@@ -22,15 +22,17 @@ Run on the host venv:
     /Users/aritra/Projects/GluonJetMass/.venv/bin/python plot_model_uncertainty.py
 or inside the rivet image.
 """
-import os, re, csv, glob
+import os, re, csv, glob, sys
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-OUTDIR = os.path.join(HERE, "out", "model_unc")
-YODA = lambda name: os.path.join(HERE, "out", f"mglo_{name}.yoda")
+# yoda family prefix: "mglo" (single-mult, default) or "mlm" (MLM-merged).
+PREFIX = sys.argv[1] if len(sys.argv) > 1 else "mglo"
+OUTDIR = os.path.join(HERE, "out", "model_unc" if PREFIX == "mglo" else f"model_unc_{PREFIX}")
+YODA = lambda name: os.path.join(HERE, "out", f"{PREFIX}_{name}.yoda")
 
 NOMINAL = "pythia"
 SOURCES = {                       # source label -> list of variation members

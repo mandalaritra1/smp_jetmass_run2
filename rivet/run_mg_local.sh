@@ -28,11 +28,18 @@ mkdir -p out
 # prepended to every shower cmnd (pythia_rivet activates the JetMatchingMadgraph hook
 # when JetMatching:merge=on; setMad reads xqcut/nJetMax from the merged LHE header).
 if [ "$MLM" -eq 1 ]; then
-  MG5CARD=gen/madgraph/mg5_zjet_mlm.dat; OUTDIR_MG=zjet_mglo_mlm
-  MATCH=$'JetMatching:merge = on\nJetMatching:scheme = 1\nJetMatching:setMad = on\nJetMatching:nJetMax = 2'
+  MG5CARD=gen/madgraph/mg5_zjet_mlm.dat; OUTDIR_MG=zjet_mglo_mlm; TAG=mlm
+  # Manual matching params: scailfin MG5 3.5.1 LHE headers are NOT read by
+  # JetMatching:setMad (it warns "Madgraph merging parameters not found" and falls
+  # back to qCut=10), so set qCut (>= the xqcut=30 in the card) and nQmatch
+  # explicitly. VALIDATE via the differential jet rate (must be smooth across qCut)
+  # before trusting any MLM result; clFact/qCut may need tuning.
+  MATCH=$'JetMatching:merge = on\nJetMatching:scheme = 1\nJetMatching:setMad = off\nJetMatching:qCut = 30.0\nJetMatching:nQmatch = 4\nJetMatching:clFact = 1.0\nJetMatching:nJetMax = 2'
 else
-  MG5CARD=gen/madgraph/mg5_zjet.dat; OUTDIR_MG=zjet_mglo; MATCH=""
+  MG5CARD=gen/madgraph/mg5_zjet.dat; OUTDIR_MG=zjet_mglo; TAG=mglo; MATCH=""
 fi
+# Output tag keeps single-mult (mglo_*) and MLM (mlm_*) yodas separate so the two
+# can coexist (and never clobber each other if run in the same out/).
 LHE=$OUTDIR_MG/Events/run_01/unweighted_events.lhe
 
 # extra Pythia settings per variation (deltas only; the ME is fixed by the LHE).
@@ -76,18 +83,18 @@ echo "LHE: $LHE"
   fi
 '
 for name in pythia pythia_vincia pythia_cr1 pythia_cr2 pythia_fragsoft pythia_fraghard; do
-  cmnd="out/_mglo_${name}.cmnd"
+  cmnd="out/_${TAG}_${name}.cmnd"
   { echo "Beams:frameType = 4"
     echo "Beams:LHEF = $LHE"
     echo "PartonLevel:MPI = on"
     echo "HadronLevel:all = on"
     [ -n "$MATCH" ] && printf '%b\n' "$MATCH"
     var_settings "$name"; } > "$cmnd"
-  out="out/mglo_${name}.yoda"
+  out="out/${TAG}_${name}.yoda"
   echo "### shower: $name -> $out ###"
   "${DRUN[@]}" "$RIV_IMG" bash -lc "export RIVET_ANALYSIS_PATH=/work; ./pythia_rivet '$cmnd' '$out' $N"
 done
 
-echo "### done. yodas: ###"; ls -la out/mglo_*.yoda
+echo "### done. yodas: ###"; ls -la out/${TAG}_*.yoda
 # overlay (nominal vs CR vs hadronization) into out/plots_syst/index.html
 "${DRUN[@]}" "$RIV_IMG" bash -lc "./plot_syst.sh"
