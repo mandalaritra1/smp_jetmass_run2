@@ -1084,8 +1084,10 @@ def GetQ2muR(events):
     down = np.ones(len(events))
     if ("LHEScaleWeight" in ak.fields(events)):
         if ak.all(ak.num(events.LHEScaleWeight, axis=1) == 9):
-            nom = events.LHEScaleWeight[:, 7]
-            up = events.LHEScaleWeight[:, 5] / nom
+            # pure muR variation at muF=1: nom=[4]=(muR1,muF1),
+            # up=[7]=(muR2,muF1), down=[1]=(muR0.5,muF1)
+            nom = events.LHEScaleWeight[:, 4]
+            up = events.LHEScaleWeight[:, 7] / nom
             down = events.LHEScaleWeight[:, 1] / nom
         elif ak.all(ak.num(events.LHEScaleWeight, axis=1) == 8):
             up = events.LHEScaleWeight[:, 6]
