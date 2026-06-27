@@ -1,0 +1,16 @@
+{
+  "channel": "zjet",
+  "dataset": "pythia",
+  "era": "2018",
+  "mode": "minimal_rho_fine",
+  "systematic_profile": "no_syst",
+  "executor_mode": "dask-casa",
+  "casa": true,
+  "test": false,
+  "useDefault": false,
+  "chunksize": 50000,
+  "chunksize_test": 200000,
+  "group_mode": "all_in_one",
+  "redirector": "casa",
+  "prependstr": "root://xcache/"
+}

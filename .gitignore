@@ -81,6 +81,27 @@ outputs/
 # notebook scratch (rewritten each "lock")
 configs/last_run.json
 
+# Rivet build/run artifacts (the .cc/.info/.plot/.cmnd/.yaml/.in are tracked)
+Rivet*.so
+*.hepmc
+*.hepmc.gz
+*.yoda
+*.yoda.gz
+rivet-plots/
+rivet/out/
+rivet/.lhapdf/
+rivet/test/zjet-plots/
+# generator working files
+*.run
+herwig-S*.*
+mglo_herwig-S*.*
+rivet/Process/
+rivet/Results/
+rivet/Status__*
+rivet/zjet_mglo/
+rivet/**/_lhe_pythia.cmnd
+rivet/**/_shower_herwig.in
+
 # corrections/ is a DATA dir (EGM/JEC files), NOT a Python package.
 # A stray __init__.py here turns it into a package that shadows
 # corrections.py on import -> breaks get_pu_weights etc. Never track it.

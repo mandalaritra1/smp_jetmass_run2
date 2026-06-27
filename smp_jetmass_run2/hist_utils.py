@@ -30,12 +30,37 @@ def group(h: hist.Hist, oldname: str, newname: str, grouping: dict[str, list[str
 
     return hnew
 
+def _refine_edges(edges, factor):
+    """Subdivide each bin of ``edges`` into ``factor`` equal sub-bins.
+
+    The original edges are preserved, so the refined binning nests exactly
+    inside the original (a refined histogram can be rebinned back to the
+    original with no boundary mismatch). factor=1 returns the edges unchanged.
+    """
+    factor = int(factor)
+    edges = np.asarray(edges, dtype=float)
+    if factor <= 1:
+        return [float(e) for e in edges]
+    out = []
+    for lo, hi in zip(edges[:-1], edges[1:]):
+        out.extend(np.linspace(lo, hi, factor, endpoint=False))
+    out.append(float(edges[-1]))
+    return [float(e) for e in out]
+
+
 class util_binning :
     '''
-    Class to implement the binning schema for jet mass and pt 2d unfolding. The gen-level mass is twice as fine. 
+    Class to implement the binning schema for jet mass and pt 2d unfolding. The gen-level mass is twice as fine.
+
+    ``rho_refine`` (default 1) subdivides the rho (mpt_gen / mpt_reco) axes by an
+    integer factor, preserving the original edges so the fine binning nests in
+    the production binning. rho_refine=4 -> 48 gen / 96 reco bins (still
+    #reco = 2x #gen). Used by the ``minimal_rho_fine`` mode for the fine-bin /
+    fine-then-rebin unfolding study; all other axes are unchanged.
     '''
-    def __init__(self, channel="zjet"):
+    def __init__(self, channel="zjet", rho_refine=1):
         self.channel = channel
+        self.rho_refine = int(rho_refine)
         self.jetR = 0.8  # AK8 radius, used in rho = 2*log10(m/(pt*R))
         #self.ptreco_axis = hist.axis.Variable([200,260,350,460,550,650,760,13000], name="ptreco", label=r"p_{T,RECO} (GeV)")
         
@@ -101,16 +126,20 @@ class util_binning :
                                                     192, 193.0, 194, 195.0, 196, 197.0, 198, 199.0, 200, 500, 1000], name="mreco", label=r"$m_{RECO}$ (GeV)")
 
 
-        # Negative counterpart of mgen_over_pt_axis
+        # Negative counterpart of mgen_over_pt_axis (rho_refine subdivides each bin)
         self.mgen_over_pt_axis = hist.axis.Variable(
-            [-10, -6, -5, -4.5, -4, -3.5, -3, -2.5, -2, -1.5, -1, -0.5, 0],
+            _refine_edges(
+                [-10, -6, -5, -4.5, -4, -3.5, -3, -2.5, -2, -1.5, -1, -0.5, 0],
+                self.rho_refine),
             name='mpt_gen', label=r'$\log(\rho^2)$'
         )
-        
-        # Negative counterpart of mreco_over_pt_axis
+
+        # Negative counterpart of mreco_over_pt_axis (rho_refine subdivides each bin)
         self.mreco_over_pt_axis = hist.axis.Variable(
-            [-10, -8.0, -6, -5.5, -5, -4.75, -4.5, -4.25, -4, -3.75, -3.5, -3.25,
-             -3, -2.75, -2.5, -2.25, -2, -1.75, -1.5, -1.25, -1, -0.75, -0.5, -0.25, 0],
+            _refine_edges(
+                [-10, -8.0, -6, -5.5, -5, -4.75, -4.5, -4.25, -4, -3.75, -3.5, -3.25,
+                 -3, -2.75, -2.5, -2.25, -2, -1.75, -1.5, -1.25, -1, -0.75, -0.5, -0.25, 0],
+                self.rho_refine),
             name='mpt_reco', label=r'$\log(\rho^2)$ (Detector)'
         )
  

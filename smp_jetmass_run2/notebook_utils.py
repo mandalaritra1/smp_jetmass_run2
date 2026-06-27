@@ -38,6 +38,7 @@ CHANNEL_OPTIONS = ["zjet", "dijet", "trijet"]
 
 RHO_MODE_OPTIONS = [
     "minimal_rho",
+    "minimal_rho_fine",
     "rho_jk",
     "reweight_pythia_rho",
     "reweight_data_prior_rho",
