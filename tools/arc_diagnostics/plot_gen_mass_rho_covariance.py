@@ -22,6 +22,9 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import mplhep as hep
+
+hep.style.use("CMS")
 
 from coffea.nanoevents import NanoEventsFactory, NanoAODSchema
 NanoAODSchema.warn_missing_crossrefs = False
@@ -44,27 +47,27 @@ def cross_corr(h):
     return corr, var_g, var_u, h2.axes
 
 
-def panel(ax, corr, var_g, var_u, axes, title, unit):
+def panel(ax, corr, var_g, var_u, axes, obs_label, unit):
     g_edges = axes[0].edges
     u_edges = axes[1].edges
     # keep only populated bins for a readable matrix
     gkeep = np.where(var_g > 0)[0]
     ukeep = np.where(var_u > 0)[0]
     sub = corr[np.ix_(gkeep, ukeep)]
-    im = ax.imshow(sub, origin="lower", aspect="auto", cmap="viridis", vmin=0, vmax=1)
+    im = ax.imshow(sub, origin="lower", aspect="auto", cmap="cividis", vmin=0, vmax=1)
+    fmt = (lambda x: f"{x:.0f}") if unit == "GeV" else (lambda x: f"{x:.1f}")
     ax.set_xticks(range(len(ukeep)))
     ax.set_yticks(range(len(gkeep)))
-    ax.set_xticklabels([f"{u_edges[i]:.0f}" if unit == "GeV" else f"{u_edges[i]:.1f}" for i in ukeep],
-                       rotation=90, fontsize=7)
-    ax.set_yticklabels([f"{g_edges[i]:.0f}" if unit == "GeV" else f"{g_edges[i]:.1f}" for i in gkeep],
-                       fontsize=7)
-    ax.set_xlabel(f"ungroomed bin low edge [{unit}]")
-    ax.set_ylabel(f"groomed bin low edge [{unit}]")
-    ax.set_title(title, fontsize=11)
+    ax.set_xticklabels([fmt(u_edges[i]) for i in ukeep], rotation=90, fontsize=12)
+    ax.set_yticklabels([fmt(g_edges[i]) for i in gkeep], fontsize=12)
+    xunit = f" [{unit}]" if unit else ""
+    ax.set_xlabel(rf"ungroomed {obs_label}{xunit}", fontsize=18)
+    ax.set_ylabel(rf"groomed {obs_label}{xunit}", fontsize=18)
     for (j, i), val in np.ndenumerate(sub):
         if np.isfinite(val):
             ax.text(i, j, f"{val:.2f}", ha="center", va="center",
-                    color="white" if val < 0.6 else "black", fontsize=6)
+                    color="white" if val < 0.5 else "black", fontsize=8)
+    hep.cms.label("Private Work", data=False, com=13, ax=ax, fontsize=16)
     return im
 
 
@@ -88,14 +91,18 @@ def main():
     cm, vg_m, vu_m, ax_m = cross_corr(out["ptjet_mjet_g_vs_u_gen"])
     cr, vg_r, vu_r, ax_r = cross_corr(out["ptjet_rhojet_g_vs_u_gen"])
 
-    fig, (a1, a2) = plt.subplots(1, 2, figsize=(13, 5.6))
-    im1 = panel(a1, cm, vg_m, vu_m, ax_m, "Gen mass: groomed vs ungroomed corr.", "GeV")
-    im2 = panel(a2, cr, vg_r, vu_r, ax_r, r"Gen rho: groomed vs ungroomed corr.", "")
-    fig.colorbar(im2, ax=a2, fraction=0.046, label="correlation")
-    fig.colorbar(im1, ax=a1, fraction=0.046, label="correlation")
-    fig.suptitle("Gen-level groomed<->ungroomed statistical correlation "
-                 "(DY HT400-600, UL18, single slice - TEMPORARY)", fontsize=11)
-    fig.tight_layout()
+    fig, (a1, a2) = plt.subplots(1, 2, figsize=(18, 8))
+    im1 = panel(a1, cm, vg_m, vu_m, ax_m, r"$m$", "GeV")
+    im2 = panel(a2, cr, vg_r, vu_r, ax_r, r"$\log_{10}(\rho^2)$", "")
+    for im, ax in ((im1, a1), (im2, a2)):
+        cb = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.02)
+        cb.set_label("statistical correlation", fontsize=16)
+        cb.ax.tick_params(labelsize=12)
+    # gen-level, single-slice illustration note (kept low-key, CMS-style plots avoid suptitles)
+    fig.text(0.5, 0.005,
+             "Gen-level groomed$\\leftrightarrow$ungroomed correlation  ·  DY HT400-600 UL18 (single slice, TEMPORARY)",
+             ha="center", fontsize=13)
+    fig.tight_layout(rect=(0, 0.02, 1, 1))
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
     fig.savefig(args.out, dpi=140, bbox_inches="tight")
     print(f"wrote {args.out}")
