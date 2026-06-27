@@ -68,6 +68,7 @@ class QJetMassProcessor(processor.ProcessorABC):
         self._do_reweight = False
         self._do_jk = False
         self._do_reco_jet_ntuple = mode == "mass_diagnostic_ntuple"
+        self._split2 = False  # 2-way (50:50) disjoint event split for the fine-binning test
 
         if mode == "minimal":
             self._do_jk = False
@@ -75,6 +76,11 @@ class QJetMassProcessor(processor.ProcessorABC):
             self._do_reweight = True
         elif mode == "jk_mc" or mode == "jk_data" or mode == "rho_jk" or mode == "mass_jk":
             self._do_jk = True
+        elif mode == "minimal_rho_fine_split":
+            # two independent halves (index % 2) carried on the jk axis: far cheaper
+            # than the 10-replica jackknife, enough for the fine-binning closure test
+            self._do_jk = True
+            self._split2 = True
         elif mode == "full":
             self._do_jk = False
         else:
@@ -118,9 +124,11 @@ class QJetMassProcessor(processor.ProcessorABC):
         else:
             self.logging = Log(mode="info")
 
-        # minimal_rho_fine: 4x-finer rho axes (48 gen / 96 reco, still #reco = 2x #gen)
+        # minimal_rho_fine[_split]: 4x-finer rho axes (48 gen / 96 reco, still #reco = 2x #gen)
         # for the fine-bin / fine-then-rebin unfolding study; everything else as minimal_rho.
-        binning = util_binning(rho_refine=4 if self._mode == "minimal_rho_fine" else 1)
+        binning = util_binning(
+            rho_refine=4 if self._mode in ("minimal_rho_fine", "minimal_rho_fine_split") else 1
+        )
 
         # Define axes
         ptreco_axis = binning.ptreco_axis
@@ -210,7 +218,19 @@ class QJetMassProcessor(processor.ProcessorABC):
                 register_hist(self.hists, "response_matrix_rho_g", [dataset_axis, ptreco_axis, mreco_over_pt_axis, ptgen_axis, mgen_over_pt_axis, syst_axis])
                 register_hist(self.hists, "ptjet_rhojet_u_gen", [dataset_axis, ptgen_axis, mgen_over_pt_axis, syst_axis])
                 register_hist(self.hists, "ptjet_rhojet_g_gen", [dataset_axis, ptgen_axis, mgen_over_pt_axis, syst_axis])
-                
+
+        if self._mode == "minimal_rho_fine_split":
+            # Same 6 rho hists as minimal_rho but with the 'jk' axis carrying the
+            # disjoint 50:50 split (jk=0,1) -- two independent halves in one pass,
+            # for the fine-binning closure/bias test (cheaper than the 10x jackknife).
+            register_hist(self.hists, "ptjet_rhojet_u_reco", [dataset_axis, ptreco_axis, mreco_over_pt_axis, binning.jackknife_axis, syst_axis])
+            register_hist(self.hists, "ptjet_rhojet_g_reco", [dataset_axis, ptreco_axis, mreco_over_pt_axis, binning.jackknife_axis, syst_axis])
+            if self._do_gen:
+                register_hist(self.hists, "response_matrix_rho_u", [dataset_axis, ptreco_axis, mreco_over_pt_axis, ptgen_axis, mgen_over_pt_axis, binning.jackknife_axis, syst_axis])
+                register_hist(self.hists, "response_matrix_rho_g", [dataset_axis, ptreco_axis, mreco_over_pt_axis, ptgen_axis, mgen_over_pt_axis, binning.jackknife_axis, syst_axis])
+                register_hist(self.hists, "ptjet_rhojet_u_gen", [dataset_axis, ptgen_axis, mgen_over_pt_axis, binning.jackknife_axis, syst_axis])
+                register_hist(self.hists, "ptjet_rhojet_g_gen", [dataset_axis, ptgen_axis, mgen_over_pt_axis, binning.jackknife_axis, syst_axis])
+
 
                 #register_hist(self.hists, 'm_u_jet_reco_over_gen', [dataset_axis, ptgen_axis, mgen_axis, frac_axis])
                 #register_hist(self.hists, 'm_g_jet_reco_over_gen', [dataset_axis, ptgen_axis, mgen_axis, frac_axis])
@@ -821,12 +841,16 @@ class QJetMassProcessor(processor.ProcessorABC):
         index_list = np.arange(len(events_all))
 
         #print(f"Binning : {events_all.Generator.binvar}")
-        for jk_index in range(0, 10): ## loops from 0 to 9 in case do_jk flag is enabled, otherwise breaks at 0
+        n_jk = 2 if self._split2 else 10  # 50:50 split = 2 disjoint halves; jackknife = 10
+        for jk_index in range(0, n_jk): ## loops if do_jk is enabled, otherwise breaks at 0
             if not self._do_jk:
                 events1 = events_all
                 self.logging.debug("Jackknife resampling not enabled, processing all events together.")
             if self._do_jk:
-                jk_sel = ak.where( (index_list % 10) == jk_index, False, True)
+                if self._split2:
+                    jk_sel = (index_list % 2) == jk_index  # KEEP one disjoint half (~50% each)
+                else:
+                    jk_sel = ak.where( (index_list % 10) == jk_index, False, True)  # delete one-tenth
                 #self.logging.debug("JK index ", jk_index, " events dropped ", ak.sum(~jk_sel) )
                 events1 = events_all[jk_sel]
                 del jk_sel
