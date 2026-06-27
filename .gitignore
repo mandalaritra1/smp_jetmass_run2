@@ -111,3 +111,9 @@ rivet/**/_shower_herwig.in
 # corrections.py on import -> breaks get_pu_weights etc. Never track it.
 smp_jetmass_run2/corrections/__init__.py
 rivet/zjet_mglo_s*/
+
+# ARC review/: keep the reusable diagnostic SCRIPTS (review/*.py) for the future,
+# but do NOT track the working response documents or generated figures.
+review/*.md
+review/*.pdf
+review/figs/
