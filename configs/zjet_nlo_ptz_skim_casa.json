@@ -1,0 +1,80 @@
+{
+  "executor_mode": "dask-casa",
+  "redirector": "casa",
+  "worker_memory": "6 GiB",
+  "min_workers": 1,
+  "max_workers": 200,
+  "chunksize": 50000,
+  "maxchunks": null,
+  "output_mode": "parquet",
+  "outdir": "/home/cms-jovyan/nlo_ptz_skims",
+  "pt_min": 150.0,
+  "skipbadfiles": true,
+  "xrootdtimeout": 120,
+  "samples": [
+    {
+      "dataset": "nlo_ptz_100To250_UL16NanoAODv9",
+      "filelist": "samples/zjet/mc/ptz_100To250_UL16NanoAODv9.txt"
+    },
+    {
+      "dataset": "nlo_ptz_250To400_UL16NanoAODv9",
+      "filelist": "samples/zjet/mc/ptz_250To400_UL16NanoAODv9.txt"
+    },
+    {
+      "dataset": "nlo_ptz_400To650_UL16NanoAODv9",
+      "filelist": "samples/zjet/mc/ptz_400To650_UL16NanoAODv9.txt"
+    },
+    {
+      "dataset": "nlo_ptz_650ToInf_UL16NanoAODv9",
+      "filelist": "samples/zjet/mc/ptz_650ToInf_UL16NanoAODv9.txt"
+    },
+    {
+      "dataset": "nlo_ptz_100To250_UL16NanoAODAPVv9",
+      "filelist": "samples/zjet/mc/ptz_100To250_UL16NanoAODAPVv9.txt"
+    },
+    {
+      "dataset": "nlo_ptz_250To400_UL16NanoAODAPVv9",
+      "filelist": "samples/zjet/mc/ptz_250To400_UL16NanoAODAPVv9.txt"
+    },
+    {
+      "dataset": "nlo_ptz_400To650_UL16NanoAODAPVv9",
+      "filelist": "samples/zjet/mc/ptz_400To650_UL16NanoAODAPVv9.txt"
+    },
+    {
+      "dataset": "nlo_ptz_650ToInf_UL16NanoAODAPVv9",
+      "filelist": "samples/zjet/mc/ptz_650ToInf_UL16NanoAODAPVv9.txt"
+    },
+    {
+      "dataset": "nlo_ptz_100To250_UL17NanoAODv9",
+      "filelist": "samples/zjet/mc/ptz_100To250_UL17NanoAODv9.txt"
+    },
+    {
+      "dataset": "nlo_ptz_250To400_UL17NanoAODv9",
+      "filelist": "samples/zjet/mc/ptz_250To400_UL17NanoAODv9.txt"
+    },
+    {
+      "dataset": "nlo_ptz_400To650_UL17NanoAODv9",
+      "filelist": "samples/zjet/mc/ptz_400To650_UL17NanoAODv9.txt"
+    },
+    {
+      "dataset": "nlo_ptz_650ToInf_UL17NanoAODv9",
+      "filelist": "samples/zjet/mc/ptz_650ToInf_UL17NanoAODv9.txt"
+    },
+    {
+      "dataset": "nlo_ptz_100To250_UL18NanoAODv9",
+      "filelist": "samples/zjet/mc/ptz_100To250_UL18NanoAODv9.txt"
+    },
+    {
+      "dataset": "nlo_ptz_250To400_UL18NanoAODv9",
+      "filelist": "samples/zjet/mc/ptz_250To400_UL18NanoAODv9.txt"
+    },
+    {
+      "dataset": "nlo_ptz_400To650_UL18NanoAODv9",
+      "filelist": "samples/zjet/mc/ptz_400To650_UL18NanoAODv9.txt"
+    },
+    {
+      "dataset": "nlo_ptz_650ToInf_UL18NanoAODv9",
+      "filelist": "samples/zjet/mc/ptz_650ToInf_UL18NanoAODv9.txt"
+    }
+  ]
+}
