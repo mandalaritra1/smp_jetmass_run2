@@ -6,7 +6,7 @@
   "max_workers": 200,
   "chunksize": 50000,
   "maxchunks": null,
-  "output_mode": "parquet",
+  "output_mode": "accumulator",
   "outdir": "/home/cms-jovyan/nlo_ptz_skims",
   "pt_min": 150.0,
   "skipbadfiles": true,
