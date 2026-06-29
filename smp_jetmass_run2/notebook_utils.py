@@ -28,6 +28,7 @@ DATASET_OPTIONS = [
     "pythia_local",
     "pythia2",
     "nlo",
+    "nlo_ptz",
     "herwig",
     "st",
     "powheg",
@@ -184,6 +185,26 @@ class AnalysisPaths:
     samples_hadronic_dir: Path
 
 
+# PtZ-binned NLO (amcatnloFXFX, MatchEWPDG20) DY. Bins are stitched by normalizing
+# each to its own XSDB cross section in the processor postprocess (each bin is a
+# separate `dataset` axis entry -> summing them gives the ptZ spectrum). Lists for
+# all six bins are built by samples/zjet/mc/make_nlo_ptz_lists.sh (dasgoclient).
+#
+# The analysis selects jet pT > 200 GeV (first ptgen/ptreco bin is 200-290). In the
+# balanced Z+jet topology jet pT ~ ptZ, so the low-ptZ bins contribute ~nothing:
+# ptZ<100 cannot recoil against a 200 GeV jet. We therefore process only the bins
+# that overlap the phase space. ptZ-100To250 is KEPT (its 200-250 part populates the
+# first 200-290 jet-pT bin); 0To50 and 50To100 are dropped (pure wasted compute, the
+# two largest samples). To use all six (e.g. a full-spectrum cross-check), set
+# NLO_PTZ_BINS = NLO_PTZ_BINS_ALL.
+NLO_PTZ_BINS_ALL = ["0To50", "50To100", "100To250", "250To400", "400To650", "650ToInf"]
+NLO_PTZ_BINS = ["100To250", "250To400", "400To650", "650ToInf"]
+
+
+def _nlo_ptz_lists(era_tag: str) -> list[str]:
+    return [f"ptz_{b}_{era_tag}.txt" for b in NLO_PTZ_BINS]
+
+
 class SamplePath:
     """Hold list-of-lists so the notebook can run per-group or all-in-one."""
 
@@ -219,26 +240,38 @@ class SamplePath:
                 ["inclusive_UL17NanoAODv9.txt"],
                 ["inclusive_UL18NanoAODv9.txt"],
             ]
+            # PtZ-binned NLO: one group per era, each holding the 6 ptZ bins
+            # (same era order as self.nlo so per_group tags line up).
+            self.nlo_ptz = [
+                _nlo_ptz_lists("UL16NanoAODv9"),
+                _nlo_ptz_lists("UL16NanoAODAPVv9"),
+                _nlo_ptz_lists("UL17NanoAODv9"),
+                _nlo_ptz_lists("UL18NanoAODv9"),
+            ]
         elif era == "2018":
             self.data = [["SingleMuon_UL2018.txt", "EGamma_UL2018.txt"]]
             self.pythia = [["pythia_UL18NanoAODv9.txt"]]
             self.herwig = [["herwig7_UL18NanoAODv9_inclusive.txt"]]
             self.nlo = [["inclusive_UL18NanoAODv9.txt"]]
+            self.nlo_ptz = [_nlo_ptz_lists("UL18NanoAODv9")]
         elif era == "2017":
             self.data = [["SingleMuon_UL2017.txt", "SingleElectron_UL2017.txt"]]
             self.pythia = [["pythia_UL17NanoAODv9.txt"]]
             self.herwig = [["herwig7_UL17NanoAODv9_inclusive.txt"]]
             self.nlo = [["inclusive_UL17NanoAODv9.txt"]]
+            self.nlo_ptz = [_nlo_ptz_lists("UL17NanoAODv9")]
         elif era == "2016APV":
             self.data = [["SingleMuon_UL2016APV.txt", "SingleElectron_UL2016APV.txt"]]
             self.pythia = [["pythia_UL16NanoAODAPVv9.txt"]]
             self.herwig = [["herwig7_UL16NanoAODAPVv9_inclusive.txt"]]
             self.nlo = [["inclusive_UL16NanoAODAPVv9.txt"]]
+            self.nlo_ptz = [_nlo_ptz_lists("UL16NanoAODAPVv9")]
         elif era == "2016":
             self.data = [["SingleMuon_UL2016.txt", "SingleElectron_UL2016.txt"]]
             self.pythia = [["pythia_UL16NanoAODv9.txt"]]
             self.herwig = [["herwig7_UL16NanoAODv9_inclusive.txt"]]
             self.nlo = [["inclusive_UL16NanoAODv9.txt"]]
+            self.nlo_ptz = [_nlo_ptz_lists("UL16NanoAODv9")]
         else:
             raise ValueError(f"Unknown era: {era}")
 
@@ -883,6 +916,12 @@ def run_from_config(cfg, *, client=None, repo_root=None, log=print):
         elif dataset in ("nlo", "pythia2"):
             # NLO (amcatnloFXFX) DY inclusive, era-aware like pythia/herwig.
             for i, group in enumerate(iter_groups(samplePath.nlo, group_mode)):
+                _run_and_save(build_fileset_from_txts(
+                    group, paths.samples_mc_dir, prependstr, split_ht=False), i)
+        elif dataset == "nlo_ptz":
+            # PtZ-binned NLO (amcatnloFXFX, MatchEWPDG20) DY; each of the 6 ptZ
+            # bins becomes its own dataset, normalized to its own xs in postprocess.
+            for i, group in enumerate(iter_groups(samplePath.nlo_ptz, group_mode)):
                 _run_and_save(build_fileset_from_txts(
                     group, paths.samples_mc_dir, prependstr, split_ht=False), i)
         elif dataset == "herwig":

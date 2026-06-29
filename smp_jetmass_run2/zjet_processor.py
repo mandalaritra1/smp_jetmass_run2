@@ -628,6 +628,25 @@ class QJetMassProcessor(processor.ProcessorABC):
             iov = dataset.split("_")[-1]
             return scale_from(6404.0, iov)
 
+        if dataset.startswith("ptz_"):
+            # PtZ-binned NLO amcatnloFXFX DY (LHEFilterPtZ, MatchEWPDG20). Each bin
+            # normalized to its own XSDB cross section (pb) -> the 6 bins stitch into
+            # the ptZ spectrum. NLO ME, so no k-factor. Name: ptz_<bin>_<iov>.
+            ptz_xsdb = {
+                "0To50": 1485.0,
+                "50To100": 397.4,
+                "100To250": 97.2,
+                "250To400": 3.701,
+                "400To650": 0.5086,
+                "650ToInf": 0.04728,
+            }
+            tokens = dataset.split("_")
+            ptz_bin, iov = tokens[1], tokens[-1]
+            xs = ptz_xsdb.get(ptz_bin)
+            if xs is None:
+                return None
+            return scale_from(xs, iov)
+
         if ("st" in dataset) or ("ST" in dataset):
             xsdb = {
                 "st_tW_antitop": 34.97,
@@ -3196,6 +3215,33 @@ class QJetMassProcessor(processor.ProcessorABC):
                     iov = ds.split('_')[-1]
                     lumi_fb = lumi_db[iov]
                     sw = sumw[ds]
+                    if sw == 0.0:
+                        print(f"[postprocess] WARNING: sumw==0 for dataset '{ds}'. Skipping normalization.")
+                        continue
+                    scale = (xs * lumi_fb * 1000) / sw
+                    h.view(flow=True)[i] *= scale
+                    if i==0:
+                        self.logging.info(f"Scaled {hname} for dataset {ds} by {scale:.6f} = {xs} * {lumi_fb*1000} / {sw}")
+                elif ds.startswith('ptz_'):
+                    # PtZ-binned NLO amcatnloFXFX DY (LHEFilterPtZ, MatchEWPDG20).
+                    # Each bin normalized to its own XSDB xs (pb); no k-factor (NLO).
+                    ptz_xsdb = {
+                        '0To50': 1485.0,
+                        '50To100': 397.4,
+                        '100To250': 97.2,
+                        '250To400': 3.701,
+                        '400To650': 0.5086,
+                        '650ToInf': 0.04728,
+                    }
+                    lumi_db = {'UL16NanoAODv9':16.81 , 'UL16NanoAODAPVv9': 19.52 ,'UL17NanoAODv9': 41.48 , 'UL18NanoAODv9': 59.83}
+                    ptz_bin = ds.split('_')[1]
+                    iov = ds.split('_')[-1]
+                    xs = ptz_xsdb.get(ptz_bin)
+                    sw = sumw[ds]
+                    if xs is None:
+                        print(f"[postprocess] WARNING: missing XS_PB for dataset '{ds}'. Skipping normalization.")
+                        continue
+                    lumi_fb = lumi_db[iov]
                     if sw == 0.0:
                         print(f"[postprocess] WARNING: sumw==0 for dataset '{ds}'. Skipping normalization.")
                         continue

@@ -1,0 +1,16 @@
+{
+  "channel": "zjet",
+  "dataset": "nlo_ptz",
+  "era": "all",
+  "mode": "minimal_rho",
+  "systematic_profile": "no_syst",
+  "executor_mode": "dask-casa",
+  "casa": true,
+  "test": false,
+  "useDefault": false,
+  "chunksize": 50000,
+  "chunksize_test": 200000,
+  "group_mode": "per_group",
+  "redirector": "casa",
+  "prependstr": "root://xcache/"
+}
