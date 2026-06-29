@@ -204,13 +204,15 @@ class QJetMassProcessor(processor.ProcessorABC):
             register_hist(self.hists, "m_g_vs_m_u_reco", [dataset_axis, channel_axis, m_u_reco_5gev_axis, m_g_reco_5gev_axis, syst_axis])
             register_hist(self.hists, "m_g_over_m_u_raw_reco", [dataset_axis, channel_axis, ptreco_axis, mass_ratio_axis, syst_axis])
             register_hist(self.hists, "m_g_vs_m_u_raw_reco", [dataset_axis, channel_axis, m_u_reco_5gev_axis, m_g_reco_5gev_axis, syst_axis])
+            # Z pT/mass (reco) for data/MC validation; filled at process() for data
+            # + MC (gated only on jet_syst=="nominal"). Top level so data gets it too.
+            register_hist(self.hists, "ptz_mz_reco", [dataset_axis, zmass_axis, pt_axis])
 
             if self._do_gen:
                 register_hist(self.hists, "response_matrix_u", [dataset_axis, channel_axis, ptreco_axis, mreco_axis, ptgen_axis, mgen_axis, syst_axis])
                 register_hist(self.hists, "response_matrix_g", [dataset_axis, channel_axis, ptreco_axis, mreco_axis, ptgen_axis, mgen_axis, syst_axis])
                 register_hist(self.hists, "ptjet_mjet_u_gen", [dataset_axis,channel_axis, ptgen_axis, mgen_axis, syst_axis])
                 register_hist(self.hists, "ptjet_mjet_g_gen", [dataset_axis,channel_axis, ptgen_axis, mgen_axis, syst_axis])
-                register_hist(self.hists, "ptz_mz_reco" , [dataset_axis, zmass_axis, pt_axis])
 
         if self._mode in ("minimal_rho", "minimal_rho_fine", "reweight_pythia_rho", "reweight_data_prior_rho"):
             register_hist(self.hists, "ptjet_rhojet_u_reco", [dataset_axis, ptreco_axis, mreco_over_pt_axis, syst_axis ])
