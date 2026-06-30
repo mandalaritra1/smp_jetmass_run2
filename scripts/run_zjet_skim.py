@@ -33,7 +33,8 @@ import numpy as np  # noqa: E402
 from coffea import processor  # noqa: E402
 from coffea.nanoevents import NanoAODSchema  # noqa: E402
 
-from smp_jetmass_run2.zjet_omnifold_skimmer import ZJetOmniFoldSkimmer  # noqa: E402
+from smp_jetmass_run2.zjet_omnifold_skimmer import (  # noqa: E402
+    ZJetOmniFoldSkimmer, to_ak_record)
 
 REDIRECTOR_PREPENDS = {
     "local": "",
@@ -156,7 +157,7 @@ def _write_accumulator_parquet(out, outdir):
         arrays = {k: acc.value for k, acc in cols.items()}
         os.makedirs(os.path.join(outdir, dataset), exist_ok=True)
         path = os.path.join(outdir, dataset, "merged.parquet")
-        ak.to_parquet(ak.Array(arrays), path)
+        ak.to_parquet(to_ak_record(arrays), path)
         written.append(path)
     return written
 

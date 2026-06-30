@@ -54,6 +54,17 @@ def _np(x):
     return ak.to_numpy(ak.fill_none(x, np.nan)).astype(np.float64)
 
 
+def to_ak_record(cols):
+    """Build a flat awkward record from a {name: numpy} dict. Object-dtype columns
+    (e.g. the 'mm'/'ee' channel strings) are converted to awkward string arrays,
+    which awkward otherwise refuses to accept from a numpy object array."""
+    fields = {}
+    for k, v in cols.items():
+        v = np.asarray(v)
+        fields[k] = ak.Array(v.tolist()) if v.dtype == object else ak.Array(v)
+    return ak.zip(fields, depth_limit=1)
+
+
 def _gen_softdrop_mass(gen_jet, subgen):
     """Gen soft-drop mass = mass of the two leading SubGenJetAK8 within dR<0.8 of
     ``gen_jet`` (NaN where < 2 subjets)."""
@@ -174,7 +185,7 @@ class ZJetOmniFoldSkimmer(processor.ProcessorABC):
             out_dir = os.path.join(self.outdir, dataset)
             os.makedirs(out_dir, exist_ok=True)
             path = os.path.join(out_dir, f"part-{uuid.uuid4().hex}.parquet")
-            ak.to_parquet(ak.Array(merged), path)
+            ak.to_parquet(to_ak_record(merged), path)
             return self._wrap(dataset, None, counts, path)
         return self._wrap(dataset, merged, counts, None)
 
