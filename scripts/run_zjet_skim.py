@@ -71,8 +71,9 @@ def _resolve_files(entry, redirector, max_files):
 def _build_fileset(cfg, max_files, only=None):
     redirector = cfg.get("redirector", "local")
     fileset = {}
+    only = set(only) if only else None
     for entry in cfg["samples"]:
-        if only and not any(tok in entry["dataset"] for tok in only):
+        if only and entry["dataset"] not in only:
             continue
         urls = _resolve_files(entry, redirector, max_files)
         fileset[entry["dataset"]] = urls
@@ -166,8 +167,8 @@ def main(argv=None):
     ap.add_argument("--max-files", type=int, default=None,
                     help="Cap files per sample (quick smoke tests).")
     ap.add_argument("--only", nargs="+", default=None,
-                    help="Only run datasets whose name contains any of these tokens "
-                         "(e.g. --only 100To250_UL18 to run one ptZ bin/era).")
+                    help="Only run these exact dataset name(s), e.g. "
+                         "--only nlo_ptz_100To250_UL18NanoAODv9 (one ptZ bin/era).")
     ap.add_argument("--output-mode", choices=["parquet", "accumulator"], default=None,
                     help="Override config output_mode.")
     ap.add_argument("--executor-mode", default=None, help="Override config executor_mode.")
