@@ -21,12 +21,33 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
 import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
+
+
+def _quiet_logs():
+    """Silence the dask/distributed log flood so skims.log only shows skim progress."""
+    try:
+        import dask
+        dask.config.set({
+            "distributed.logging.distributed": "error",
+            "distributed.logging.distributed.client": "error",
+            "distributed.logging.bokeh": "error",
+            "distributed.admin.system-monitor.disk": False,
+        })
+    except Exception:
+        pass
+    for name in ("distributed", "distributed.scheduler", "distributed.worker",
+                 "distributed.nanny", "distributed.core", "distributed.batched",
+                 "distributed.comm", "distributed.deploy", "distributed.utils_perf",
+                 "distributed.active_memory_manager", "bokeh", "tornado",
+                 "dask_jobqueue", "coffea_casa"):
+        logging.getLogger(name).setLevel(logging.ERROR)
 
 import awkward as ak  # noqa: E402
 import numpy as np  # noqa: E402
@@ -83,7 +104,22 @@ def _build_fileset(cfg, max_files, only=None):
     return fileset
 
 
+def _sched_banner(client):
+    """Print the scheduler address prominently so workers can be killed manually."""
+    try:
+        addr = client.scheduler.address
+    except Exception:
+        addr = getattr(client, "scheduler_info", lambda: {})().get("address", "?")
+    print("=" * 60, flush=True)
+    print(f"[skim] SCHEDULER ADDRESS: {addr}", flush=True)
+    print(f"[skim] dashboard: {getattr(client, 'dashboard_link', '?')}", flush=True)
+    print("[skim] to kill workers:  Client(\"%s\", security=<casa Security>)"
+          ".retire_workers([...], close_workers=True)" % addr, flush=True)
+    print("=" * 60, flush=True)
+
+
 def _make_executor(cfg):
+    _quiet_logs()
     mode = cfg.get("executor_mode", "futures")
     if mode == "iterative":
         return processor.IterativeExecutor(compression=None), None
@@ -95,6 +131,7 @@ def _make_executor(cfg):
 
         cluster = LocalCluster(n_workers=cfg.get("workers", 4), threads_per_worker=1)
         client = Client(cluster)
+        _sched_banner(client)
         return processor.DaskExecutor(client=client, retries=6), client
 
     if mode == "dask-casa":
@@ -111,6 +148,8 @@ def _make_executor(cfg):
         zip_path = "/tmp/smp_jetmass_run2_omnifold.zip"
         shutil.make_archive(zip_path[:-4], "zip", str(pkg_dir.parent), pkg_dir.name)
         client.upload_file(zip_path)
+        _quiet_logs()
+        _sched_banner(client)
         return processor.DaskExecutor(client=client, retries=6, treereduction=8), client
 
     if mode == "dask-lpc":
@@ -137,10 +176,8 @@ def _make_executor(cfg):
                           maximum=cfg.get("max_workers", 100))
         client = Client(cluster)
         client.upload_file(zip_path)
-        try:
-            print(f"[dask-lpc] dashboard: {cluster.dashboard_link}", flush=True)
-        except Exception:
-            pass
+        _quiet_logs()
+        _sched_banner(client)
         return processor.DaskExecutor(client=client, retries=6, treereduction=8,
                                       status=False), client
 
@@ -163,6 +200,7 @@ def _write_accumulator_parquet(out, outdir):
 
 
 def main(argv=None):
+    _quiet_logs()
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--config", required=True, type=Path)
     ap.add_argument("--max-files", type=int, default=None,
