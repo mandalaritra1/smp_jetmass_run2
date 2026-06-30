@@ -45,9 +45,13 @@ def _quiet_logs():
     for name in ("distributed", "distributed.scheduler", "distributed.worker",
                  "distributed.nanny", "distributed.core", "distributed.batched",
                  "distributed.comm", "distributed.deploy", "distributed.utils_perf",
-                 "distributed.active_memory_manager", "bokeh", "tornado",
-                 "dask_jobqueue", "coffea_casa"):
+                 "distributed.active_memory_manager", "dask_jobqueue", "coffea_casa"):
         logging.getLogger(name).setLevel(logging.ERROR)
+    # The dashboard (bokeh/tornado) logs "Token is expired" at ERROR level when a
+    # stale dashboard tab reconnects -> need CRITICAL to silence those.
+    for name in ("tornado", "tornado.application", "tornado.general",
+                 "tornado.access", "bokeh", "bokeh.server", "bokeh.server.views.ws"):
+        logging.getLogger(name).setLevel(logging.CRITICAL)
 
 import awkward as ak  # noqa: E402
 import numpy as np  # noqa: E402
