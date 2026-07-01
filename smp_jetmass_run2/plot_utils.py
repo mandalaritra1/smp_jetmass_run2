@@ -257,3 +257,88 @@ def plot_raw_mass_overlay(
     )
     plt.legend()
     hplot.show()
+
+
+# HEM sector in phi (approximate CMS convention): the failing HCAL endcap minus
+# region spans phi in [-1.57, -0.87]. Lost energy there fakes MET pointing away
+# from the hole, i.e. an excess near phi ~ +1.2. If the 2018 HEM treatment
+# (flat lumi-fraction weight for MC, hard veto for data) is applied correctly,
+# data and MC MET(phi) agree and no unmodelled excess remains.
+_HEM_PHI_MIN, _HEM_PHI_MAX = -1.57, -0.87
+
+_MET_VARS = {
+    "met_phi": ("phi", r"$\phi$(MET)"),
+    "met_pt":  ("pt",  r"MET $p_T$ [GeV]"),
+}
+
+
+def plot_met(out, var="met_phi", era="2018", data=False, dataset=None,
+             systematic="nominal", density=True):
+    """Single-source MET pt/phi (validation mode). Shades the HEM phi band for
+    ``met_phi``. ``out`` is one loaded pickle (data or MC)."""
+    if var not in _MET_VARS:
+        raise ValueError(f"var must be one of {list(_MET_VARS)}, got {var!r}")
+    if var not in out:
+        raise KeyError(f"Output is missing {var!r}. Re-run the processor in 'validation' mode.")
+    axis_name, xlabel = _MET_VARS[var]
+
+    hplot.setup(era=era)
+    hplot.set_plot_name(f"{var}_hem")
+
+    h = _select_if_present(out[var], dataset=dataset, systematic=systematic).project(axis_name)
+    h.plot(histtype="fill" if not data else "errorbar", density=density,
+           label="Data" if data else "MC")
+
+    if var == "met_phi":
+        plt.axvspan(_HEM_PHI_MIN, _HEM_PHI_MAX, color="red", alpha=0.15,
+                    label="HEM sector")
+
+    hplot.quick_label(
+        data=data,
+        xlabel=xlabel,
+        ylabel="Normalized events" if density else "# Events",
+        cms_text="Simulation Internal" if not data else "Preliminary",
+    )
+    plt.legend()
+    hplot.show()
+
+
+def plot_met_data_mc(data_out, mc_out, var="met_phi", era="2018",
+                     data_dataset=None, systematic="nominal", density=True):
+    """Overlay 2018 data vs MC MET pt/phi to show the HEM implementation is
+    correct: with HEM applied, the two agree across the HEM phi sector.
+
+    ``data_out``/``mc_out`` are the loaded data and MC pickles.
+    ``data_dataset`` selects the data dataset(s) (defaults to ``datasets[era]``).
+    """
+    if var not in _MET_VARS:
+        raise ValueError(f"var must be one of {list(_MET_VARS)}, got {var!r}")
+    for name, o in (("data", data_out), ("MC", mc_out)):
+        if var not in o:
+            raise KeyError(f"{name} output is missing {var!r}. Re-run in 'validation' mode.")
+    axis_name, xlabel = _MET_VARS[var]
+    if data_dataset is None:
+        data_dataset = datasets.get(era)
+
+    hplot.setup(era=era)
+    hplot.set_plot_name(f"{var}_data_mc_hem")
+
+    h_mc = _select_if_present(mc_out[var], systematic=systematic).project(axis_name)
+    h_data = _select_if_present(data_out[var], dataset=data_dataset,
+                                systematic=systematic).project(axis_name)
+
+    h_mc.plot(histtype="fill", density=density, alpha=0.6, label="MC")
+    h_data.plot(histtype="errorbar", density=density, color="black", label="Data")
+
+    if var == "met_phi":
+        plt.axvspan(_HEM_PHI_MIN, _HEM_PHI_MAX, color="red", alpha=0.15,
+                    label="HEM sector")
+
+    hplot.quick_label(
+        data=True,
+        xlabel=xlabel,
+        ylabel="Normalized events" if density else "# Events",
+        cms_text="Preliminary",
+    )
+    plt.legend()
+    hplot.show()

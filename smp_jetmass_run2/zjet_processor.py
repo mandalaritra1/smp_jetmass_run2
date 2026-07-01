@@ -304,6 +304,14 @@ class QJetMassProcessor(processor.ProcessorABC):
             register_hist(self.hists, "y_jet0", [dataset_axis, y_axis, syst_axis])
             register_hist(self.hists, "eta_phi_jet_reco", [dataset_axis, eta_axis, phi_axis])
 
+            #### MET pt / phi (reco) -- data vs MC cross-check that the 2018 HEM
+            #### treatment (flat lumi-fraction weight for MC, hard veto for data)
+            #### is applied correctly: without it, lost energy in the HEM sector
+            #### (phi in [-1.57, -0.87]) shows up as an excess of fake MET pointing
+            #### opposite the hole. Filled from events_j_meas.MET (PF Type-1 MET).
+            register_hist(self.hists, "met_pt",  [dataset_axis, met_pt_axis, syst_axis])
+            register_hist(self.hists, "met_phi", [dataset_axis, phi_axis, syst_axis])
+
             register_hist(self.hists, "ptasym_presel", [dataset_axis, frac_axis])
             register_hist(self.hists, "ptasym", [dataset_axis, frac_axis, syst_axis])
             register_hist(self.hists, "dr", [dataset_axis, dr_axis, syst_axis])
@@ -2838,7 +2846,11 @@ class QJetMassProcessor(processor.ProcessorABC):
                                 fill_hist(self.hists, "mass_Z", dataset = dataset, mass = mass_Z, systematic = syst, weight = weights_reco )
                                 fill_hist(self.hists, "y_Z", dataset = dataset, y = getRapidity(z_reco_meas), systematic = syst, weight = weights_reco)
 
-                                
+                                ## MET (PF Type-1) -- HEM implementation cross-check (2018)
+                                fill_hist(self.hists, "met_pt",  dataset = dataset, pt  = events_j_meas.MET.pt,  systematic = syst, weight = weights_reco)
+                                fill_hist(self.hists, "met_phi", dataset = dataset, phi = events_j_meas.MET.phi, systematic = syst, weight = weights_reco)
+
+
                                 ## Jet
                                 fill_hist(self.hists, "pt_jet0", dataset = dataset, pt = ptreco, systematic = syst, weight = weights_reco )
                                 fill_hist(self.hists, "eta_jet0", dataset = dataset, eta = reco_jet_meas.eta, systematic = syst, weight = weights_reco )
@@ -3046,6 +3058,9 @@ class QJetMassProcessor(processor.ProcessorABC):
                             fill_hist(self.hists, "phi_Z", dataset = dataset, phi = phi_Z, systematic = jet_syst, weight = weights_reco )
                             fill_hist(self.hists, "mass_Z", dataset = dataset, mass = mass_Z, systematic = jet_syst, weight = weights_reco )
                             fill_hist(self.hists, "y_Z", dataset = dataset, y = getRapidity(z_reco_meas), systematic = jet_syst, weight = weights_reco)
+                            ## MET (PF Type-1) -- HEM implementation cross-check (2018)
+                            fill_hist(self.hists, "met_pt",  dataset = dataset, pt  = events_j_meas.MET.pt,  systematic = jet_syst, weight = weights_reco)
+                            fill_hist(self.hists, "met_phi", dataset = dataset, phi = events_j_meas.MET.phi, systematic = jet_syst, weight = weights_reco)
                             ## Jet
                             fill_hist(self.hists, "pt_jet0", dataset = dataset, pt = ptreco, systematic = jet_syst, weight = weights_reco )
                             fill_hist(self.hists, "eta_jet0", dataset = dataset, eta = reco_jet_meas.eta, systematic = jet_syst, weight = weights_reco )
