@@ -526,10 +526,12 @@ def plot_ak4_etaphi(out, era="2018", data=False, dataset=None):
 
 
 def plot_met_vs_jetpt(data_out, mc_out, era="2018", data_dataset=None,
-                      systematic="nominal", hist_name="met_ptjet_reco"):
+                      systematic="nominal", hist_name="met_ptjet_reco",
+                      jetpt_max=None):
     """Profile of <MET> vs leading-jet pT, data vs MC. If the MET tail is
     jet-resolution driven, <MET> rises with jet pT and MC tracks it -- the
-    justification that high-MET events are resolution, not anomalies."""
+    justification that high-MET events are resolution, not anomalies.
+    ``jetpt_max`` caps the x-axis; None auto-crops to the last populated bin."""
     import numpy as np
     for name, o in (("data", data_out), ("MC", mc_out)):
         if hist_name not in o:
@@ -569,6 +571,12 @@ def plot_met_vs_jetpt(data_out, mc_out, era="2018", data_dataset=None,
     ax.set_xlabel(r"Leading jet $p_T$ [GeV]")
     ax.set_ylabel(r"$\langle$MET$\rangle$ [GeV]")
     ax.set_ylim(bottom=0)
+    # crop the empty high-jet-pt region
+    ptj_edges = h_mc.axes["ptreco"].edges
+    if jetpt_max is None:
+        pop = np.where(g_mc | g_dt)[0]
+        jetpt_max = ptj_edges[pop[-1] + 1] if len(pop) else ptj_edges[-1]
+    ax.set_xlim(ptj_edges[0], jetpt_max)
     plt.sca(ax)
     hplot.quick_label(data=True, cms_text="Preliminary")
     ax.legend(loc="upper left", framealpha=0.0)
@@ -658,10 +666,14 @@ def plot_veto_compare(out, obs="met_pt", era="2018", data=True, dataset=None,
 
 
 def plot_met_jetpt_2d(out, era="2018", data=False, dataset=None,
-                      systematic="nominal", hist_name="met_ptjet_reco"):
+                      systematic="nominal", hist_name="met_ptjet_reco",
+                      jetpt_max=None):
     """2D MET vs leading-jet pt heatmap (log colour) from the validation output,
     with the <MET>-vs-jet-pt profile overlaid. Shows whether the MET tail sits at
-    high or low jet pt (it tracks the abundant low-pt jets' resolution tail)."""
+    high or low jet pt (it tracks the abundant low-pt jets' resolution tail).
+
+    ``jetpt_max`` caps the x-axis; None (default) auto-crops to the last populated
+    jet-pt bin so the empty high-pt phase space isn't shown."""
     import numpy as np
     if hist_name not in out:
         raise KeyError(f"Output is missing {hist_name!r}. Re-run in 'validation' mode.")
@@ -686,6 +698,12 @@ def plot_met_jetpt_2d(out, era="2018", data=False, dataset=None,
     ax.plot(ptj_c, mean, "o-", color="red", ms=5, lw=2, label=r"$\langle$MET$\rangle$")
     ax.set_xlabel(r"Leading jet $p_T$ [GeV]")
     ax.set_ylabel(r"MET $p_T$ [GeV]")
+    # crop the empty high-jet-pt region (nothing lives there in this phase space)
+    ptj_edges = h2.axes["ptreco"].edges
+    if jetpt_max is None:
+        pop = np.where(n > 0)[0]
+        jetpt_max = ptj_edges[pop[-1] + 1] if len(pop) else ptj_edges[-1]
+    ax.set_xlim(ptj_edges[0], jetpt_max)
     ax.legend(loc="upper right", framealpha=0.6)
     plt.sca(ax)
     hplot.quick_label(data=data, cms_text="Preliminary")   # data=False -> "Simulation Preliminary"
