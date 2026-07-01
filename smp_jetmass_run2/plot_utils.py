@@ -584,9 +584,27 @@ def plot_mass_metsplit(out, era="2018", data=True, dataset=None, met_cut=50.0,
         present = set(out[hist_name].axes["dataset"])
         dataset = [d for d in dataset if d in present] or None
 
-    h = _select_if_present(out[hist_name], dataset=dataset, systematic=systematic)
-    h_lo = h[{"pt": slice(None, hist.loc(met_cut))}].project("mass")
-    h_hi = h[{"pt": slice(hist.loc(met_cut), None)}].project("mass")
+    # Sum the MET axis over real bins only. NB: `h[{"pt": slice(loc(cut), None)}]`
+    # then `.project("mass")` is WRONG -- slicing dumps the out-of-range content
+    # into the sliced axis's flow bins and project() sums the flow, so both halves
+    # recover the full distribution (ratio == 1 by construction). Build the two 1D
+    # mass hists explicitly from the 2D (mass, MET) values, flow excluded.
+    h2 = _select_if_present(out[hist_name], dataset=dataset,
+                            systematic=systematic).project("mass", "pt")
+    icut = h2.axes["pt"].index(met_cut)
+    vals = h2.values()        # (nmass, nmet), flow excluded
+    vars = h2.variances()
+    mass_ax = h2.axes["mass"]
+
+    def _mass_hist(met_slice):
+        hh = hist.Hist(mass_ax, storage=hist.storage.Weight())
+        view = hh.view()
+        view["value"] = vals[:, met_slice].sum(axis=1)
+        view["variance"] = vars[:, met_slice].sum(axis=1)
+        return hh
+
+    h_lo = _mass_hist(slice(None, icut))   # MET < cut
+    h_hi = _mass_hist(slice(icut, None))   # MET > cut
     _data_mc_ratio(
         h_hi, h_lo, r"Ungroomed jet mass [GeV]", era,
         f"mass_metsplit_{int(met_cut)}", density=density, ratio=ratio,
