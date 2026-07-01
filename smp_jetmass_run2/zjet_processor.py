@@ -336,7 +336,10 @@ class QJetMassProcessor(processor.ProcessorABC):
             #### per-event correlation the 1D hists throw away, so the MET tail
             #### can be shown to be jet-resolution-driven (rises with jet pt) and
             #### the jet mass shown insensitive to a MET<50/>50 split (offline).
-            register_hist(self.hists, "met_ptjet_reco", [dataset_axis, met_pt_axis, ptreco_axis, syst_axis])
+            #### fine jet-pt axis (NOT the coarse analysis ptreco binning, whose
+            #### last bin is [400, 13000] and makes the MET-vs-jetpt 2D unreadable)
+            ak_jetpt_axis = hist.axis.Regular(65, 200, 1500, name="ptreco", label=r"Leading jet $p_T$ [GeV]")
+            register_hist(self.hists, "met_ptjet_reco", [dataset_axis, met_pt_axis, ak_jetpt_axis, syst_axis])
             register_hist(self.hists, "mass_met_reco",  [dataset_axis, mass_axis, met_pt_axis, syst_axis])
 
             register_hist(self.hists, "ptasym_presel", [dataset_axis, frac_axis])

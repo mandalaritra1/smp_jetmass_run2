@@ -292,6 +292,28 @@ def _density_max(h):
     return float((vals / integral).max())
 
 
+def _crop_edge(counts, edges, frac=0.999):
+    """Upper x-limit for a jet-pt axis: the smaller of the ``frac`` quantile edge
+    and the last 'reasonable' edge. The latter excludes an open/huge final bin
+    (the analysis ptreco binning ends in [400, 13000]); without it that bin's
+    center (~6700) and edge (13000) blow the axis out."""
+    import numpy as np
+
+    counts = np.asarray(counts, dtype=float)
+    edges = np.asarray(edges, dtype=float)
+    # last edge before a bin that is >3x wider than its lower edge (an open bin)
+    reasonable = edges[-1]
+    for i in range(len(edges) - 1):
+        if edges[i + 1] > 3.0 * max(edges[i], 100.0):
+            reasonable = edges[i]
+            break
+    tot = counts.sum()
+    if tot <= 0:
+        return reasonable
+    idx = int(np.searchsorted(np.cumsum(counts), frac * tot))
+    return min(edges[min(idx + 1, len(edges) - 1)], reasonable)
+
+
 def plot_met(out, var="met_phi", era="2018", data=False, dataset=None,
              systematic="nominal", density=True):
     """Single-source MET pt/phi (validation mode). Shades the HEM phi band for
@@ -571,11 +593,10 @@ def plot_met_vs_jetpt(data_out, mc_out, era="2018", data_dataset=None,
     ax.set_xlabel(r"Leading jet $p_T$ [GeV]")
     ax.set_ylabel(r"$\langle$MET$\rangle$ [GeV]")
     ax.set_ylim(bottom=0)
-    # crop the empty high-jet-pt region
+    # crop to where 99.9% of events live (outlier-robust; ignore stray TeV jets)
     ptj_edges = h_mc.axes["ptreco"].edges
     if jetpt_max is None:
-        pop = np.where(g_mc | g_dt)[0]
-        jetpt_max = ptj_edges[pop[-1] + 1] if len(pop) else ptj_edges[-1]
+        jetpt_max = _crop_edge(h_mc.values().sum(1) + h_data.values().sum(1), ptj_edges)
     ax.set_xlim(ptj_edges[0], jetpt_max)
     plt.sca(ax)
     hplot.quick_label(data=True, cms_text="Preliminary")
@@ -698,11 +719,10 @@ def plot_met_jetpt_2d(out, era="2018", data=False, dataset=None,
     ax.plot(ptj_c, mean, "o-", color="red", ms=5, lw=2, label=r"$\langle$MET$\rangle$")
     ax.set_xlabel(r"Leading jet $p_T$ [GeV]")
     ax.set_ylabel(r"MET $p_T$ [GeV]")
-    # crop the empty high-jet-pt region (nothing lives there in this phase space)
+    # crop to where 99.9% of events live (outlier-robust; ignore stray TeV jets)
     ptj_edges = h2.axes["ptreco"].edges
     if jetpt_max is None:
-        pop = np.where(n > 0)[0]
-        jetpt_max = ptj_edges[pop[-1] + 1] if len(pop) else ptj_edges[-1]
+        jetpt_max = _crop_edge(n, ptj_edges)
     ax.set_xlim(ptj_edges[0], jetpt_max)
     ax.legend(loc="upper right", framealpha=0.6)
     plt.sca(ax)
