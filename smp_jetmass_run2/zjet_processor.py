@@ -316,6 +316,14 @@ class QJetMassProcessor(processor.ProcessorABC):
             #### pair demonstrates the residual is modulation, not HEM.
             register_hist(self.hists, "met_pt_xy",  [dataset_axis, met_pt_axis, syst_axis])
             register_hist(self.hists, "met_phi_xy", [dataset_axis, phi_axis, syst_axis])
+            #### AK4 jet occupancy for the HEM cross-check (ARC): the AK8 jet is
+            #### HEM-vetoed, but AK4 jets are not -- a suppressed HEM sector in
+            #### data (vs MC) shows up here. Wide eta axis to reach the HEM strip
+            #### (down to eta ~ -3), which the analysis eta_axis (+/-2.5) misses.
+            ak4_eta_axis = hist.axis.Regular(50, -5.0, 5.0, name="eta", label=r"AK4 jet $\eta$")
+            ak4_phi_axis = hist.axis.Regular(50, -np.pi, np.pi, name="phi", label=r"AK4 jet $\phi$")
+            register_hist(self.hists, "ak4_eta_phi_reco", [dataset_axis, ak4_eta_axis, ak4_phi_axis])
+            register_hist(self.hists, "ak4_phi_hemeta",   [dataset_axis, ak4_phi_axis])
 
             register_hist(self.hists, "ptasym_presel", [dataset_axis, frac_axis])
             register_hist(self.hists, "ptasym", [dataset_axis, frac_axis, syst_axis])
@@ -2859,6 +2867,20 @@ class QJetMassProcessor(processor.ProcessorABC):
                                     IOV, isMC = self._do_gen, run = events_j_meas.run)
                                 fill_hist(self.hists, "met_pt_xy",  dataset = dataset, pt  = met_pt_xy,  systematic = syst, weight = weights_reco)
                                 fill_hist(self.hists, "met_phi_xy", dataset = dataset, phi = met_phi_xy, systematic = syst, weight = weights_reco)
+
+                                ## AK4-jet HEM occupancy cross-check (per jet; nominal only,
+                                ## hists carry no systematic axis so fill once per event)
+                                if syst == "nominal":
+                                    ak4 = events_j_meas.Jet
+                                    ak4 = ak4[(ak4.pt > 30) & (ak4.jetId >= 2)]
+                                    ak4_w = ak.broadcast_arrays(weights_reco, ak4.pt)[0]
+                                    fill_hist(self.hists, "ak4_eta_phi_reco", dataset = dataset,
+                                              eta = ak.flatten(ak4.eta), phi = ak.flatten(ak4.phi),
+                                              weight = ak.flatten(ak4_w))
+                                    ak4_hem = ak4[(ak4.eta > -3.0) & (ak4.eta < -1.3)]
+                                    ak4_hem_w = ak.broadcast_arrays(weights_reco, ak4_hem.pt)[0]
+                                    fill_hist(self.hists, "ak4_phi_hemeta", dataset = dataset,
+                                              phi = ak.flatten(ak4_hem.phi), weight = ak.flatten(ak4_hem_w))
 
 
                                 ## Jet

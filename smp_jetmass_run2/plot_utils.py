@@ -324,34 +324,16 @@ def plot_met(out, var="met_phi", era="2018", data=False, dataset=None,
     hplot.show(fig=fig)
 
 
-def plot_met_data_mc(data_out, mc_out, var="met_phi", era="2018",
-                     data_dataset=None, systematic="nominal", density=True,
-                     ratio=True):
-    """Overlay 2018 data vs MC MET pt/phi to show the HEM implementation is
-    correct: with HEM applied, the two agree across the HEM phi sector.
-
-    ``data_out``/``mc_out`` are the loaded data and MC pickles.
-    ``data_dataset`` selects the data dataset(s) (defaults to ``datasets[era]``).
-    ``ratio=True`` adds a Data/MC ratio panel below (data stat error only).
-    """
+def _data_mc_ratio(h_data, h_mc, xlabel, era, plot_name,
+                   density=True, ratio=True, hem_band=False):
+    """Overlay two already-projected 1D hists (data points, MC fill) with an
+    optional Data/MC ratio panel below (data stat error on the points, MC stat
+    as a grey band around 1). ``hem_band`` shades the HEM phi sector on both
+    panels. Shared by the MET and AK4 HEM validation plots."""
     import numpy as np
 
-    if var not in _MET_VARS:
-        raise ValueError(f"var must be one of {list(_MET_VARS)}, got {var!r}")
-    for name, o in (("data", data_out), ("MC", mc_out)):
-        if var not in o:
-            raise KeyError(f"{name} output is missing {var!r}. Re-run in 'validation' mode.")
-    axis_name, xlabel = _MET_VARS[var]
-    if data_dataset is None:
-        data_dataset = datasets.get(era)
-    # keep only data streams actually present (a single-channel run may have just
-    # SingleMuon or just EGamma); selecting a missing name is a hard KeyError.
-    if data_dataset is not None:
-        present = set(data_out[var].axes["dataset"])
-        data_dataset = [d for d in data_dataset if d in present] or None
-
     hplot.setup(era=era)
-    hplot.set_plot_name(f"{var}_data_mc_hem")
+    hplot.set_plot_name(plot_name)
     if ratio:
         fig, (ax, rax) = plt.subplots(
             2, 1, sharex=True, gridspec_kw={"height_ratios": [3, 1]},
@@ -360,14 +342,10 @@ def plot_met_data_mc(data_out, mc_out, var="met_phi", era="2018",
         fig, ax = plt.subplots(layout="constrained")
         rax = None
 
-    h_mc = _select_if_present(mc_out[var], systematic=systematic).project(axis_name)
-    h_data = _select_if_present(data_out[var], dataset=data_dataset,
-                                systematic=systematic).project(axis_name)
-
     h_mc.plot(ax=ax, histtype="fill", density=density, alpha=0.6, label="MC")
     h_data.plot(ax=ax, histtype="errorbar", density=density, color="black", label="Data")
 
-    if var in ("met_phi", "met_phi_xy"):
+    if hem_band:
         ax.axvspan(_HEM_PHI_MIN, _HEM_PHI_MAX, color="red", alpha=0.15,
                    label="HEM sector")
 
@@ -412,10 +390,101 @@ def plot_met_data_mc(data_out, mc_out, var="met_phi", era="2018",
         rax.errorbar(centers[good], r[good], yerr=r_err[good], fmt="o",
                      color="black", ms=4, lw=1, label="Data")
         rax.axhline(1.0, color="gray", ls="--", lw=1)
-        if var in ("met_phi", "met_phi_xy"):
+        if hem_band:
             rax.axvspan(_HEM_PHI_MIN, _HEM_PHI_MAX, color="red", alpha=0.15)
         rax.set_ylim(0.5, 1.5)
         rax.set_ylabel("Data/MC")
         rax.set_xlabel(xlabel)
 
+    hplot.show(fig=fig)
+
+
+def plot_met_data_mc(data_out, mc_out, var="met_phi", era="2018",
+                     data_dataset=None, systematic="nominal", density=True,
+                     ratio=True):
+    """Overlay 2018 data vs MC MET pt/phi to show the HEM implementation is
+    correct: with HEM applied, the two agree across the HEM phi sector.
+
+    ``data_out``/``mc_out`` are the loaded data and MC pickles.
+    ``data_dataset`` selects the data dataset(s) (defaults to ``datasets[era]``).
+    ``ratio=True`` adds a Data/MC ratio panel below.
+    """
+    if var not in _MET_VARS:
+        raise ValueError(f"var must be one of {list(_MET_VARS)}, got {var!r}")
+    for name, o in (("data", data_out), ("MC", mc_out)):
+        if var not in o:
+            raise KeyError(f"{name} output is missing {var!r}. Re-run in 'validation' mode.")
+    axis_name, xlabel = _MET_VARS[var]
+    if data_dataset is None:
+        data_dataset = datasets.get(era)
+    # keep only data streams actually present (a single-channel run may have just
+    # SingleMuon or just EGamma); selecting a missing name is a hard KeyError.
+    if data_dataset is not None:
+        present = set(data_out[var].axes["dataset"])
+        data_dataset = [d for d in data_dataset if d in present] or None
+
+    h_mc = _select_if_present(mc_out[var], systematic=systematic).project(axis_name)
+    h_data = _select_if_present(data_out[var], dataset=data_dataset,
+                                systematic=systematic).project(axis_name)
+    _data_mc_ratio(h_data, h_mc, xlabel, era, f"{var}_data_mc_hem",
+                   density=density, ratio=ratio,
+                   hem_band=var in ("met_phi", "met_phi_xy"))
+
+
+def plot_ak4_phi_hem(data_out, mc_out, era="2018", data_dataset=None,
+                     density=True, ratio=True):
+    """Data vs MC phi of AK4 jets that fall in the HEM eta strip
+    (-3.0 < eta < -1.3), with a Data/MC ratio. Answers the ARC ask "how big is
+    the AK4-in-HEM effect": in 2018 data the failing HEM sector
+    (phi in [-1.57, -0.87]) loses jet energy, so AK4 jets there are suppressed
+    -> a data deficit / ratio dip in the band that MC (no HEM) does not show.
+    The AK8 measurement jet is HEM-vetoed, but AK4 jets are not, so this is the
+    residual check requested."""
+    var = "ak4_phi_hemeta"
+    for name, o in (("data", data_out), ("MC", mc_out)):
+        if var not in o:
+            raise KeyError(f"{name} output is missing {var!r}. Re-run in 'validation' mode.")
+    if data_dataset is None:
+        data_dataset = datasets.get(era)
+    if data_dataset is not None:
+        present = set(data_out[var].axes["dataset"])
+        data_dataset = [d for d in data_dataset if d in present] or None
+
+    h_mc = _select_if_present(mc_out[var]).project("phi")
+    h_data = _select_if_present(data_out[var], dataset=data_dataset).project("phi")
+    _data_mc_ratio(h_data, h_mc, r"AK4 jet $\phi$ (HEM $\eta$ strip)", era,
+                   "ak4_phi_hem_data_mc", density=density, ratio=ratio,
+                   hem_band=True)
+
+
+def plot_ak4_etaphi(out, era="2018", data=False, dataset=None):
+    """2D eta-phi occupancy of AK4 jets (validation mode), with the HEM veto box
+    overlaid for 2018. Data shows the depleted HEM sector; MC (no HEM) does not."""
+    var = "ak4_eta_phi_reco"
+    if var not in out:
+        raise KeyError(f"Output is missing {var!r}. Re-run in 'validation' mode.")
+    if dataset is None and data:
+        dataset = datasets.get(era)
+    if dataset is not None:
+        present = set(out[var].axes["dataset"])
+        dataset = [d for d in dataset if d in present] or None
+
+    hplot.setup(era=era)
+    hplot.set_plot_name("ak4_etaphi" + ("" if data else "_mc"))
+    fig, ax = plt.subplots(layout="constrained")
+
+    _select_if_present(out[var], dataset=dataset).project("eta", "phi").plot2d(
+        ax=ax, norm="log")
+
+    if era == "2018":
+        # HEM veto box (approx CMS convention): eta in [-3.0, -1.3], phi in [-1.57, -0.87]
+        ax.add_patch(patches.Rectangle(
+            (-3.0, _HEM_PHI_MIN), 3.0 - 1.3, _HEM_PHI_MAX - _HEM_PHI_MIN,
+            linewidth=2.5, edgecolor="red", facecolor="none", linestyle="--"))
+    ax.set_xlabel(r"AK4 jet $\eta$")
+    ax.set_ylabel(r"AK4 jet $\phi$")
+    plt.sca(ax)
+    hplot.quick_label(data=data, cms_text="Preliminary" if data else "Simulation Internal")
+    cbar = plt.gcf().axes[-1]
+    cbar.set_ylabel("# Jets")
     hplot.show(fig=fig)
