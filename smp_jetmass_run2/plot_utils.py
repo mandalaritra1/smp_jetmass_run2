@@ -655,3 +655,40 @@ def plot_veto_compare(out, obs="met_pt", era="2018", data=True, dataset=None,
         density=density, ratio=ratio, hem_band=hem, mc_style="errorbar",
         label_mc="No veto", label_data="AK4-HEM veto",
         ratio_label="veto / no-veto", cms_data=data)
+
+
+def plot_met_jetpt_2d(out, era="2018", data=False, dataset=None,
+                      systematic="nominal", hist_name="met_ptjet_reco"):
+    """2D MET vs leading-jet pt heatmap (log colour) from the validation output,
+    with the <MET>-vs-jet-pt profile overlaid. Shows whether the MET tail sits at
+    high or low jet pt (it tracks the abundant low-pt jets' resolution tail)."""
+    import numpy as np
+    if hist_name not in out:
+        raise KeyError(f"Output is missing {hist_name!r}. Re-run in 'validation' mode.")
+    if dataset is None and data:
+        dataset = datasets.get(era)
+    if dataset is not None:
+        present = set(out[hist_name].axes["dataset"])
+        dataset = [d for d in dataset if d in present] or None
+
+    h2 = _select_if_present(out[hist_name], dataset=dataset,
+                            systematic=systematic).project("ptreco", "pt")
+    hplot.setup(era=era)
+    hplot.set_plot_name("met_vs_jetpt_2d" + ("" if data else "_mc"))
+    fig, ax = plt.subplots(layout="constrained")
+    h2.plot2d(ax=ax, norm="log")
+
+    v = h2.values()                      # (nptreco, nmet)
+    met_c = h2.axes["pt"].centers
+    ptj_c = h2.axes["ptreco"].centers
+    n = v.sum(axis=1)
+    mean = np.where(n > 0, (v * met_c).sum(axis=1) / np.where(n > 0, n, 1), np.nan)
+    ax.plot(ptj_c, mean, "o-", color="red", ms=5, lw=2, label=r"$\langle$MET$\rangle$")
+    ax.set_xlabel(r"Leading jet $p_T$ [GeV]")
+    ax.set_ylabel(r"MET $p_T$ [GeV]")
+    ax.legend(loc="upper right", framealpha=0.6)
+    plt.sca(ax)
+    hplot.quick_label(data=data, cms_text="Preliminary")   # data=False -> "Simulation Preliminary"
+    cbar = plt.gcf().axes[-1]
+    cbar.set_ylabel("Events")
+    hplot.show(fig=fig)
