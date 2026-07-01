@@ -332,12 +332,13 @@ def plot_met(out, var="met_phi", era="2018", data=False, dataset=None,
 def _data_mc_ratio(h_data, h_mc, xlabel, era, plot_name,
                    density=True, ratio=True, hem_band=False,
                    label_data="Data", label_mc="MC", ratio_label="Data/MC",
-                   cms_data=True):
-    """Overlay two already-projected 1D hists (``h_data`` points, ``h_mc`` fill)
-    with an optional ratio panel below (points stat error + reference stat band
-    around 1). ``hem_band`` shades the HEM phi sector. Labels are overridable so
-    the same layout serves e.g. a MET<50/>50 shape comparison. Shared by the MET,
-    AK4 HEM, and mass-split validation plots."""
+                   cms_data=True, mc_style="fill"):
+    """Overlay two already-projected 1D hists (``h_data`` points, ``h_mc``
+    reference) with an optional ratio panel below (points stat error + reference
+    stat band around 1). ``hem_band`` shades the HEM phi sector. Labels are
+    overridable and ``mc_style`` can be "fill" (default) or "errorbar" (points on
+    points, e.g. a before/after-veto overlay). Shared by the MET, AK4 HEM,
+    mass-split, and veto-compare validation plots."""
     import numpy as np
 
     hplot.setup(era=era)
@@ -350,7 +351,11 @@ def _data_mc_ratio(h_data, h_mc, xlabel, era, plot_name,
         fig, ax = plt.subplots(layout="constrained")
         rax = None
 
-    h_mc.plot(ax=ax, histtype="fill", density=density, alpha=0.6, label=label_mc)
+    if mc_style == "errorbar":
+        h_mc.plot(ax=ax, histtype="errorbar", density=density, color="C0",
+                  marker="s", label=label_mc)
+    else:
+        h_mc.plot(ax=ax, histtype="fill", density=density, alpha=0.6, label=label_mc)
     h_data.plot(ax=ax, histtype="errorbar", density=density, color="black", label=label_data)
 
     if hem_band:
@@ -610,3 +615,43 @@ def plot_mass_metsplit(out, era="2018", data=True, dataset=None, met_cut=50.0,
         f"mass_metsplit_{int(met_cut)}", density=density, ratio=ratio,
         label_mc=f"MET < {int(met_cut)} GeV", label_data=f"MET > {int(met_cut)} GeV",
         ratio_label=f">{int(met_cut)} / <{int(met_cut)}", cms_data=data)
+
+
+# observable -> (before hist, after-veto hist, projected axis, x label, phi HEM band?)
+_VETO_COMPARE = {
+    "met_pt":   ("met_pt",   "met_pt_ak4veto",   "pt",   r"MET $p_T$ [GeV]", False),
+    "met_phi":  ("met_phi",  "met_phi_ak4veto",  "phi",  r"$\phi$(MET)",     True),
+    "mass_jet0":("mass_jet0","mass_jet0_ak4veto","mass", r"Ungroomed jet mass [GeV]", False),
+}
+
+
+def plot_veto_compare(out, obs="met_pt", era="2018", data=True, dataset=None,
+                      systematic="nominal", density=False, ratio=True):
+    """Before vs after the AK4-in-HEM event veto, SAME source, points on points
+    + ratio (veto / no-veto). Demonstrates the veto changes essentially nothing.
+    ``density=False`` (default) keeps raw counts so the ~equal yields are visible;
+    the removed events are only those with an AK4 jet in the HEM box (affected
+    2018 runs), so the ratio should sit at 1 except in a few HEM-adjacent bins.
+
+    Note: after is a subset of before (highly correlated), so the plotted error
+    bars (treated as independent) OVER-state the true ratio uncertainty -- fine
+    for a 'no change' demonstration, not for a precision number."""
+    if obs not in _VETO_COMPARE:
+        raise ValueError(f"obs must be one of {list(_VETO_COMPARE)}, got {obs!r}")
+    before_name, after_name, axis_name, xlabel, hem = _VETO_COMPARE[obs]
+    for nm in (before_name, after_name):
+        if nm not in out:
+            raise KeyError(f"Output is missing {nm!r}. Re-run in 'validation' mode.")
+    if dataset is None and data:
+        dataset = datasets.get(era)
+    if dataset is not None:
+        present = set(out[before_name].axes["dataset"])
+        dataset = [d for d in dataset if d in present] or None
+
+    h_before = _select_if_present(out[before_name], dataset=dataset, systematic=systematic).project(axis_name)
+    h_after = _select_if_present(out[after_name], dataset=dataset, systematic=systematic).project(axis_name)
+    _data_mc_ratio(
+        h_after, h_before, xlabel, era, f"{obs}_vetocompare",
+        density=density, ratio=ratio, hem_band=hem, mc_style="errorbar",
+        label_mc="No veto", label_data="AK4-HEM veto",
+        ratio_label="veto / no-veto", cms_data=data)
