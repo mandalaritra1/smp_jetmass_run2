@@ -267,11 +267,16 @@ def plot_raw_mass_overlay(
 _HEM_PHI_MIN, _HEM_PHI_MAX = -1.57, -0.87
 
 _MET_VARS = {
-    "met_phi":    ("phi", r"$\phi$(MET)"),
-    "met_pt":     ("pt",  r"MET $p_T$ [GeV]"),
-    "met_phi_xy": ("phi", r"$\phi$(MET), xy-corrected"),
-    "met_pt_xy":  ("pt",  r"MET $p_T$ [GeV], xy-corrected"),
+    "met_phi":         ("phi", r"$\phi$(MET)"),
+    "met_pt":          ("pt",  r"MET $p_T$ [GeV]"),
+    "met_phi_xy":      ("phi", r"$\phi$(MET), xy-corrected"),
+    "met_pt_xy":       ("pt",  r"MET $p_T$ [GeV], xy-corrected"),
+    "met_phi_ak4veto": ("phi", r"$\phi$(MET), AK4-HEM veto"),
+    "met_pt_ak4veto":  ("pt",  r"MET $p_T$ [GeV], AK4-HEM veto"),
 }
+
+# phi variables that should shade the HEM sector band
+_PHI_HEM_VARS = {"met_phi", "met_phi_xy", "met_phi_ak4veto"}
 
 
 def _density_max(h):
@@ -307,7 +312,7 @@ def plot_met(out, var="met_phi", era="2018", data=False, dataset=None,
     h.plot(ax=ax, histtype="errorbar" if data else "fill", density=density,
            color="black" if data else None, label="Data" if data else "MC")
 
-    if var in ("met_phi", "met_phi_xy"):
+    if var in _PHI_HEM_VARS:
         ax.axvspan(_HEM_PHI_MIN, _HEM_PHI_MAX, color="red", alpha=0.15,
                    label="HEM sector")
 
@@ -428,7 +433,29 @@ def plot_met_data_mc(data_out, mc_out, var="met_phi", era="2018",
                                 systematic=systematic).project(axis_name)
     _data_mc_ratio(h_data, h_mc, xlabel, era, f"{var}_data_mc_hem",
                    density=density, ratio=ratio,
-                   hem_band=var in ("met_phi", "met_phi_xy"))
+                   hem_band=var in _PHI_HEM_VARS)
+
+
+def plot_validation_data_mc(data_out, mc_out, hist_name, axis_name, xlabel,
+                            era="2018", data_dataset=None, systematic="nominal",
+                            density=True, ratio=True, hem_band=False, plot_name=None):
+    """Generic data-vs-MC overlay + ratio for any 1D validation hist (used e.g.
+    for the jet-mass before/after the AK4-HEM veto: hist_name='mass_jet0' vs
+    'mass_jet0_ak4veto', axis_name='mass')."""
+    for name, o in (("data", data_out), ("MC", mc_out)):
+        if hist_name not in o:
+            raise KeyError(f"{name} output is missing {hist_name!r}. Re-run in 'validation' mode.")
+    if data_dataset is None:
+        data_dataset = datasets.get(era)
+    if data_dataset is not None:
+        present = set(data_out[hist_name].axes["dataset"])
+        data_dataset = [d for d in data_dataset if d in present] or None
+
+    h_mc = _select_if_present(mc_out[hist_name], systematic=systematic).project(axis_name)
+    h_data = _select_if_present(data_out[hist_name], dataset=data_dataset,
+                                systematic=systematic).project(axis_name)
+    _data_mc_ratio(h_data, h_mc, xlabel, era, plot_name or f"{hist_name}_data_mc",
+                   density=density, ratio=ratio, hem_band=hem_band)
 
 
 def plot_ak4_phi_hem(data_out, mc_out, era="2018", data_dataset=None,

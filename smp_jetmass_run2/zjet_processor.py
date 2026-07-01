@@ -324,6 +324,14 @@ class QJetMassProcessor(processor.ProcessorABC):
             ak4_phi_axis = hist.axis.Regular(50, -np.pi, np.pi, name="phi", label=r"AK4 jet $\phi$")
             register_hist(self.hists, "ak4_eta_phi_reco", [dataset_axis, ak4_eta_axis, ak4_phi_axis])
             register_hist(self.hists, "ak4_phi_hemeta",   [dataset_axis, ak4_phi_axis])
+            #### "after" distributions with the AK4-in-HEM event veto applied
+            #### (data: hard veto; 2018 MC: flat lumi-fraction weight, mirroring
+            #### the AK8 HEMVeto). Paired with met_pt/met_phi/mass_jet0 ("before")
+            #### to size how much the veto improves data/MC and whether it biases
+            #### the jet mass.
+            register_hist(self.hists, "met_pt_ak4veto",    [dataset_axis, met_pt_axis, syst_axis])
+            register_hist(self.hists, "met_phi_ak4veto",   [dataset_axis, phi_axis, syst_axis])
+            register_hist(self.hists, "mass_jet0_ak4veto", [dataset_axis, mass_axis, syst_axis])
 
             register_hist(self.hists, "ptasym_presel", [dataset_axis, frac_axis])
             register_hist(self.hists, "ptasym", [dataset_axis, frac_axis, syst_axis])
@@ -2881,6 +2889,19 @@ class QJetMassProcessor(processor.ProcessorABC):
                                     ak4_hem_w = ak.broadcast_arrays(weights_reco, ak4_hem.pt)[0]
                                     fill_hist(self.hists, "ak4_phi_hemeta", dataset = dataset,
                                               phi = ak.flatten(ak4_hem.phi), weight = ak.flatten(ak4_hem_w))
+
+                                    ## AK4-in-HEM event veto: reuse HEMVeto on the AK4 collection
+                                    ## (data -> pass/fail mask; 2018 MC -> flat lumi weight). Only
+                                    ## meaningful for 2018; elsewhere it's a no-op (weight 1).
+                                    if IOV == "2018":
+                                        ak4_veto = HEMVeto(events_j_meas.Jet, events_j_meas.run, isMC = self._do_gen)
+                                        ak4_veto_w = ak.to_numpy(ak4_veto).astype(float)
+                                    else:
+                                        ak4_veto_w = np.ones(len(weights_reco))
+                                    w_ak4veto = weights_reco * ak4_veto_w
+                                    fill_hist(self.hists, "met_pt_ak4veto",    dataset = dataset, pt   = events_j_meas.MET.pt,  systematic = syst, weight = w_ak4veto)
+                                    fill_hist(self.hists, "met_phi_ak4veto",   dataset = dataset, phi  = events_j_meas.MET.phi, systematic = syst, weight = w_ak4veto)
+                                    fill_hist(self.hists, "mass_jet0_ak4veto", dataset = dataset, mass = reco_jet_meas.mass,     systematic = syst, weight = w_ak4veto)
 
 
                                 ## Jet
