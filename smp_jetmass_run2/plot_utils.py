@@ -391,10 +391,10 @@ def _data_mc_ratio(h_data, h_mc, xlabel, era, plot_name,
     # CMS label goes on the top (main) axes; xlabel only on the bottom-most axes
     plt.sca(ax)
     hplot.quick_label(
-        data=cms_data,
+        data=cms_data,   # data=False makes hep prepend "Simulation" itself
         xlabel=None if ratio else xlabel,
         ylabel="Normalized events" if density else "# Events",
-        cms_text="Preliminary" if cms_data else "Simulation Preliminary",
+        cms_text="Preliminary",
     )
     ax.legend(loc="upper right", framealpha=0.0)
 
@@ -641,7 +641,7 @@ def plot_mass_metsplit(out, era="2018", data=True, dataset=None, met_cut=50.0,
     h_hi = _mass_hist(slice(icut, None))   # MET > cut
     _data_mc_ratio(
         h_hi, h_lo, r"Ungroomed jet mass [GeV]", era,
-        f"mass_metsplit_{int(met_cut)}", density=density, ratio=ratio,
+        f"mass_metsplit_{int(met_cut)}_{'data' if data else 'mc'}", density=density, ratio=ratio,
         label_mc=f"MET < {int(met_cut)} GeV", label_data=f"MET > {int(met_cut)} GeV",
         ratio_label=f">{int(met_cut)} / <{int(met_cut)}", cms_data=data)
 
@@ -680,7 +680,7 @@ def plot_veto_compare(out, obs="met_pt", era="2018", data=True, dataset=None,
     h_before = _select_if_present(out[before_name], dataset=dataset, systematic=systematic).project(axis_name)
     h_after = _select_if_present(out[after_name], dataset=dataset, systematic=systematic).project(axis_name)
     _data_mc_ratio(
-        h_after, h_before, xlabel, era, f"{obs}_vetocompare",
+        h_after, h_before, xlabel, era, f"{obs}_vetocompare_{'data' if data else 'mc'}",
         density=density, ratio=ratio, hem_band=hem, mc_style="errorbar",
         label_mc="No veto", label_data="AK4-HEM veto",
         ratio_label="veto / no-veto", cms_data=data)
