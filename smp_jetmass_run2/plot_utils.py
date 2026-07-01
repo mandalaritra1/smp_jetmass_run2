@@ -330,11 +330,14 @@ def plot_met(out, var="met_phi", era="2018", data=False, dataset=None,
 
 
 def _data_mc_ratio(h_data, h_mc, xlabel, era, plot_name,
-                   density=True, ratio=True, hem_band=False):
-    """Overlay two already-projected 1D hists (data points, MC fill) with an
-    optional Data/MC ratio panel below (data stat error on the points, MC stat
-    as a grey band around 1). ``hem_band`` shades the HEM phi sector on both
-    panels. Shared by the MET and AK4 HEM validation plots."""
+                   density=True, ratio=True, hem_band=False,
+                   label_data="Data", label_mc="MC", ratio_label="Data/MC",
+                   cms_data=True):
+    """Overlay two already-projected 1D hists (``h_data`` points, ``h_mc`` fill)
+    with an optional ratio panel below (points stat error + reference stat band
+    around 1). ``hem_band`` shades the HEM phi sector. Labels are overridable so
+    the same layout serves e.g. a MET<50/>50 shape comparison. Shared by the MET,
+    AK4 HEM, and mass-split validation plots."""
     import numpy as np
 
     hplot.setup(era=era)
@@ -347,8 +350,8 @@ def _data_mc_ratio(h_data, h_mc, xlabel, era, plot_name,
         fig, ax = plt.subplots(layout="constrained")
         rax = None
 
-    h_mc.plot(ax=ax, histtype="fill", density=density, alpha=0.6, label="MC")
-    h_data.plot(ax=ax, histtype="errorbar", density=density, color="black", label="Data")
+    h_mc.plot(ax=ax, histtype="fill", density=density, alpha=0.6, label=label_mc)
+    h_data.plot(ax=ax, histtype="errorbar", density=density, color="black", label=label_data)
 
     if hem_band:
         ax.axvspan(_HEM_PHI_MIN, _HEM_PHI_MAX, color="red", alpha=0.15,
@@ -361,10 +364,10 @@ def _data_mc_ratio(h_data, h_mc, xlabel, era, plot_name,
     # CMS label goes on the top (main) axes; xlabel only on the bottom-most axes
     plt.sca(ax)
     hplot.quick_label(
-        data=True,
+        data=cms_data,
         xlabel=None if ratio else xlabel,
         ylabel="Normalized events" if density else "# Events",
-        cms_text="Preliminary",
+        cms_text="Preliminary" if cms_data else "Simulation Preliminary",
     )
     ax.legend(loc="upper right", framealpha=0.0)
 
@@ -393,12 +396,12 @@ def _data_mc_ratio(h_data, h_mc, xlabel, era, plot_name,
         rax.stairs(1.0 + mc_rel, edges, baseline=1.0 - mc_rel, fill=True,
                    color="gray", alpha=0.30, label="MC stat")
         rax.errorbar(centers[good], r[good], yerr=r_err[good], fmt="o",
-                     color="black", ms=4, lw=1, label="Data")
+                     color="black", ms=4, lw=1, label=label_data)
         rax.axhline(1.0, color="gray", ls="--", lw=1)
         if hem_band:
             rax.axvspan(_HEM_PHI_MIN, _HEM_PHI_MAX, color="red", alpha=0.15)
         rax.set_ylim(0.5, 1.5)
-        rax.set_ylabel("Data/MC")
+        rax.set_ylabel(ratio_label)
         rax.set_xlabel(xlabel)
 
     hplot.show(fig=fig)
@@ -515,3 +518,77 @@ def plot_ak4_etaphi(out, era="2018", data=False, dataset=None):
     cbar = plt.gcf().axes[-1]
     cbar.set_ylabel("# Jets")
     hplot.show(fig=fig)
+
+
+def plot_met_vs_jetpt(data_out, mc_out, era="2018", data_dataset=None,
+                      systematic="nominal", hist_name="met_ptjet_reco"):
+    """Profile of <MET> vs leading-jet pT, data vs MC. If the MET tail is
+    jet-resolution driven, <MET> rises with jet pT and MC tracks it -- the
+    justification that high-MET events are resolution, not anomalies."""
+    import numpy as np
+    for name, o in (("data", data_out), ("MC", mc_out)):
+        if hist_name not in o:
+            raise KeyError(f"{name} output is missing {hist_name!r}. Re-run in 'validation' mode.")
+    if data_dataset is None:
+        data_dataset = datasets.get(era)
+    if data_dataset is not None:
+        present = set(data_out[hist_name].axes["dataset"])
+        data_dataset = [d for d in data_dataset if d in present] or None
+
+    h_mc = _select_if_present(mc_out[hist_name], systematic=systematic).project("ptreco", "pt")
+    h_data = _select_if_present(data_out[hist_name], dataset=data_dataset,
+                                systematic=systematic).project("ptreco", "pt")
+    met_c = h_mc.axes["pt"].centers
+    ptj_c = h_mc.axes["ptreco"].centers
+
+    def profile(h):
+        v = h.values().astype(float)              # (nptreco, nmet)
+        n = v.sum(axis=1)
+        good = n > 0
+        mean = np.where(good, (v * met_c).sum(axis=1) / np.where(good, n, 1), np.nan)
+        var = np.where(good, (v * met_c ** 2).sum(axis=1) / np.where(good, n, 1) - mean ** 2, np.nan)
+        err = np.sqrt(np.clip(var, 0, None) / np.where(good, n, 1))
+        return mean, err, good
+
+    m_mc, e_mc, g_mc = profile(h_mc)
+    m_dt, e_dt, g_dt = profile(h_data)
+
+    hplot.setup(era=era)
+    hplot.set_plot_name("met_vs_jetpt")
+    fig, ax = plt.subplots(layout="constrained")
+    ax.errorbar(ptj_c[g_mc], m_mc[g_mc], yerr=e_mc[g_mc], fmt="s", color="C0",
+                ms=5, lw=1.2, label="MC")
+    ax.errorbar(ptj_c[g_dt], m_dt[g_dt], yerr=e_dt[g_dt], fmt="o", color="black",
+                ms=5, lw=1.2, label="Data")
+    ax.axhline(50.0, color="red", ls=":", lw=1)  # the MET>50 line under discussion
+    ax.set_xlabel(r"Leading jet $p_T$ [GeV]")
+    ax.set_ylabel(r"$\langle$MET$\rangle$ [GeV]")
+    ax.set_ylim(bottom=0)
+    plt.sca(ax)
+    hplot.quick_label(data=True, cms_text="Preliminary")
+    ax.legend(loc="upper left", framealpha=0.0)
+    hplot.show(fig=fig)
+
+
+def plot_mass_metsplit(out, era="2018", data=True, dataset=None, met_cut=50.0,
+                       hist_name="mass_met_reco", systematic="nominal",
+                       density=True, ratio=True):
+    """Jet-mass shape for MET < cut vs MET > cut (same source). If high-MET
+    events don't distort the observable the two overlap and the ratio is flat
+    -- the justification for not cutting on MET."""
+    if hist_name not in out:
+        raise KeyError(f"Output is missing {hist_name!r}. Re-run in 'validation' mode.")
+    if dataset is None and data:
+        dataset = datasets.get(era)
+    if dataset is not None:
+        present = set(out[hist_name].axes["dataset"])
+        dataset = [d for d in dataset if d in present] or None
+
+    h = _select_if_present(out[hist_name], dataset=dataset, systematic=systematic)
+    h_lo = h[{"pt": slice(None, hist.loc(met_cut))}].project("mass")
+    h_hi = h[{"pt": slice(hist.loc(met_cut), None)}].project("mass")
+    _data_mc_ratio(
+        h_hi, h_lo, r"Ungroomed jet mass [GeV]", era,
+        f"mass_metsplit_{int(met_cut)}", density=density, ratio=ratio,
+        label_mc=f"MET < {int(met_cut)} GeV", label_data=f"MET > {int(met_cut)} GeV",
+        ratio_label=f">{int(met_cut)} / <{int(met_cut)}", cms_data=data)

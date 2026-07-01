@@ -332,6 +332,12 @@ class QJetMassProcessor(processor.ProcessorABC):
             register_hist(self.hists, "met_pt_ak4veto",    [dataset_axis, met_pt_axis, syst_axis])
             register_hist(self.hists, "met_phi_ak4veto",   [dataset_axis, phi_axis, syst_axis])
             register_hist(self.hists, "mass_jet0_ak4veto", [dataset_axis, mass_axis, syst_axis])
+            #### joint MET x (leading-jet pt) and MET x (jet mass): keep the
+            #### per-event correlation the 1D hists throw away, so the MET tail
+            #### can be shown to be jet-resolution-driven (rises with jet pt) and
+            #### the jet mass shown insensitive to a MET<50/>50 split (offline).
+            register_hist(self.hists, "met_ptjet_reco", [dataset_axis, met_pt_axis, ptreco_axis, syst_axis])
+            register_hist(self.hists, "mass_met_reco",  [dataset_axis, mass_axis, met_pt_axis, syst_axis])
 
             register_hist(self.hists, "ptasym_presel", [dataset_axis, frac_axis])
             register_hist(self.hists, "ptasym", [dataset_axis, frac_axis, syst_axis])
@@ -2870,6 +2876,9 @@ class QJetMassProcessor(processor.ProcessorABC):
                                 ## MET (PF Type-1) -- HEM implementation cross-check (2018)
                                 fill_hist(self.hists, "met_pt",  dataset = dataset, pt  = events_j_meas.MET.pt,  systematic = syst, weight = weights_reco)
                                 fill_hist(self.hists, "met_phi", dataset = dataset, phi = events_j_meas.MET.phi, systematic = syst, weight = weights_reco)
+                                ## joint MET x jet-pt and MET x jet-mass (per-event correlation)
+                                fill_hist(self.hists, "met_ptjet_reco", dataset = dataset, pt = events_j_meas.MET.pt, ptreco = reco_jet_meas.pt,   systematic = syst, weight = weights_reco)
+                                fill_hist(self.hists, "mass_met_reco",  dataset = dataset, mass = reco_jet_meas.mass, pt = events_j_meas.MET.pt,   systematic = syst, weight = weights_reco)
                                 met_pt_xy, met_phi_xy = METXYCorr(
                                     events_j_meas.MET.pt, events_j_meas.MET.phi, events_j_meas.PV.npvs,
                                     IOV, isMC = self._do_gen, run = events_j_meas.run)
@@ -3114,6 +3123,9 @@ class QJetMassProcessor(processor.ProcessorABC):
                             ## MET (PF Type-1) -- HEM implementation cross-check (2018)
                             fill_hist(self.hists, "met_pt",  dataset = dataset, pt  = events_j_meas.MET.pt,  systematic = jet_syst, weight = weights_reco)
                             fill_hist(self.hists, "met_phi", dataset = dataset, phi = events_j_meas.MET.phi, systematic = jet_syst, weight = weights_reco)
+                            ## joint MET x jet-pt and MET x jet-mass (per-event correlation)
+                            fill_hist(self.hists, "met_ptjet_reco", dataset = dataset, pt = events_j_meas.MET.pt, ptreco = reco_jet_meas.pt,   systematic = jet_syst, weight = weights_reco)
+                            fill_hist(self.hists, "mass_met_reco",  dataset = dataset, mass = reco_jet_meas.mass, pt = events_j_meas.MET.pt,   systematic = jet_syst, weight = weights_reco)
                             met_pt_xy, met_phi_xy = METXYCorr(
                                 events_j_meas.MET.pt, events_j_meas.MET.phi, events_j_meas.PV.npvs,
                                 IOV, isMC = self._do_gen, run = events_j_meas.run)
