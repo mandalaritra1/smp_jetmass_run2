@@ -272,6 +272,19 @@ _MET_VARS = {
 }
 
 
+def _density_max(h):
+    """Peak height of ``h`` as drawn with ``density=True`` (unit-area normalized),
+    so we can size the y-axis headroom without clipping."""
+    import numpy as np
+
+    vals = h.values()
+    widths = np.diff(h.axes[0].edges)
+    integral = (vals * widths).sum()
+    if integral <= 0:
+        return float(vals.max()) if len(vals) else 1.0
+    return float((vals / integral).max())
+
+
 def plot_met(out, var="met_phi", era="2018", data=False, dataset=None,
              systematic="nominal", density=True):
     """Single-source MET pt/phi (validation mode). Shades the HEM phi band for
@@ -282,17 +295,22 @@ def plot_met(out, var="met_phi", era="2018", data=False, dataset=None,
         raise KeyError(f"Output is missing {var!r}. Re-run the processor in 'validation' mode.")
     axis_name, xlabel = _MET_VARS[var]
 
-    plt.figure()
     hplot.setup(era=era)
     hplot.set_plot_name(f"{var}_hem")
+    # constrained layout keeps the CMS<->lumi label spacing and stops the axis
+    # labels being clipped; no forced figsize (CMS style drives the proportions).
+    fig, ax = plt.subplots(layout="constrained")
 
     h = _select_if_present(out[var], dataset=dataset, systematic=systematic).project(axis_name)
-    h.plot(histtype="fill" if not data else "errorbar", density=density,
-           label="Data" if data else "MC")
+    h.plot(ax=ax, histtype="errorbar" if data else "fill", density=density,
+           color="black" if data else None, label="Data" if data else "MC")
 
     if var == "met_phi":
-        plt.axvspan(_HEM_PHI_MIN, _HEM_PHI_MAX, color="red", alpha=0.15,
-                    label="HEM sector")
+        ax.axvspan(_HEM_PHI_MIN, _HEM_PHI_MAX, color="red", alpha=0.15,
+                   label="HEM sector")
+
+    # legend headroom: raise the top to ~1.5x the data peak, never clip (rules 5/6)
+    ax.set_ylim(0, (_density_max(h) if density else float(h.values().max())) * 1.5)
 
     hplot.quick_label(
         data=data,
@@ -300,8 +318,8 @@ def plot_met(out, var="met_phi", era="2018", data=False, dataset=None,
         ylabel="Normalized events" if density else "# Events",
         cms_text="Simulation Internal" if not data else "Preliminary",
     )
-    plt.legend()
-    hplot.show()
+    ax.legend(loc="upper right", framealpha=0.0)
+    hplot.show(fig=fig)
 
 
 def plot_met_data_mc(data_out, mc_out, var="met_phi", era="2018",
@@ -320,21 +338,30 @@ def plot_met_data_mc(data_out, mc_out, var="met_phi", era="2018",
     axis_name, xlabel = _MET_VARS[var]
     if data_dataset is None:
         data_dataset = datasets.get(era)
+    # keep only data streams actually present (a single-channel run may have just
+    # SingleMuon or just EGamma); selecting a missing name is a hard KeyError.
+    if data_dataset is not None:
+        present = set(data_out[var].axes["dataset"])
+        data_dataset = [d for d in data_dataset if d in present] or None
 
-    plt.figure()
     hplot.setup(era=era)
     hplot.set_plot_name(f"{var}_data_mc_hem")
+    fig, ax = plt.subplots(layout="constrained")
 
     h_mc = _select_if_present(mc_out[var], systematic=systematic).project(axis_name)
     h_data = _select_if_present(data_out[var], dataset=data_dataset,
                                 systematic=systematic).project(axis_name)
 
-    h_mc.plot(histtype="fill", density=density, alpha=0.6, label="MC")
-    h_data.plot(histtype="errorbar", density=density, color="black", label="Data")
+    h_mc.plot(ax=ax, histtype="fill", density=density, alpha=0.6, label="MC")
+    h_data.plot(ax=ax, histtype="errorbar", density=density, color="black", label="Data")
 
     if var == "met_phi":
-        plt.axvspan(_HEM_PHI_MIN, _HEM_PHI_MAX, color="red", alpha=0.15,
-                    label="HEM sector")
+        ax.axvspan(_HEM_PHI_MIN, _HEM_PHI_MAX, color="red", alpha=0.15,
+                   label="HEM sector")
+
+    peak = max(_density_max(h_mc), _density_max(h_data)) if density \
+        else max(float(h_mc.values().max()), float(h_data.values().max()))
+    ax.set_ylim(0, peak * 1.5)
 
     hplot.quick_label(
         data=True,
@@ -342,5 +369,5 @@ def plot_met_data_mc(data_out, mc_out, var="met_phi", era="2018",
         ylabel="Normalized events" if density else "# Events",
         cms_text="Preliminary",
     )
-    plt.legend()
-    hplot.show()
+    ax.legend(loc="upper right", framealpha=0.0)
+    hplot.show(fig=fig)
