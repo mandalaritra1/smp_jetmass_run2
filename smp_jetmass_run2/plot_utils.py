@@ -388,23 +388,29 @@ def plot_met_data_mc(data_out, mc_out, var="met_phi", era="2018",
     if rax is not None:
         ax.tick_params(labelbottom=False)  # hide top-panel x labels (shared x)
         ax.set_xlabel("")                   # drop the auto axis-name label from hist.plot
+        edges = h_data.axes[0].edges
         centers = h_data.axes[0].centers
-        widths = np.diff(h_data.axes[0].edges)
+        widths = np.diff(edges)
         mc_v = h_mc.values().astype(float)
         dt_v = h_data.values().astype(float)
         dt_e = np.sqrt(h_data.variances())
+        mc_e = np.sqrt(h_mc.variances())
         if density:
             mc_norm = (mc_v * widths).sum() or 1.0
             dt_norm = (dt_v * widths).sum() or 1.0
         else:
             mc_norm = dt_norm = 1.0
         mc_d = mc_v / mc_norm
-        with np.errstate(divide="ignore", invalid="ignore"):
-            r = (dt_v / dt_norm) / mc_d
-            r_err = (dt_e / dt_norm) / mc_d
         good = mc_d > 0
+        with np.errstate(divide="ignore", invalid="ignore"):
+            r = (dt_v / dt_norm) / mc_d          # data stat error on the points
+            r_err = (dt_e / dt_norm) / mc_d
+            mc_rel = np.where(good, mc_e / mc_v, 0.0)  # MC stat, as a band around 1
+        # MC stat uncertainty: shaded step band centred on 1
+        rax.stairs(1.0 + mc_rel, edges, baseline=1.0 - mc_rel, fill=True,
+                   color="gray", alpha=0.30, label="MC stat")
         rax.errorbar(centers[good], r[good], yerr=r_err[good], fmt="o",
-                     color="black", ms=4, lw=1)
+                     color="black", ms=4, lw=1, label="Data")
         rax.axhline(1.0, color="gray", ls="--", lw=1)
         if var in ("met_phi", "met_phi_xy"):
             rax.axvspan(_HEM_PHI_MIN, _HEM_PHI_MAX, color="red", alpha=0.15)
