@@ -267,8 +267,10 @@ def plot_raw_mass_overlay(
 _HEM_PHI_MIN, _HEM_PHI_MAX = -1.57, -0.87
 
 _MET_VARS = {
-    "met_phi": ("phi", r"$\phi$(MET)"),
-    "met_pt":  ("pt",  r"MET $p_T$ [GeV]"),
+    "met_phi":    ("phi", r"$\phi$(MET)"),
+    "met_pt":     ("pt",  r"MET $p_T$ [GeV]"),
+    "met_phi_xy": ("phi", r"$\phi$(MET), xy-corrected"),
+    "met_pt_xy":  ("pt",  r"MET $p_T$ [GeV], xy-corrected"),
 }
 
 
@@ -305,7 +307,7 @@ def plot_met(out, var="met_phi", era="2018", data=False, dataset=None,
     h.plot(ax=ax, histtype="errorbar" if data else "fill", density=density,
            color="black" if data else None, label="Data" if data else "MC")
 
-    if var == "met_phi":
+    if var in ("met_phi", "met_phi_xy"):
         ax.axvspan(_HEM_PHI_MIN, _HEM_PHI_MAX, color="red", alpha=0.15,
                    label="HEM sector")
 
@@ -355,7 +357,7 @@ def plot_met_data_mc(data_out, mc_out, var="met_phi", era="2018",
     h_mc.plot(ax=ax, histtype="fill", density=density, alpha=0.6, label="MC")
     h_data.plot(ax=ax, histtype="errorbar", density=density, color="black", label="Data")
 
-    if var == "met_phi":
+    if var in ("met_phi", "met_phi_xy"):
         ax.axvspan(_HEM_PHI_MIN, _HEM_PHI_MAX, color="red", alpha=0.15,
                    label="HEM sector")
 

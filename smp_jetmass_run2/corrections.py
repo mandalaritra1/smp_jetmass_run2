@@ -970,6 +970,101 @@ def HEMVeto(FatJets, runs, isMC=False, year="2018"):
 
 
 # =====================================================================
+# MET xy ("phi") correction  (UL, PF Type-1 MET)
+# ---------------------------------------------------------------------
+# Removes the nPV-dependent MET phi-modulation from the beamspot offset +
+# phi-nonuniform detector response, parametrized SEPARATELY for data (per
+# era, by run number) and MC (per IOV). Coefficients are the standard
+# Louis Thomas UL recipe (XYMETCorrection_withUL17andUL18andUL16.h,
+# non-puppi branch): METxcorr = -(a*npv + b), METycorr = -(c*npv + d);
+# corrected (x, y) = uncorrected (x, y) + (METxcorr, METycorr). npv is
+# capped at 100 as in the reference. Only used for validation MET plots --
+# MET is not a selection variable, so this does not touch the measurement.
+_MET_XY_MC = {  # (a, b, c, d)
+    "2016APV": (-0.188743, 0.136539, 0.0127927, 0.117747),
+    "2016":    (-0.153497, -0.231751, 0.00731978, 0.243323),
+    "2017":    (-0.300155, 1.90608, 0.300213, -2.02232),
+    "2018":    (0.183518, 0.546754, 0.192263, -0.42121),
+}
+_MET_XY_DATA = {  # era label -> (a, b, c, d)
+    "2018A": (0.263733, -1.91115, 0.0431304, -0.112043),
+    "2018B": (0.400466, -3.05914, 0.146125, -0.533233),
+    "2018C": (0.430911, -1.42865, 0.0620083, -1.46021),
+    "2018D": (0.457327, -1.56856, 0.0684071, -0.928372),
+    "2017B": (-0.211161, 0.419333, 0.251789, -1.28089),
+    "2017C": (-0.185184, -0.164009, 0.200941, -0.56853),
+    "2017D": (-0.201606, 0.426502, 0.188208, -0.58313),
+    "2017E": (-0.162472, 0.176329, 0.138076, -0.250239),
+    "2017F": (-0.210639, 0.72934, 0.198626, 1.028),
+    "2016B": (-0.0214894, -0.188255, 0.0876624, 0.812885),
+    "2016C": (-0.032209, 0.067288, 0.113917, 0.743906),
+    "2016D": (-0.0293663, 0.21106, 0.11331, 0.815787),
+    "2016E": (-0.0132046, 0.20073, 0.134809, 0.679068),
+    "2016F": (-0.0543566, 0.816597, 0.114225, 1.17266),
+    "2016Flate": (0.134616, -0.89965, 0.0397736, 1.0385),
+    "2016G": (0.121809, -0.584893, 0.0558974, 0.891234),
+    "2016H": (0.0868828, -0.703489, 0.0888774, 0.902632),
+}
+
+
+def _met_xy_data_era_masks(run):
+    """Boolean run-number masks for each UL data era (matches the reference
+    run ranges, including the 2016F/F-late single-run special cases)."""
+    return {
+        "2018A": (run >= 315252) & (run <= 316995),
+        "2018B": (run >= 316998) & (run <= 319312),
+        "2018C": (run >= 319313) & (run <= 320393),
+        "2018D": (run >= 320394) & (run <= 325273),
+        "2017B": (run >= 297020) & (run <= 299329),
+        "2017C": (run >= 299337) & (run <= 302029),
+        "2017D": (run >= 302030) & (run <= 303434),
+        "2017E": (run >= 303435) & (run <= 304826),
+        "2017F": (run >= 304911) & (run <= 306462),
+        "2016B": (run >= 272007) & (run <= 275376),
+        "2016C": (run >= 275657) & (run <= 276283),
+        "2016D": (run >= 276315) & (run <= 276811),
+        "2016E": (run >= 276831) & (run <= 277420),
+        "2016F": ((run >= 277772) & (run <= 278768)) | (run == 278770),
+        "2016Flate": ((run >= 278801) & (run <= 278808)) | (run == 278769),
+        "2016G": (run >= 278820) & (run <= 280385),
+        "2016H": (run >= 280919) & (run <= 284044),
+    }
+
+
+def METXYCorr(met_pt, met_phi, npv, iov, isMC=False, run=None):
+    """UL PF-MET xy correction. Returns (corrected_pt, corrected_phi) as numpy
+    arrays. `npv` is the number of primary vertices (events.PV.npvs); `run` is
+    required for data (per-era coefficients). Runs/eras that match nothing get
+    zero correction (a safe no-op)."""
+    npv = np.minimum(np.asarray(ak.to_numpy(npv), dtype=np.float64), 100.0)
+    pt = np.asarray(ak.to_numpy(met_pt), dtype=np.float64)
+    phi = np.asarray(ak.to_numpy(met_phi), dtype=np.float64)
+    px = pt * np.cos(phi)
+    py = pt * np.sin(phi)
+
+    xcorr = np.zeros_like(npv)
+    ycorr = np.zeros_like(npv)
+    if isMC:
+        if iov not in _MET_XY_MC:
+            raise KeyError(f"No MET xy MC coefficients for IOV {iov!r}")
+        a, b, c, d = _MET_XY_MC[iov]
+        xcorr = -(a * npv + b)
+        ycorr = -(c * npv + d)
+    else:
+        if run is None:
+            raise ValueError("METXYCorr needs `run` for data (per-era coefficients).")
+        run = np.asarray(ak.to_numpy(run))
+        for era, mask in _met_xy_data_era_masks(run).items():
+            a, b, c, d = _MET_XY_DATA[era]
+            xcorr = np.where(mask, -(a * npv + b), xcorr)
+            ycorr = np.where(mask, -(c * npv + d), ycorr)
+
+    cx = px + xcorr
+    cy = py + ycorr
+    return np.hypot(cx, cy), np.arctan2(cy, cx)
+
+
+# =====================================================================
 # Hadronic (dijet / trijet) ported functions
 # ---------------------------------------------------------------------
 # Ported from GluonJetMass python/corrections.py and python/utils.py.

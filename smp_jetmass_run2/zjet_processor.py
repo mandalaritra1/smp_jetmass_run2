@@ -311,6 +311,11 @@ class QJetMassProcessor(processor.ProcessorABC):
             #### opposite the hole. Filled from events_j_meas.MET (PF Type-1 MET).
             register_hist(self.hists, "met_pt",  [dataset_axis, met_pt_axis, syst_axis])
             register_hist(self.hists, "met_phi", [dataset_axis, phi_axis, syst_axis])
+            #### same MET after the UL MET-xy (phi) correction -- removes the
+            #### nPV-dependent phi-modulation so data and MC agree; before/after
+            #### pair demonstrates the residual is modulation, not HEM.
+            register_hist(self.hists, "met_pt_xy",  [dataset_axis, met_pt_axis, syst_axis])
+            register_hist(self.hists, "met_phi_xy", [dataset_axis, phi_axis, syst_axis])
 
             register_hist(self.hists, "ptasym_presel", [dataset_axis, frac_axis])
             register_hist(self.hists, "ptasym", [dataset_axis, frac_axis, syst_axis])
@@ -2849,6 +2854,11 @@ class QJetMassProcessor(processor.ProcessorABC):
                                 ## MET (PF Type-1) -- HEM implementation cross-check (2018)
                                 fill_hist(self.hists, "met_pt",  dataset = dataset, pt  = events_j_meas.MET.pt,  systematic = syst, weight = weights_reco)
                                 fill_hist(self.hists, "met_phi", dataset = dataset, phi = events_j_meas.MET.phi, systematic = syst, weight = weights_reco)
+                                met_pt_xy, met_phi_xy = METXYCorr(
+                                    events_j_meas.MET.pt, events_j_meas.MET.phi, events_j_meas.PV.npvs,
+                                    IOV, isMC = self._do_gen, run = events_j_meas.run)
+                                fill_hist(self.hists, "met_pt_xy",  dataset = dataset, pt  = met_pt_xy,  systematic = syst, weight = weights_reco)
+                                fill_hist(self.hists, "met_phi_xy", dataset = dataset, phi = met_phi_xy, systematic = syst, weight = weights_reco)
 
 
                                 ## Jet
@@ -3061,6 +3071,11 @@ class QJetMassProcessor(processor.ProcessorABC):
                             ## MET (PF Type-1) -- HEM implementation cross-check (2018)
                             fill_hist(self.hists, "met_pt",  dataset = dataset, pt  = events_j_meas.MET.pt,  systematic = jet_syst, weight = weights_reco)
                             fill_hist(self.hists, "met_phi", dataset = dataset, phi = events_j_meas.MET.phi, systematic = jet_syst, weight = weights_reco)
+                            met_pt_xy, met_phi_xy = METXYCorr(
+                                events_j_meas.MET.pt, events_j_meas.MET.phi, events_j_meas.PV.npvs,
+                                IOV, isMC = self._do_gen, run = events_j_meas.run)
+                            fill_hist(self.hists, "met_pt_xy",  dataset = dataset, pt  = met_pt_xy,  systematic = jet_syst, weight = weights_reco)
+                            fill_hist(self.hists, "met_phi_xy", dataset = dataset, phi = met_phi_xy, systematic = jet_syst, weight = weights_reco)
                             ## Jet
                             fill_hist(self.hists, "pt_jet0", dataset = dataset, pt = ptreco, systematic = jet_syst, weight = weights_reco )
                             fill_hist(self.hists, "eta_jet0", dataset = dataset, eta = reco_jet_meas.eta, systematic = jet_syst, weight = weights_reco )
