@@ -325,13 +325,17 @@ def plot_met(out, var="met_phi", era="2018", data=False, dataset=None,
 
 
 def plot_met_data_mc(data_out, mc_out, var="met_phi", era="2018",
-                     data_dataset=None, systematic="nominal", density=True):
+                     data_dataset=None, systematic="nominal", density=True,
+                     ratio=True):
     """Overlay 2018 data vs MC MET pt/phi to show the HEM implementation is
     correct: with HEM applied, the two agree across the HEM phi sector.
 
     ``data_out``/``mc_out`` are the loaded data and MC pickles.
     ``data_dataset`` selects the data dataset(s) (defaults to ``datasets[era]``).
+    ``ratio=True`` adds a Data/MC ratio panel below (data stat error only).
     """
+    import numpy as np
+
     if var not in _MET_VARS:
         raise ValueError(f"var must be one of {list(_MET_VARS)}, got {var!r}")
     for name, o in (("data", data_out), ("MC", mc_out)):
@@ -348,7 +352,13 @@ def plot_met_data_mc(data_out, mc_out, var="met_phi", era="2018",
 
     hplot.setup(era=era)
     hplot.set_plot_name(f"{var}_data_mc_hem")
-    fig, ax = plt.subplots(layout="constrained")
+    if ratio:
+        fig, (ax, rax) = plt.subplots(
+            2, 1, sharex=True, gridspec_kw={"height_ratios": [3, 1]},
+            layout="constrained")
+    else:
+        fig, ax = plt.subplots(layout="constrained")
+        rax = None
 
     h_mc = _select_if_present(mc_out[var], systematic=systematic).project(axis_name)
     h_data = _select_if_present(data_out[var], dataset=data_dataset,
@@ -365,11 +375,41 @@ def plot_met_data_mc(data_out, mc_out, var="met_phi", era="2018",
         else max(float(h_mc.values().max()), float(h_data.values().max()))
     ax.set_ylim(0, peak * 1.5)
 
+    # CMS label goes on the top (main) axes; xlabel only on the bottom-most axes
+    plt.sca(ax)
     hplot.quick_label(
         data=True,
-        xlabel=xlabel,
+        xlabel=None if ratio else xlabel,
         ylabel="Normalized events" if density else "# Events",
         cms_text="Preliminary",
     )
     ax.legend(loc="upper right", framealpha=0.0)
+
+    if rax is not None:
+        ax.tick_params(labelbottom=False)  # hide top-panel x labels (shared x)
+        ax.set_xlabel("")                   # drop the auto axis-name label from hist.plot
+        centers = h_data.axes[0].centers
+        widths = np.diff(h_data.axes[0].edges)
+        mc_v = h_mc.values().astype(float)
+        dt_v = h_data.values().astype(float)
+        dt_e = np.sqrt(h_data.variances())
+        if density:
+            mc_norm = (mc_v * widths).sum() or 1.0
+            dt_norm = (dt_v * widths).sum() or 1.0
+        else:
+            mc_norm = dt_norm = 1.0
+        mc_d = mc_v / mc_norm
+        with np.errstate(divide="ignore", invalid="ignore"):
+            r = (dt_v / dt_norm) / mc_d
+            r_err = (dt_e / dt_norm) / mc_d
+        good = mc_d > 0
+        rax.errorbar(centers[good], r[good], yerr=r_err[good], fmt="o",
+                     color="black", ms=4, lw=1)
+        rax.axhline(1.0, color="gray", ls="--", lw=1)
+        if var in ("met_phi", "met_phi_xy"):
+            rax.axvspan(_HEM_PHI_MIN, _HEM_PHI_MAX, color="red", alpha=0.15)
+        rax.set_ylim(0.5, 1.5)
+        rax.set_ylabel("Data/MC")
+        rax.set_xlabel(xlabel)
+
     hplot.show(fig=fig)
