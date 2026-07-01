@@ -282,6 +282,7 @@ def plot_met(out, var="met_phi", era="2018", data=False, dataset=None,
         raise KeyError(f"Output is missing {var!r}. Re-run the processor in 'validation' mode.")
     axis_name, xlabel = _MET_VARS[var]
 
+    plt.figure()
     hplot.setup(era=era)
     hplot.set_plot_name(f"{var}_hem")
 
@@ -320,6 +321,7 @@ def plot_met_data_mc(data_out, mc_out, var="met_phi", era="2018",
     if data_dataset is None:
         data_dataset = datasets.get(era)
 
+    plt.figure()
     hplot.setup(era=era)
     hplot.set_plot_name(f"{var}_data_mc_hem")
 
