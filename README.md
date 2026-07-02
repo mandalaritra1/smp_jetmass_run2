@@ -44,11 +44,12 @@ pip install -e ".[dask,notebook]"
 
 ## Run Environments
 
-This repository can run locally, on the LPC, or on
-[coffea.casa](https://coffea.casa). For large Run 2 jobs, prefer `dask-casa` or
-`dask-lpc` rather than the local/futures executors. The actual analysis behavior is
-still controlled by the JSON config: `executor_mode`, `redirector`, `prependstr`,
-and `casa` decide where the job runs and how input files are resolved.
+This repository can run locally, on the LPC, on CERN **lxplus** (HTCondor), or on
+[coffea.casa](https://coffea.casa). For large Run 2 jobs, prefer `dask-casa`,
+`dask-lpc`, or `dask-lxplus` rather than the local/futures executors. The actual
+analysis behavior is still controlled by the JSON config: `executor_mode`,
+`redirector`, `prependstr`, and `casa` decide where the job runs and how input
+files are resolved.
 
 ### LPC Setup
 
@@ -109,6 +110,70 @@ jupyter lab --no-browser --ip=127.0.0.1 --port=8XXX
 ```
 
 Then open the forwarded Jupyter link in your local browser.
+
+### lxplus Setup (CERN HTCondor)
+
+The lxplus analogue of `lpcjobqueue` is
+[`dask-lxplus`](https://github.com/cernops/dask-lxplus), which wraps
+`dask-jobqueue`'s `HTCondorCluster` in a `CernCluster` that knows about CERN's
+batch quirks (JobFlavour walltime tiers, scheduler host/port so workers can dial
+back, LCG-view environment shipping). This repo drives it through
+`executor_mode: "dask-lxplus"`.
+
+Log in with a forwarded port for the Dask dashboard / JupyterLab:
+
+```bash
+ssh -Y -L 8XXX:127.0.0.1:8XXX LXPLUSUSERNAME@lxplus.cern.ch
+```
+
+Get a CMS proxy before reading remote NanoAOD:
+
+```bash
+voms-proxy-init --rfc --voms cms -valid 192:00
+```
+
+Source an LCG view, then put this package on the path. Because the cluster is
+created with `lcg=True` + `container_runtime="none"`, the **submitting** environment
+(this sourced view) is what runs on the batch workers — so coffea/dask must live in
+it. A recent view already bundles everything you need: `LCG_110`
+(`x86_64-el9-gcc13-opt`) ships coffea 2026.5.0, dask 2025.2.0, dask-awkward, and
+**dask-lxplus 0.3.3**, so no cluster deps have to be installed — only this repo:
+
+```bash
+source /cvmfs/sft.cern.ch/lcg/views/LCG_110/x86_64-el9-gcc13-opt/setup.sh
+git clone https://github.com/mandalaritra1/smp_jetmass_run2.git
+cd smp_jetmass_run2
+python -m pip install --user --no-deps -e .   # just this package; view provides the rest
+```
+
+(If you pick an older view without `dask-lxplus`, add `pip install --user dask-lxplus`.)
+
+For lxplus runs, use configs with:
+
+```json
+"executor_mode": "dask-lxplus",
+"casa": false,
+"redirector": "lxplus",
+"prependstr": "root://cms-xrd-global.cern.ch/"
+```
+
+Example (a ready-made config ships in `configs/`):
+
+```bash
+python scripts/run_analysis_cli.py --config configs/dijet_pythia_2018_lxplus.json
+```
+
+Two optional environment variables tune the batch submission (sensible defaults
+otherwise):
+
+| env var | default | meaning |
+|---|---|---|
+| `DASK_LXPLUS_JOB_FLAVOUR` | `longlunch` | HTCondor walltime tier: `espresso`(20m) · `microcentury`(1h) · `longlunch`(2h) · `workday`(8h) · `tomorrow`(1d) · `testmatch`(3d) · `nextweek`(1w) |
+| `DASK_LXPLUS_LOG_DIR` | `~/dask_lxplus_logs` | where condor writes worker job logs (point at EOS for long-lived logs) |
+
+The cluster auto-scales `adapt(minimum=1, maximum=100)`. If most of your input
+files live on European sites, swap the redirector for the closer
+`root://xrootd-cms.infn.it/`.
 
 ### coffea.casa Setup
 
@@ -173,8 +238,8 @@ Key fields (defaults filled in by `validate_analysis_config`):
 | `era` | data-taking period | `2016APV` · `2016` · `2017` · `2018` · `all` |
 | `mode` | histogram set | `minimal` (mass+response) · `minimal_rho` (rho+response) · `validation`/`full` (diagnostics) · `mass_jk`/`rho_jk` (jackknife) |
 | `systematic_profile` | which systematics | `all_syst` · `minimal_syst` · `no_syst` |
-| `executor_mode` | where it runs | `iterative` · `futures` · `dask-local` · `dask-lpc` · `dask-casa` |
-| `casa` / `redirector` / `prependstr` | file access | `dask-casa` uses `casa`+`root://xcache/`; LPC/local use a redirector like `root://cmsxrootd.fnal.gov/` |
+| `executor_mode` | where it runs | `iterative` · `futures` · `dask-local` · `dask-lpc` · `dask-lxplus` · `dask-casa` |
+| `casa` / `redirector` / `prependstr` | file access | `dask-casa` uses `casa`+`root://xcache/`; LPC uses `lpc`+`root://cmsxrootd.fnal.gov/`; lxplus uses `lxplus`+`root://cms-xrd-global.cern.ch/` |
 | `test` | 1 file / 1 chunk smoke run | `true`/`false` |
 | `dataset_filter` | hadronic only: keep DAS names containing this substring | e.g. `"HT1000to1500"` |
 
@@ -186,9 +251,10 @@ Key fields (defaults filled in by `validate_analysis_config`):
 Channel → processor dispatch is `notebook_utils.get_processor_class(mode, channel)`;
 hadronic filesets are built by `build_hadronic_fileset` from `samples/hadronic/*.json`
 (ported from GluonJetMass `run.py`), zjet filesets from `samples/zjet/**` `.txt` lists.
-On `dask-casa`/`dask-lpc` the whole package (incl. `corrections/`) is shipped to the
-workers (`upload_package_if_casa` / `transfer_input_files`), so `importlib.resources`
-resolves the bundled correction files remotely. Outputs are pickled to `outputs/`.
+On `dask-casa`/`dask-lpc`/`dask-lxplus` the whole package (incl. `corrections/`) is
+shipped to the workers (`upload_package_if_casa` via `client.upload_file`, plus
+`transfer_input_files` on LPC), so `importlib.resources` resolves the bundled
+correction files remotely. Outputs are pickled to `outputs/`.
 
 ### Programmatic (notebook / quick local test)
 

@@ -62,11 +62,15 @@ EXECUTOR_MODE_OPTIONS = [
     "dask-local",
     "dask-casa",
     "dask-lpc",
+    "dask-lxplus",
 ]
 REDIRECTOR_PREPENDS = {
     "local": "",
     "lpc": "root://cmsxrootd.fnal.gov/",
     "casa": "root://xcache/",
+    # CERN/lxplus: CMS global redirector. Swap for the closer Europe redirector
+    # root://xrootd-cms.infn.it/ if most inputs live on EU sites.
+    "lxplus": "root://cms-xrd-global.cern.ch/",
 }
 REDIRECTOR_OPTIONS = list(REDIRECTOR_PREPENDS)
 
@@ -672,6 +676,63 @@ def ensure_client(
         print("Created LPCCondorCluster client.")
         return client
 
+    if resolved_mode == "dask-lxplus":
+        try:
+            from dask_lxplus import CernCluster
+        except ImportError as exc:
+            raise ImportError(
+                "executor_mode='dask-lxplus' requires the dask-lxplus package "
+                "(pip install dask-lxplus). Use this mode from an lxplus/CERN "
+                "HTCondor submit node, or choose 'dask-casa', 'dask-local', or "
+                "'futures'."
+            ) from exc
+
+        import socket
+
+        # lcg=True ships the *submitting* environment (the LCG view you sourced
+        # on lxplus, which must provide coffea/dask/awkward) to the batch workers;
+        # container_runtime='none' means run directly in that view rather than a
+        # Singularity/Docker image. The analysis package itself is shipped
+        # separately via client.upload_file (see upload_package_if_casa).
+        log_dir = Path(
+            os.environ.get(
+                "DASK_LXPLUS_LOG_DIR", str(Path.home() / "dask_lxplus_logs")
+            )
+        )
+        log_dir.mkdir(parents=True, exist_ok=True)
+        job_flavour = os.environ.get("DASK_LXPLUS_JOB_FLAVOUR", "longlunch")
+
+        cluster = CernCluster(
+            cores=1,
+            memory="6 GiB",
+            disk="10 GiB",
+            death_timeout="60",
+            lcg=True,
+            nanny=False,
+            container_runtime="none",
+            log_directory=str(log_dir),
+            scheduler_options={
+                # HTCondor workers dial back to the scheduler, so it must bind to
+                # a routable host/port (not localhost). gethostname() resolves to
+                # the lxplus node's reachable name inside the CERN batch network.
+                "port": 8786,
+                "host": socket.gethostname(),
+                "dashboard_address": ":8787",
+            },
+            job_extra={
+                # HTCondor max walltime tier: espresso(20m)/microcentury(1h)/
+                # longlunch(2h)/workday(8h)/tomorrow(1d)/testmatch(3d)/nextweek(1w).
+                "MY.JobFlavour": f'"{job_flavour}"',
+            },
+        )
+        cluster.adapt(minimum=1, maximum=100)
+        client = Client(cluster)
+        print(
+            f"Created CernCluster (lxplus) client "
+            f"[JobFlavour={job_flavour}, logs={log_dir}]."
+        )
+        return client
+
     raise ValueError(f"Unsupported executor_mode '{resolved_mode}'")
 
 
@@ -686,6 +747,11 @@ def make_package_archive(package_dir: Path | None = None) -> Path:
 
 
 def upload_package_if_casa(client, casa: bool, package_dir: Path | None = None):
+    # Ships the analysis package zip to every worker over the scheduler
+    # (client.upload_file adds it to each worker's sys.path). This covers
+    # dask-casa and dask-lxplus (CernCluster), neither of which has lpcjobqueue's
+    # per-job transfer_input_files hook; dask-lpc additionally transfers it via
+    # the cluster, but the redundant upload here is harmless.
     if client is None:
         return
 
