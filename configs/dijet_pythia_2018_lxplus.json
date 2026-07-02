@@ -6,7 +6,7 @@
   "systematic_profile": "minimal_syst",
   "executor_mode": "dask-lxplus",
   "casa": false,
-  "test": false,
+  "test": true,
   "useDefault": false,
   "chunksize": 50000,
   "chunksize_test": 200000,
