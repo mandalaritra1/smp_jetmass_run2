@@ -8,9 +8,9 @@ ru, rg), weighted by genWeight -- fine enough to derive a (pt, rho/mass) reweigh
 and the SAME schema as the Herwig ev_*.npz files.
 
     # on a coffea-casa terminal, from the repo root, in the analysis env:
-    python tools/arc_diagnostics/run_sherpa_gen_casa.py
+    python scripts/run_sherpa_gen.py
     # quick smoke over 1 file first:
-    python tools/arc_diagnostics/run_sherpa_gen_casa.py --test
+    python scripts/run_sherpa_gen.py --test
 """
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ from pathlib import Path
 
 import numpy as np
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
 import smp_jetmass_run2.notebook_utils as nb
