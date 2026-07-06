@@ -238,6 +238,34 @@ def get_herwig_weight_u(mode: str = "rho", channel: str = "zjet") -> PtVarWeight
         return PtVarWeighter(p, grid_key)
 
 
+def _get_vincia_weight_resource(is_groomed: bool, mode: str, channel: str = "zjet") -> tuple[str, str]:
+    # Vincia shower-model gen reweight (w = Vincia / Pythia-CP5), built by
+    # scripts/build_vincia_reweight_npz.py from the unfold-repo derivation. Same
+    # PtVarWeighter format / grid_key as the Herwig files, different generator.
+    if mode != "rho":
+        raise ValueError(f"Vincia reweighting is only available for mode 'rho', got '{mode}'.")
+    if channel != "zjet":
+        raise ValueError(f"Vincia reweighting is only wired for channel 'zjet', got '{channel}'.")
+    filename = "vincia_rho_reweight_groomed.npz" if is_groomed else "vincia_rho_reweight_ungroomed.npz"
+    return filename, "rho_grids"
+
+
+@lru_cache(maxsize=None)
+def get_vincia_weight_g(mode: str = "rho", channel: str = "zjet") -> PtVarWeighter:
+    filename, grid_key = _get_vincia_weight_resource(is_groomed=True, mode=mode, channel=channel)
+    resource = files("smp_jetmass_run2") / "corrections" / filename
+    with as_file(resource) as p:
+        return PtVarWeighter(p, grid_key)
+
+
+@lru_cache(maxsize=None)
+def get_vincia_weight_u(mode: str = "rho", channel: str = "zjet") -> PtVarWeighter:
+    filename, grid_key = _get_vincia_weight_resource(is_groomed=False, mode=mode, channel=channel)
+    resource = files("smp_jetmass_run2") / "corrections" / filename
+    with as_file(resource) as p:
+        return PtVarWeighter(p, grid_key)
+
+
 @lru_cache(maxsize=None)
 def get_data_prior_rho_weight_g() -> PtBinnedVarWeighter:
     filename, _ = _get_data_prior_rho_weight_resource(is_groomed=True)

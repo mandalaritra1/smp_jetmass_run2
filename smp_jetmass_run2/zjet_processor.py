@@ -54,7 +54,7 @@ class QJetMassProcessor(processor.ProcessorABC):
     With "do_gen == True", will perform GEN selection and create response matrices. 
     Will always plot RECO level quantities. 
     '''
-    def __init__(self, do_gen = True, mode = "minimal",  debug = False, jet_systematics = None, systematics = None):
+    def __init__(self, do_gen = True, mode = "minimal",  debug = False, jet_systematics = None, systematics = None, reweight_source = "herwig"):
         '''
         Args:
             do_gen (bool): whether to run gen-level analysis and create response matrices
@@ -65,6 +65,10 @@ class QJetMassProcessor(processor.ProcessorABC):
         self._do_gen = do_gen
         self._mode = mode
         self._debug = debug
+        # which alternate-generator gen reweight the reweight_pythia* modes apply
+        if reweight_source not in ("herwig", "vincia"):
+            raise ValueError(f"reweight_source must be 'herwig' or 'vincia', got '{reweight_source}'.")
+        self._reweight_source = reweight_source
         self._do_reweight = False
         self._do_jk = False
         self._do_reco_jet_ntuple = mode == "mass_diagnostic_ntuple"
@@ -468,9 +472,13 @@ class QJetMassProcessor(processor.ProcessorABC):
                 np.nan_to_num(data_prior_weight_g, nan=1.0, posinf=1.0, neginf=1.0),
             )
 
-        herwig_weight_g = get_herwig_weight_g(mode=mode).weight_array(pt, groomed_value)
-        herwig_weight_u = get_herwig_weight_u(mode=mode).weight_array(pt, ungroomed_value)
-        return herwig_weight_u, herwig_weight_g
+        if self._reweight_source == "vincia":
+            weight_g = get_vincia_weight_g(mode=mode).weight_array(pt, groomed_value)
+            weight_u = get_vincia_weight_u(mode=mode).weight_array(pt, ungroomed_value)
+        else:
+            weight_g = get_herwig_weight_g(mode=mode).weight_array(pt, groomed_value)
+            weight_u = get_herwig_weight_u(mode=mode).weight_array(pt, ungroomed_value)
+        return weight_u, weight_g
 
     def _register_reco_jet_ntuple(self):
         float_columns = [

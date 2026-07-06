@@ -809,6 +809,7 @@ def run_once(
     chunksize: int = 100_000,
     chunksize_test: int = 100_000,
     executor_mode: str | None = None,
+    reweight_source: str = "herwig",
 ):
     print("Running over:", list(fileset.keys())[:10], "..." if len(fileset) > 10 else "")
     mode = normalize_mode_for_channel(mode, channel)
@@ -842,16 +843,21 @@ def run_once(
 
     processor_cls = get_processor_class(mode, channel=channel)
 
+    proc_kwargs = dict(
+        do_gen=not data,
+        debug=debug,
+        systematics=systematics,
+        jet_systematics=jet_systematics,
+        mode=mode,
+    )
+    # reweight_source is only a zjet knob (dijet/trijet always use Herwig)
+    if channel == "zjet":
+        proc_kwargs["reweight_source"] = reweight_source
+
     start = time.time()
     out = run(
         fileset,
-        processor_cls(
-            do_gen=not data,
-            debug=debug,
-            systematics=systematics,
-            jet_systematics=jet_systematics,
-            mode=mode,
-        ),
+        processor_cls(**proc_kwargs),
         treename="Events",
     )
     print(f"Done. time taken {format_time(time.time() - start)}")
@@ -881,10 +887,14 @@ def make_output_filename(
     channel: str | None = None,
     test: bool = False,
     output_dir: str | os.PathLike[str] | None = None,
+    reweight_source: str = "herwig",
 ) -> str:
     base = "data" if data else dataset
     if channel and channel != "zjet":
         base = f"{channel}_{base}"
+    # keep alternate-generator reweights in distinct files (Herwig is the default)
+    if reweight_source and reweight_source != "herwig":
+        base = f"{base}_{reweight_source}"
     mode_token = ""
     if mode:
         output_mode = OUTPUT_MODE_TAGS.get(mode, mode)
@@ -954,12 +964,14 @@ def run_from_config(cfg, *, client=None, repo_root=None, log=print):
             systematic_profile=cfg["systematic_profile"],
             chunksize=cfg["chunksize"], chunksize_test=cfg["chunksize_test"],
             executor_mode=cfg["executor_mode"],
+            reweight_source=cfg.get("reweight_source", "herwig"),
         )
         tag = get_group_tag(index, cfg["era"], group_mode)
         fout = make_output_filename(
             data=dataset == "data", dataset=dataset, tag=tag, mode=cfg["mode"],
             channel=cfg["channel"], test=cfg["test"],
             output_dir=paths.repo_root / "outputs",
+            reweight_source=cfg.get("reweight_source", "herwig"),
         )
         save_output(out, fout)
         log(f"[{index + 1}] Saved: {fout}")
