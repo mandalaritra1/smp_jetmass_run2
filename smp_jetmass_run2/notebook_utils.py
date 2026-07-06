@@ -723,6 +723,13 @@ def ensure_client(
                 # HTCondor max walltime tier: espresso(20m)/microcentury(1h)/
                 # longlunch(2h)/workday(8h)/tomorrow(1d)/testmatch(3d)/nextweek(1w).
                 "MY.JobFlavour": f'"{job_flavour}"',
+                # Ship the grid proxy to each worker and export X509_USER_PROXY in
+                # its env. Without this the worker boots with no proxy, so it can't
+                # authenticate to any xrootd server and every /store read fails with
+                # "[3011] No servers are available to read the file" (which looks
+                # like a redirector problem but is really missing auth). Requires a
+                # valid proxy at submit time: voms-proxy-init -voms cms.
+                "use_x509userproxy": "true",
             },
         )
         cluster.adapt(minimum=1, maximum=100)
