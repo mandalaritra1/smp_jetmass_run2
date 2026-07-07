@@ -13,5 +13,6 @@
   "chunksize_test": 200000,
   "group_mode": "all_in_one",
   "redirector": "casa",
-  "prependstr": "root://xcache/"
+  "prependstr": "root://xcache/",
+  "rho_refine": 2
 }

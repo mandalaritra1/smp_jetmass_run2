@@ -13,5 +13,6 @@
   "chunksize_test": 200000,
   "group_mode": "all_in_one",
   "redirector": "lxplus",
-  "prependstr": "root://cms-xrd-global.cern.ch/"
+  "prependstr": "root://cms-xrd-global.cern.ch/",
+  "rho_refine": 2
 }
