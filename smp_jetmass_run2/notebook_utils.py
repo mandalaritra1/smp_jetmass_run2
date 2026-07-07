@@ -122,7 +122,8 @@ def infer_redirector_from_prepend(prepend: str) -> str:
             return name
     return "casa"
 
-MINIMAL_JET_SYSTEMATICS = ["nominal", "JERUp", "JERDown"]
+MINIMAL_JET_SYSTEMATICS = ["nominal", "JERUp", "JERDown",
+                           "JMSUp", "JMSDown", "JMRUp", "JMRDown"]
 NO_SYST_SYSTEMATICS = ["nominal"]
 
 
