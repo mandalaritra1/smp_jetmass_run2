@@ -657,57 +657,75 @@ def debug_jec_weightset(iov: str = "2018", mode: str = "AK8", is_data: bool = Fa
     }
 
 
+# ARC recommendation (SMP-25-010 / AN-24-162 L777): the JMAR JMS/JMR scale
+# factors are derived for the GROOMED (soft-drop) jet mass only. There is no
+# dedicated ungroomed calibration, so the ungroomed up/down uncertainty is
+# conservatively inflated by this factor (the deviation from the nominal SF is
+# scaled by it). Nominal is left unchanged. Default: x2 -> JMS 1%->2%, JMR 2%->4%.
+UNGROOMED_JMSJMR_INFLATION = 2.0
+
+
+def _inflate_ungroomed_sf(nom, var_val):
+    """Inflate an up/down JMS/JMR scale factor for the ungroomed jet mass.
+
+    The groomed (soft-drop) mass keeps the JMAR value ``var_val`` directly; the
+    ungroomed mass has no dedicated calibration, so its deviation from the
+    nominal SF is scaled by ``UNGROOMED_JMSJMR_INFLATION``. For the nominal
+    variation (``var_val == nom``) this returns ``nom`` unchanged, so only the
+    up/down systematic width is affected.
+    """
+    return nom + UNGROOMED_JMSJMR_INFLATION * (var_val - nom)
+
+
 def jmssf(IOV, FatJet,  var = ''):
     jmsSF = {
 
-        "2016APV":{"sf": 1.00, "sfup": 1.0094, "sfdown": 0.9906}, 
+        "2016APV":{"sf": 1.00, "sfup": 1.0094, "sfdown": 0.9906},
 
-        "2016"   :{"sf": 1.00, "sfup": 1.0094, "sfdown": 0.9906}, 
+        "2016"   :{"sf": 1.00, "sfup": 1.0094, "sfdown": 0.9906},
 
         "2017"   :{"sf": 0.982, "sfup": 0.986, "sfdown": 0.978},
 
-        "2018"   :{"sf": 0.999, "sfup": 1.001, "sfdown": 0.997}} 
-    
-    out = jmsSF[IOV]["sf"+var]
-    
+        "2018"   :{"sf": 0.999, "sfup": 1.001, "sfdown": 0.997}}
 
-    FatJet = ak.with_field(FatJet, FatJet.mass * out, 'mass')
+    nom = jmsSF[IOV]["sf"]
+    out = jmsSF[IOV]["sf"+var]
+
+    # groomed (soft-drop): JMAR value applied directly
     FatJet = ak.with_field(FatJet, FatJet.msoftdrop * out, 'msoftdrop')
+    # ungroomed: no dedicated calibration -> inflate the up/down deviation
+    out_ung = _inflate_ungroomed_sf(nom, out)
+    FatJet = ak.with_field(FatJet, FatJet.mass * out_ung, 'mass')
     return FatJet
 
 def jmrsf(IOV, FatJet, var = ''):
     jmrSF = {
 
-       #"2016APV":{"sf": 1.00, "sfup": 1.2, "sfdown": 0.8}, 
-        "2016APV":{"sf": 1.00, "sfup": 1.2, "sfdown": 0.8}, 
-        "2016"   :{"sf": 1.00, "sfup": 1.2, "sfdown": 0.8}, 
+       #"2016APV":{"sf": 1.00, "sfup": 1.2, "sfdown": 0.8},
+        "2016APV":{"sf": 1.00, "sfup": 1.2, "sfdown": 0.8},
+        "2016"   :{"sf": 1.00, "sfup": 1.2, "sfdown": 0.8},
 
         "2017"   :{"sf": 1.09, "sfup": 1.14, "sfdown": 1.04},
 
-        "2018"   :{"sf": 1.108, "sfup": 1.142, "sfdown": 1.074}}     
-    
+        "2018"   :{"sf": 1.108, "sfup": 1.142, "sfdown": 1.074}}
+
+    nom = jmrSF[IOV]["sf"]
     jmrvalnom = jmrSF[IOV]["sf"+var]
     print("How many none in Fatjet.mass before processing inside jmrnom", ak.sum(ak.is_none(ak.firsts(FatJet).mass)))
     recomass = FatJet.mass
     genmass = FatJet.matched_gen.mass
 
-    print("Genmass inside jmrsf", genmass)
+    def _jmr_factor(jval):
+        deltamass = (recomass-genmass)*(jval-1.0)
+        condition = ((recomass+deltamass)/recomass) > 0
+        return ak.where( recomass <= 0.0, 0 , ak.where( condition , (recomass+deltamass)/recomass, 0 ))
 
-    print("How many none in Fatjet.matched_gen inside jmrnom", ak.sum(ak.is_none(FatJet.matched_gen.mass)))
-    # counts = ak.num(recomass)
-    # recomass = ak.flatten(recomass)
-    # genmass = ak.flatten(genmass)
-    
-    
-    deltamass = (recomass-genmass)*(jmrvalnom-1.0)
-    condition = ((recomass+deltamass)/recomass) > 0
-    jmrnom = ak.where( recomass <= 0.0, 0 , ak.where( condition , (recomass+deltamass)/recomass, 0 ))
-    print(jmrnom)
-    print("How many none in Fatjet inside jmrnom", ak.sum(ak.is_none(FatJet.mass)))
+    # groomed (soft-drop): JMAR value applied directly
+    FatJet = ak.with_field(FatJet, FatJet.msoftdrop * _jmr_factor(jmrvalnom), 'msoftdrop')
+    # ungroomed: no dedicated calibration -> inflate the up/down deviation
+    jmrval_ung = _inflate_ungroomed_sf(nom, jmrvalnom)
+    FatJet = ak.with_field(FatJet, FatJet.mass * _jmr_factor(jmrval_ung), 'mass')
 
-    FatJet = ak.with_field(FatJet, FatJet.mass * jmrnom, 'mass')
-    FatJet = ak.with_field(FatJet, FatJet.msoftdrop * jmrnom, 'msoftdrop')
-    
     print("How many none in Fatjet.mass that is being returned inside jmrnom", ak.sum(ak.is_none(ak.firsts(FatJet).mass)))
     return FatJet
 
@@ -1139,36 +1157,57 @@ MET_filters = {
 
 
 def applyjmsSF(IOV, FatJet, var=''):
-    """JMS scale factor (GluonJetMass values: flat sf=1.0, +-1%)."""
+    """JMS scale factor (GluonJetMass values: flat sf=1.0, +-1%).
+
+    Groomed (soft-drop) mass uses the JMAR +-1% directly; the ungroomed mass has
+    no dedicated calibration, so its up/down deviation is inflated (ARC / see
+    ``UNGROOMED_JMSJMR_INFLATION``).
+    """
     jmsSF = {
         "2016APV": {"sf": 1.00, "sfup": 1.01, "sfdown": 0.99},
         "2016":    {"sf": 1.00, "sfup": 1.01, "sfdown": 0.99},
         "2017":    {"sf": 1.0,  "sfup": 1.01, "sfdown": 0.99},
         "2018":    {"sf": 1.0,  "sfup": 1.01, "sfdown": 0.99},
     }
+    nom = jmsSF[IOV]["sf"]
     out = jmsSF[IOV]["sf" + var]
-    FatJet = ak.with_field(FatJet, FatJet.mass * out, 'mass')
+    # groomed (soft-drop): JMAR value applied directly
     FatJet = ak.with_field(FatJet, FatJet.msoftdrop * out, 'msoftdrop')
+    # ungroomed: no dedicated calibration -> inflate the up/down deviation
+    out_ung = _inflate_ungroomed_sf(nom, out)
+    FatJet = ak.with_field(FatJet, FatJet.mass * out_ung, 'mass')
     return FatJet
 
 
 def applyjmrSF(IOV, FatJet, var=''):
-    """JMR scale factor (GluonJetMass values: flat sf=1.0, +-2%)."""
+    """JMR scale factor (GluonJetMass values: flat sf=1.0, +-2%).
+
+    Groomed (soft-drop) mass uses the JMAR +-2% directly; the ungroomed mass has
+    no dedicated calibration, so its up/down deviation is inflated (ARC / see
+    ``UNGROOMED_JMSJMR_INFLATION``).
+    """
     jmrSF = {
         "2016APV": {"sf": 1.0, "sfup": 1.02, "sfdown": 0.98},
         "2016":    {"sf": 1.0, "sfup": 1.02, "sfdown": 0.98},
         "2017":    {"sf": 1.0, "sfup": 1.02, "sfdown": 0.98},
         "2018":    {"sf": 1.0, "sfup": 1.02, "sfdown": 0.98},
     }
+    nom = jmrSF[IOV]["sf"]
     jmrvalnom = jmrSF[IOV]["sf" + var]
     recomass = FatJet.mass
     genmass = FatJet.matched_gen.mass
-    deltamass = (recomass - genmass) * (jmrvalnom - 1.0)
-    condition = ((recomass + deltamass) / recomass) > 0
-    jmrnom = ak.where(recomass <= 0.0, 0,
-                      ak.where(condition, (recomass + deltamass) / recomass, 0))
-    FatJet = ak.with_field(FatJet, FatJet.mass * jmrnom, 'mass')
-    FatJet = ak.with_field(FatJet, FatJet.msoftdrop * jmrnom, 'msoftdrop')
+
+    def _jmr_factor(jval):
+        deltamass = (recomass - genmass) * (jval - 1.0)
+        condition = ((recomass + deltamass) / recomass) > 0
+        return ak.where(recomass <= 0.0, 0,
+                        ak.where(condition, (recomass + deltamass) / recomass, 0))
+
+    # groomed (soft-drop): JMAR value applied directly
+    FatJet = ak.with_field(FatJet, FatJet.msoftdrop * _jmr_factor(jmrvalnom), 'msoftdrop')
+    # ungroomed: no dedicated calibration -> inflate the up/down deviation
+    jmrval_ung = _inflate_ungroomed_sf(nom, jmrvalnom)
+    FatJet = ak.with_field(FatJet, FatJet.mass * _jmr_factor(jmrval_ung), 'mass')
     return FatJet
 
 
