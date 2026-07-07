@@ -479,12 +479,15 @@ class QJetMassProcessor(processor.ProcessorABC):
                 np.nan_to_num(data_prior_weight_g, nan=1.0, posinf=1.0, neginf=1.0),
             )
 
-        if self._reweight_source == "vincia":
-            weight_g = get_vincia_weight_g(mode=mode).weight_array(pt, groomed_value)
-            weight_u = get_vincia_weight_u(mode=mode).weight_array(pt, ungroomed_value)
-        else:
+        if self._reweight_source == "herwig":
             weight_g = get_herwig_weight_g(mode=mode).weight_array(pt, groomed_value)
             weight_u = get_herwig_weight_u(mode=mode).weight_array(pt, ungroomed_value)
+        else:
+            # any modelling variation (vincia, cr1/cr2, fraghard/fragsoft, ...) loads
+            # <source>_rho_reweight_{groomed,ungroomed}.npz — dispatch on the source,
+            # NOT a hard-coded == "vincia" (which silently fell back to Herwig).
+            weight_g = get_model_reweight_g(self._reweight_source, mode=mode).weight_array(pt, groomed_value)
+            weight_u = get_model_reweight_u(self._reweight_source, mode=mode).weight_array(pt, ungroomed_value)
         return weight_u, weight_g
 
     def _register_reco_jet_ntuple(self):
