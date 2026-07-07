@@ -2466,24 +2466,19 @@ class QJetMassProcessor(processor.ProcessorABC):
                                 weights_both_u = weights_both
                                 weights_both_reweighted_g = weights_both_g
 
-                                if self._do_reweight and self._is_data_prior_rho_reweight():
+                                if self._do_reweight:
+                                    # Generator-model reweights are functions of GEN kinematics
+                                    # on every fill: evaluating w at reco scales response ROWS
+                                    # (distorting P(reco|gen)) instead of gen columns. See
+                                    # ai-wiki bug zjet_casa_reskim_reweight_contamination.
                                     herwig_weight_both_u, herwig_weight_both_g = self._get_herwig_reweights(
                                         ptgen_both,
                                         mgen_both,
                                         mgen_both_g,
                                         jetR,
                                     )
-                                    weights_both_u = weights_both * herwig_weight_both_u
-                                    weights_both_reweighted_g = weights_both_g * herwig_weight_both_g
-                                elif self._do_reweight:
-                                    herwig_weight_both_u, herwig_weight_both_g = self._get_herwig_reweights(
-                                        ptreco_both,
-                                        mreco_both,
-                                        mreco_both_g,
-                                        jetR,
-                                    )
-                                    herwig_weight_both_g = ak.nan_to_num(herwig_weight_both_g, 0)
-                                    self.logging.debug(f"herwig WEights both g? {herwig_weight_both_g}" )
+                                    herwig_weight_both_u = ak.nan_to_num(herwig_weight_both_u, nan=1.0)
+                                    herwig_weight_both_g = ak.nan_to_num(herwig_weight_both_g, nan=1.0)
                                     weights_both_u = weights_both * herwig_weight_both_u
                                     weights_both_reweighted_g = weights_both_g * herwig_weight_both_g
 
@@ -2600,7 +2595,9 @@ class QJetMassProcessor(processor.ProcessorABC):
                             #mreco_g2 = reco_jet_meas.msoftdrop_orig
                             reco_data_prior_weight_u = None
                             reco_data_prior_weight_g = None
-                            if self._do_gen and self._is_data_prior_rho_reweight():
+                            if self._do_gen and self._do_reweight:
+                                # gen-matched weights for the reco fills (w=1 for unmatched/
+                                # fakes) — same gen-kinematics rule as the response fill.
                                 gen_jet_for_reco = gen_jet[sel_reco]
                                 groomed_gen_jet_for_reco = groomed_gen_jet[sel_reco]
                                 matched_to_selected_gen = ak.to_numpy(
@@ -2615,8 +2612,12 @@ class QJetMassProcessor(processor.ProcessorABC):
                                         groomed_gen_jet_for_reco[matched_to_selected_gen].mass,
                                         jetR,
                                     )
-                                    reco_data_prior_weight_u[matched_to_selected_gen] = prior_u
-                                    reco_data_prior_weight_g[matched_to_selected_gen] = prior_g
+                                    reco_data_prior_weight_u[matched_to_selected_gen] = np.nan_to_num(
+                                        np.asarray(prior_u), nan=1.0
+                                    )
+                                    reco_data_prior_weight_g[matched_to_selected_gen] = np.nan_to_num(
+                                        np.asarray(prior_g), nan=1.0
+                                    )
 
                             self._fill_groomed_over_ungroomed_reco(
                                 dataset=dataset,
@@ -2771,18 +2772,11 @@ class QJetMassProcessor(processor.ProcessorABC):
                             weights_reco_u = weights_reco
                             weights_reco_reweighted_g = weights_reco_g
 
-                            if self._do_reweight and self._is_data_prior_rho_reweight():
+                            if self._do_reweight and reco_data_prior_weight_u is not None:
+                                # gen-matched weights built above (w=1 for fakes); never
+                                # evaluate the reweight at reco kinematics.
                                 weights_reco_u = weights_reco * reco_data_prior_weight_u
                                 weights_reco_reweighted_g = weights_reco_g * reco_data_prior_weight_g
-                            elif self._do_reweight:
-                                herwig_weight_reco_u, herwig_weight_reco_g = self._get_herwig_reweights(
-                                    ptreco,
-                                    mreco,
-                                    mreco_g,
-                                    jetR,
-                                )
-                                weights_reco_u = weights_reco * herwig_weight_reco_u
-                                weights_reco_reweighted_g = weights_reco_g * herwig_weight_reco_g
 
                             fill_hist(
                                 self.hists,
