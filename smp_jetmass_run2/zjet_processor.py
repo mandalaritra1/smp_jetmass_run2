@@ -66,8 +66,11 @@ class QJetMassProcessor(processor.ProcessorABC):
         self._mode = mode
         self._debug = debug
         # which alternate-generator gen reweight the reweight_pythia* modes apply
-        if reweight_source not in ("herwig", "vincia"):
-            raise ValueError(f"reweight_source must be 'herwig' or 'vincia', got '{reweight_source}'.")
+        # "herwig" (default) uses the spline files; any other label is a modelling
+        # variation loaded from <label>_rho_reweight_{groomed,ungroomed}.npz.
+        _MODEL_SOURCES = ("herwig", "vincia", "cr1", "cr2", "fraghard", "fragsoft")
+        if reweight_source not in _MODEL_SOURCES:
+            raise ValueError(f"reweight_source must be one of {_MODEL_SOURCES}, got '{reweight_source}'.")
         self._reweight_source = reweight_source
         # optional override of the rho-axis refinement (default: mode-driven).
         # e.g. rho_refine=2 -> 24 gen / 48 reco (2x analysis) for a finer reweight skim.
