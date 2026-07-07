@@ -811,6 +811,7 @@ def run_once(
     chunksize_test: int = 100_000,
     executor_mode: str | None = None,
     reweight_source: str = "herwig",
+    rho_refine: int | None = None,
 ):
     print("Running over:", list(fileset.keys())[:10], "..." if len(fileset) > 10 else "")
     mode = normalize_mode_for_channel(mode, channel)
@@ -851,9 +852,10 @@ def run_once(
         jet_systematics=jet_systematics,
         mode=mode,
     )
-    # reweight_source is only a zjet knob (dijet/trijet always use Herwig)
+    # reweight_source / rho_refine are only zjet knobs
     if channel == "zjet":
         proc_kwargs["reweight_source"] = reweight_source
+        proc_kwargs["rho_refine"] = rho_refine
 
     start = time.time()
     out = run(
@@ -889,6 +891,7 @@ def make_output_filename(
     test: bool = False,
     output_dir: str | os.PathLike[str] | None = None,
     reweight_source: str = "herwig",
+    rho_refine: int | None = None,
 ) -> str:
     base = "data" if data else dataset
     if channel and channel != "zjet":
@@ -896,6 +899,9 @@ def make_output_filename(
     # keep alternate-generator reweights in distinct files (Herwig is the default)
     if reweight_source and reweight_source != "herwig":
         base = f"{base}_{reweight_source}"
+    # distinct file per rho-axis refinement (2x -> _r2, 4x -> _r4)
+    if rho_refine and rho_refine != 1:
+        base = f"{base}_r{rho_refine}"
     mode_token = ""
     if mode:
         output_mode = OUTPUT_MODE_TAGS.get(mode, mode)
@@ -966,6 +972,7 @@ def run_from_config(cfg, *, client=None, repo_root=None, log=print):
             chunksize=cfg["chunksize"], chunksize_test=cfg["chunksize_test"],
             executor_mode=cfg["executor_mode"],
             reweight_source=cfg.get("reweight_source", "herwig"),
+            rho_refine=cfg.get("rho_refine", None),
         )
         tag = get_group_tag(index, cfg["era"], group_mode)
         fout = make_output_filename(
@@ -973,6 +980,7 @@ def run_from_config(cfg, *, client=None, repo_root=None, log=print):
             channel=cfg["channel"], test=cfg["test"],
             output_dir=paths.repo_root / "outputs",
             reweight_source=cfg.get("reweight_source", "herwig"),
+            rho_refine=cfg.get("rho_refine", None),
         )
         save_output(out, fout)
         log(f"[{index + 1}] Saved: {fout}")

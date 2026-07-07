@@ -54,7 +54,7 @@ class QJetMassProcessor(processor.ProcessorABC):
     With "do_gen == True", will perform GEN selection and create response matrices. 
     Will always plot RECO level quantities. 
     '''
-    def __init__(self, do_gen = True, mode = "minimal",  debug = False, jet_systematics = None, systematics = None, reweight_source = "herwig"):
+    def __init__(self, do_gen = True, mode = "minimal",  debug = False, jet_systematics = None, systematics = None, reweight_source = "herwig", rho_refine = None):
         '''
         Args:
             do_gen (bool): whether to run gen-level analysis and create response matrices
@@ -69,6 +69,9 @@ class QJetMassProcessor(processor.ProcessorABC):
         if reweight_source not in ("herwig", "vincia"):
             raise ValueError(f"reweight_source must be 'herwig' or 'vincia', got '{reweight_source}'.")
         self._reweight_source = reweight_source
+        # optional override of the rho-axis refinement (default: mode-driven).
+        # e.g. rho_refine=2 -> 24 gen / 48 reco (2x analysis) for a finer reweight skim.
+        self._rho_refine = rho_refine
         self._do_reweight = False
         self._do_jk = False
         self._do_reco_jet_ntuple = mode == "mass_diagnostic_ntuple"
@@ -131,7 +134,8 @@ class QJetMassProcessor(processor.ProcessorABC):
         # minimal_rho_fine[_split]: 4x-finer rho axes (48 gen / 96 reco, still #reco = 2x #gen)
         # for the fine-bin / fine-then-rebin unfolding study; everything else as minimal_rho.
         binning = util_binning(
-            rho_refine=4 if self._mode in ("minimal_rho_fine", "minimal_rho_fine_split") else 1
+            rho_refine=(self._rho_refine if self._rho_refine is not None
+                        else (4 if self._mode in ("minimal_rho_fine", "minimal_rho_fine_split") else 1))
         )
 
         # Define axes
