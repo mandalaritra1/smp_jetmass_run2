@@ -328,7 +328,11 @@ def iter_groups(list_of_lists, mode: str):
 
 def read_txt_lines(txt_file: str | os.PathLike[str]) -> list[str]:
     with open(txt_file) as handle:
-        return [line.strip() for line in handle.readlines() if line.strip()]
+        return [
+            line.strip()
+            for line in handle.readlines()
+            if line.strip() and not line.lstrip().startswith("#")
+        ]
 
 
 def build_fileset_from_txts(
@@ -831,6 +835,7 @@ def run_once(
             client=client,
             chunksize=chunksize_test,
             maxchunks=1,
+            skipbadfiles=True,
         )
         debug = True
     else:
@@ -840,6 +845,7 @@ def run_once(
             client=client,
             chunksize=chunksize,
             maxchunks=None,
+            skipbadfiles=True,
         )
         debug = False
 
