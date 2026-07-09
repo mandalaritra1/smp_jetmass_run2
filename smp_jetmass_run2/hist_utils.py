@@ -144,8 +144,21 @@ class util_binning :
         )
  
         
-        self.ptgen_axis = hist.axis.Variable([0,  200.,   290.,   400.,    13000.], name="ptgen", label=r"$p_{T,GEN}$ (GeV)")  
-        self.ptreco_axis = hist.axis.Variable([0, 200.,   290.,   400.,    13000.], name="ptreco", label=r"$p_{T,RECO}$ (GeV)")
+        # ARC round-2: the low pt sink bin is [185,200], not [0,200]. The old
+        # [0,200] bin was populated down to the storage floors (FatJet reco floor
+        # ~170 GeV, GenJetAK8 gen floor ~100 GeV) -- a wide, data/MC-mismodelled,
+        # gen/reco-asymmetric region. Narrowing it to [185,200] keeps the near-200
+        # resolution migration inside the response matrix and routes everything
+        # further from 200 GeV into the pt underflow, to be handled as a fake
+        # (reco<185) or miss (gen<185).
+        # NB: this cut creates pt-underflow content for the first time, so the
+        # unfold-side fake/miss derivation must sum the matched matrix over the
+        # IN-RANGE pt bins only (exclude pt flow); the flow-inclusive projection
+        # would otherwise fold cross-boundary events back into "matched" and leak
+        # them out of both the matrix and the fakes/misses. See the unfold repo
+        # arc_round2 branch (_make_inputs_numpy).
+        self.ptgen_axis = hist.axis.Variable([185.,  200.,   290.,   400.,    13000.], name="ptgen", label=r"$p_{T,GEN}$ (GeV)")
+        self.ptreco_axis = hist.axis.Variable([185., 200.,   290.,   400.,    13000.], name="ptreco", label=r"$p_{T,RECO}$ (GeV)")
 
         self.mcut_reco_u_axis = hist.axis.Variable([ 0, 20, 1000], name="mreco", label=r"Mass (GeV)" )
         self.mcut_reco_g_axis = hist.axis.Variable([ 0, 10, 1000], name="mreco", label=r"Mass (GeV)" )
