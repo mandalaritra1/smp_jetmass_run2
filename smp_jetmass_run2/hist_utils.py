@@ -136,10 +136,15 @@ class util_binning :
 
         # Groomed truth rho binning.  Its detector-level counterpart below has
         # exactly two bins per truth bin; ungroomed rho retains the axis above.
+        # The shown region (-3..-1.5) stays 0.5-wide: finer bins there tripled the
+        # unfolded stat error at ~35% purity.  Instead the tail below -3.5 is
+        # resolved at 0.25 down to -5 -- a hidden buffer that absorbs low-rho
+        # migrations so they do not leak into the last shown bin.  The deep tail
+        # (< -5) stays a coarse sink; it is too sparse to bin finely.
         self.mgen_over_pt_g_axis = hist.axis.Variable(
             _refine_edges(
-                [-10, -6, -5, -4.5, -4, -3.5, -3, -2.75, -2.5, -2.25, -2,
-                 -1.75, -1.5, -1, 0],
+                [-10, -6, -5, -4.75, -4.5, -4.25, -4, -3.75, -3.5,
+                 -3, -2.5, -2, -1.5, -1, 0],
                 self.rho_refine),
             name='mpt_gen', label=r'$\log(\rho^2)$'
         )
@@ -158,9 +163,9 @@ class util_binning :
         # unchanged ungroomed detector axis above.
         self.mreco_over_pt_g_axis = hist.axis.Variable(
             _refine_edges(
-                [-10, -8, -6, -5.5, -5, -4.75, -4.5, -4.25, -4, -3.75, -3.5,
-                 -3.25, -3, -2.875, -2.75, -2.625, -2.5, -2.375, -2.25, -2.125,
-                 -2, -1.875, -1.75, -1.625, -1.5, -1.25, -1, -0.5, 0],
+                [-10, -8, -6, -5.5, -5, -4.875, -4.75, -4.625, -4.5, -4.375,
+                 -4.25, -4.125, -4, -3.875, -3.75, -3.625, -3.5, -3.25, -3,
+                 -2.75, -2.5, -2.25, -2, -1.75, -1.5, -1.25, -1, -0.5, 0],
                 self.rho_refine),
             name='mpt_reco', label=r'$\log(\rho^2)$ (Detector)'
         )
