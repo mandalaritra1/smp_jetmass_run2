@@ -174,6 +174,8 @@ class QJetMassProcessor(processor.ProcessorABC):
         ptfine_axis = binning.ptfine_axis
         mreco_over_pt_axis = binning.mreco_over_pt_axis
         mgen_over_pt_axis = binning.mgen_over_pt_axis
+        mreco_over_pt_g_axis = binning.mreco_over_pt_g_axis
+        mgen_over_pt_g_axis = binning.mgen_over_pt_g_axis
         y_axis = binning.y_axis
         ptlong_axis = binning.ptlong_axis
         
@@ -227,7 +229,7 @@ class QJetMassProcessor(processor.ProcessorABC):
 
         if self._mode in ("minimal_rho", "minimal_rho_fine", "reweight_pythia_rho", "reweight_data_prior_rho"):
             register_hist(self.hists, "ptjet_rhojet_u_reco", [dataset_axis, ptreco_axis, mreco_over_pt_axis, syst_axis ])
-            register_hist(self.hists, "ptjet_rhojet_g_reco", [dataset_axis, ptreco_axis, mreco_over_pt_axis, syst_axis ])
+            register_hist(self.hists, "ptjet_rhojet_g_reco", [dataset_axis, ptreco_axis, mreco_over_pt_g_axis, syst_axis ])
             register_hist(self.hists, "m_g_over_m_u_reco", [dataset_axis, channel_axis, ptreco_axis, mass_ratio_axis, syst_axis])
             register_hist(self.hists, "m_g_vs_m_u_reco", [dataset_axis, channel_axis, m_u_reco_5gev_axis, m_g_reco_5gev_axis, syst_axis])
             register_hist(self.hists, "m_g_over_m_u_raw_reco", [dataset_axis, channel_axis, ptreco_axis, mass_ratio_axis, syst_axis])
@@ -240,21 +242,21 @@ class QJetMassProcessor(processor.ProcessorABC):
 
             if self._do_gen:
                 register_hist(self.hists, "response_matrix_rho_u", [dataset_axis, ptreco_axis, mreco_over_pt_axis, ptgen_axis, mgen_over_pt_axis, syst_axis])
-                register_hist(self.hists, "response_matrix_rho_g", [dataset_axis, ptreco_axis, mreco_over_pt_axis, ptgen_axis, mgen_over_pt_axis, syst_axis])
+                register_hist(self.hists, "response_matrix_rho_g", [dataset_axis, ptreco_axis, mreco_over_pt_g_axis, ptgen_axis, mgen_over_pt_g_axis, syst_axis])
                 register_hist(self.hists, "ptjet_rhojet_u_gen", [dataset_axis, ptgen_axis, mgen_over_pt_axis, syst_axis])
-                register_hist(self.hists, "ptjet_rhojet_g_gen", [dataset_axis, ptgen_axis, mgen_over_pt_axis, syst_axis])
+                register_hist(self.hists, "ptjet_rhojet_g_gen", [dataset_axis, ptgen_axis, mgen_over_pt_g_axis, syst_axis])
 
         if self._mode == "minimal_rho_fine_split":
             # Same 6 rho hists as minimal_rho but with the 'jk' axis carrying the
             # disjoint 50:50 split (jk=0,1) -- two independent halves in one pass,
             # for the fine-binning closure/bias test (cheaper than the 10x jackknife).
             register_hist(self.hists, "ptjet_rhojet_u_reco", [dataset_axis, ptreco_axis, mreco_over_pt_axis, binning.jackknife_axis, syst_axis])
-            register_hist(self.hists, "ptjet_rhojet_g_reco", [dataset_axis, ptreco_axis, mreco_over_pt_axis, binning.jackknife_axis, syst_axis])
+            register_hist(self.hists, "ptjet_rhojet_g_reco", [dataset_axis, ptreco_axis, mreco_over_pt_g_axis, binning.jackknife_axis, syst_axis])
             if self._do_gen:
                 register_hist(self.hists, "response_matrix_rho_u", [dataset_axis, ptreco_axis, mreco_over_pt_axis, ptgen_axis, mgen_over_pt_axis, binning.jackknife_axis, syst_axis])
-                register_hist(self.hists, "response_matrix_rho_g", [dataset_axis, ptreco_axis, mreco_over_pt_axis, ptgen_axis, mgen_over_pt_axis, binning.jackknife_axis, syst_axis])
+                register_hist(self.hists, "response_matrix_rho_g", [dataset_axis, ptreco_axis, mreco_over_pt_g_axis, ptgen_axis, mgen_over_pt_g_axis, binning.jackknife_axis, syst_axis])
                 register_hist(self.hists, "ptjet_rhojet_u_gen", [dataset_axis, ptgen_axis, mgen_over_pt_axis, binning.jackknife_axis, syst_axis])
-                register_hist(self.hists, "ptjet_rhojet_g_gen", [dataset_axis, ptgen_axis, mgen_over_pt_axis, binning.jackknife_axis, syst_axis])
+                register_hist(self.hists, "ptjet_rhojet_g_gen", [dataset_axis, ptgen_axis, mgen_over_pt_g_axis, binning.jackknife_axis, syst_axis])
 
 
                 #register_hist(self.hists, 'm_u_jet_reco_over_gen', [dataset_axis, ptgen_axis, mgen_axis, frac_axis])
@@ -359,7 +361,7 @@ class QJetMassProcessor(processor.ProcessorABC):
             register_hist(self.hists, "dphi", [dataset_axis, dphi_axis, syst_axis])
 
             register_hist(self.hists, "ptjet_rhojet_u_reco", [dataset_axis, ptreco_axis, mreco_over_pt_axis, syst_axis ])
-            register_hist(self.hists, "ptjet_rhojet_g_reco", [dataset_axis, ptreco_axis, mreco_over_pt_axis, syst_axis ])
+            register_hist(self.hists, "ptjet_rhojet_g_reco", [dataset_axis, ptreco_axis, mreco_over_pt_g_axis, syst_axis ])
             register_hist(self.hists, "m_g_over_m_u_reco", [dataset_axis, channel_axis, ptreco_axis, mass_ratio_axis, syst_axis])
             register_hist(self.hists, "m_g_vs_m_u_reco", [dataset_axis, channel_axis, m_u_reco_5gev_axis, m_g_reco_5gev_axis, syst_axis])
             register_hist(self.hists, "m_g_over_m_u_raw_reco", [dataset_axis, channel_axis, ptreco_axis, mass_ratio_axis, syst_axis])
@@ -383,14 +385,14 @@ class QJetMassProcessor(processor.ProcessorABC):
                 
         if self._mode == "rho_jk":
             register_hist(self.hists, "ptjet_rhojet_u_reco", [dataset_axis, ptreco_axis, mreco_over_pt_axis,  binning.jackknife_axis , syst_axis,])
-            register_hist(self.hists, "ptjet_rhojet_g_reco", [dataset_axis, ptreco_axis, mreco_over_pt_axis,  binning.jackknife_axis , syst_axis, ])
+            register_hist(self.hists, "ptjet_rhojet_g_reco", [dataset_axis, ptreco_axis, mreco_over_pt_g_axis,  binning.jackknife_axis , syst_axis, ])
             #register_hist(self.hists, "ptjet_rhojet_g_reco2", [dataset_axis, ptreco_axis, mreco_over_pt_axis, syst_axis ])
 
             if self._do_gen:
                 register_hist(self.hists, "response_matrix_rho_u", [dataset_axis, ptreco_axis, mreco_over_pt_axis, ptgen_axis, mgen_over_pt_axis, binning.jackknife_axis, syst_axis,])
-                register_hist(self.hists, "response_matrix_rho_g", [dataset_axis, ptreco_axis, mreco_over_pt_axis, ptgen_axis, mgen_over_pt_axis, binning.jackknife_axis, syst_axis,])
+                register_hist(self.hists, "response_matrix_rho_g", [dataset_axis, ptreco_axis, mreco_over_pt_g_axis, ptgen_axis, mgen_over_pt_g_axis, binning.jackknife_axis, syst_axis,])
                 register_hist(self.hists, "ptjet_rhojet_u_gen", [dataset_axis, ptgen_axis, mgen_over_pt_axis, binning.jackknife_axis, syst_axis])
-                register_hist(self.hists, "ptjet_rhojet_g_gen", [dataset_axis, ptgen_axis, mgen_over_pt_axis, binning.jackknife_axis, syst_axis])
+                register_hist(self.hists, "ptjet_rhojet_g_gen", [dataset_axis, ptgen_axis, mgen_over_pt_g_axis, binning.jackknife_axis, syst_axis])
                 
 
                 register_hist(self.hists, 'm_u_jet_reco_over_gen', [dataset_axis, ptgen_axis, mgen_axis, frac_axis, binning.jackknife_axis, syst_axis,])

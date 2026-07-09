@@ -134,11 +134,33 @@ class util_binning :
             name='mpt_gen', label=r'$\log(\rho^2)$'
         )
 
+        # Groomed truth rho binning.  Its detector-level counterpart below has
+        # exactly two bins per truth bin; ungroomed rho retains the axis above.
+        self.mgen_over_pt_g_axis = hist.axis.Variable(
+            _refine_edges(
+                [-10, -6, -5, -4.5, -4, -3.5, -3, -2.75, -2.5, -2.25, -2,
+                 -1.75, -1.5, -1, 0],
+                self.rho_refine),
+            name='mpt_gen', label=r'$\log(\rho^2)$'
+        )
+
         # Negative counterpart of mreco_over_pt_axis (rho_refine subdivides each bin)
         self.mreco_over_pt_axis = hist.axis.Variable(
             _refine_edges(
                 [-10, -8.0, -6, -5.5, -5, -4.75, -4.5, -4.25, -4, -3.75, -3.5, -3.25,
                  -3, -2.75, -2.5, -2.25, -2, -1.75, -1.5, -1.25, -1, -0.75, -0.5, -0.25, 0],
+                self.rho_refine),
+            name='mpt_reco', label=r'$\log(\rho^2)$ (Detector)'
+        )
+
+        # Groomed detector rho binning, constructed as an exact 2:1 refinement
+        # of mgen_over_pt_g_axis.  This is deliberately distinct from the
+        # unchanged ungroomed detector axis above.
+        self.mreco_over_pt_g_axis = hist.axis.Variable(
+            _refine_edges(
+                [-10, -8, -6, -5.5, -5, -4.75, -4.5, -4.25, -4, -3.75, -3.5,
+                 -3.25, -3, -2.875, -2.75, -2.625, -2.5, -2.375, -2.25, -2.125,
+                 -2, -1.875, -1.75, -1.625, -1.5, -1.25, -1, -0.5, 0],
                 self.rho_refine),
             name='mpt_reco', label=r'$\log(\rho^2)$ (Detector)'
         )
