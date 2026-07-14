@@ -1,0 +1,15 @@
+{
+  "_comment": "Exact GEN event counts per HT bin of the HT-binned Herwig7-CH3 NanoGEN production (2026-07-02), on EOS /eos/user/a/amandal/herwig_ch3_dy/. These are the sum of Events num_entries over all CH3_ files (canary seeds 2000000-2 excluded). Use for per-HT stitching (weight = z_xs * sigma_frac_HT / N_HT), NOT to overwrite cms_utils.numentries_herwig[era] (that is the INCLUSIVE madgraphMLM-herwig7 sample's per-era total). HT-binned = the fix for the inclusive sample's starved high-pT tail. 2500toInf may tick up slightly (a few stragglers were still running at count time).",
+  "era": "generated with --era Run2_2018 (GEN-level, IOV-independent)",
+  "counts": {
+    "DYJetsToLL_M-50_HT-200to400_TuneCH3_madgraphMLM-herwig7":  347839,
+    "DYJetsToLL_M-50_HT-400to600_TuneCH3_madgraphMLM-herwig7":  340711,
+    "DYJetsToLL_M-50_HT-600to800_TuneCH3_madgraphMLM-herwig7":  347352,
+    "DYJetsToLL_M-50_HT-800to1200_TuneCH3_madgraphMLM-herwig7": 318466,
+    "DYJetsToLL_M-50_HT-1200to2500_TuneCH3_madgraphMLM-herwig7":271806,
+    "DYJetsToLL_M-50_HT-2500toInf_TuneCH3_madgraphMLM-herwig7": 135217
+  },
+  "total": 1761391,
+  "files_per_bin": {"HT-200to400":323,"HT-400to600":323,"HT-600to800":331,"HT-800to1200":325,"HT-1200to2500":308,"HT-2500toInf":249},
+  "xsec_pb_DY_LO_used_for_quicklook_stitch": {"HT-200to400":48.66,"HT-400to600":6.968,"HT-600to800":1.743,"HT-800to1200":0.8052,"HT-1200to2500":0.1933,"HT-2500toInf":0.003468}
+}

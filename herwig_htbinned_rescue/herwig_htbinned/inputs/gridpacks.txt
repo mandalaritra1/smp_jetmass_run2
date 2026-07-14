@@ -1,0 +1,7 @@
+# <BIN>  <cvmfs UL V5_2.6.5 gridpack .tar.xz>  (same gridpacks as the Pythia CP5 nominal)
+HT-200to400    /cvmfs/cms.cern.ch/phys_generator/gridpacks/UL/13TeV/madgraph/V5_2.6.5/DYJets_HT/DYJets_HT-200to400_slc7_amd64_gcc700_CMSSW_10_6_19_tarball.tar.xz
+HT-400to600    /cvmfs/cms.cern.ch/phys_generator/gridpacks/UL/13TeV/madgraph/V5_2.6.5/DYJets_HT/DYJets_HT-400to600_slc7_amd64_gcc700_CMSSW_10_6_19_tarball.tar.xz
+HT-600to800    /cvmfs/cms.cern.ch/phys_generator/gridpacks/UL/13TeV/madgraph/V5_2.6.5/DYJets_HT/DYJets_HT-600to800_slc7_amd64_gcc700_CMSSW_10_6_19_tarball.tar.xz
+HT-800to1200   /cvmfs/cms.cern.ch/phys_generator/gridpacks/UL/13TeV/madgraph/V5_2.6.5/DYJets_HT/DYJets_HT-800to1200_slc7_amd64_gcc700_CMSSW_10_6_19_tarball.tar.xz
+HT-1200to2500  /cvmfs/cms.cern.ch/phys_generator/gridpacks/UL/13TeV/madgraph/V5_2.6.5/DYJets_HT/DYJets_HT-1200to2500_slc7_amd64_gcc700_CMSSW_10_6_19_tarball.tar.xz
+HT-2500toInf   /cvmfs/cms.cern.ch/phys_generator/gridpacks/UL/13TeV/madgraph/V5_2.6.5/DYJets_HT/DYJets_HT-2500toInf_slc7_amd64_gcc700_CMSSW_10_6_19_tarball.tar.xz

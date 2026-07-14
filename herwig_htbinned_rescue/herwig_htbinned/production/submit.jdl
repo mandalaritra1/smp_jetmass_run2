@@ -1,0 +1,18 @@
+# Submit one HT bin:
+#   condor_submit BIN=HT-200to400 NEVT=1500 SEEDBASE=1000000 NJOBS=5 submit.jdl
+universe               = vanilla
+executable             = run_job.sh
+arguments              = $(BIN) $(Process) $(NEVT) $(SEEDBASE)
+transfer_input_files   = run_job.sh, inner.sh, job_tail.py, nanogen_addsubjets.py, cfgs/prod_$(BIN).py
+should_transfer_files  = YES
+when_to_transfer_output = ON_EXIT
+transfer_output_files  = ""
+MY.SendCredential      = true
+output                 = logs/$(BIN)/j_$(Process).out
+error                  = logs/$(BIN)/j_$(Process).err
+log                    = logs/$(BIN)/j_$(Process).log
++JobFlavour            = "workday"
+request_cpus           = 1
+request_memory         = 2000
+request_disk           = 4000000
+queue $(NJOBS)
