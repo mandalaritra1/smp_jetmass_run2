@@ -12,3 +12,6 @@ Quick reminders:
   `~/Projects/GluonJetMass/test_files/`.
 - After touching a processor, re-run the cutflow regression vs GluonJetMass — every
   selection step must still match.
+- This is the analysis behind **SMP-25-010** (paper, `~/Projects/SMP-25-010/`) and
+  **AN-24-162** (analysis note, `~/Projects/AN-24-162/`) — see AGENTS.md for the
+  local paths. Read-only unless asked to edit.

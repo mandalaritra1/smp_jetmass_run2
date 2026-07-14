@@ -15,6 +15,21 @@ changes project status, you may update the relevant `~/Projects/ai-wiki` pages
 (follow its AGENTS.md; update `wiki/meta/index.md` + append `wiki/meta/log.md`).
 Treat raw sources, PDFs, and other linked repositories as read-only unless asked.
 
+## Paper & analysis note (local, read-only)
+
+This framework is the analysis behind **CMS SMP-25-010** (Z+jet jet-mass cross
+section) and its supporting note **AN-24-162**. Both LaTeX sources live locally:
+
+- **Paper — SMP-25-010**: `~/Projects/SMP-25-010/` (`SMP-25-010.tex` / `main.tex`,
+  `SMP-25-010.bib`, built `main.pdf`; a parallel copy is `~/Projects/smp_25_010_paper/`).
+- **Analysis note — AN-24-162**: `~/Projects/AN-24-162/` (`AN-24-162.tex`,
+  `AN-24-162.bib`, `AN-24-162_draft.pdf`).
+- ARC / review context: `review/` in this repo, and
+  `~/Projects/research-notes/papers/SMP-25-010_*`.
+
+Consult these for definitions, binning, and result numbers; treat them as
+read-only unless the user asks to edit them.
+
 ## Architecture (quick map)
 
 - `smp_jetmass_run2/` — flat importable package (no `src/`).
