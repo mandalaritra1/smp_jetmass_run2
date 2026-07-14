@@ -1,0 +1,56 @@
+# TEMPLATE -- the condor wrapper seds __MINKT__ / __MAXKT__ / __RUN__ before reading.
+# Herwig 7.3 standalone Z(->ll)+jet at the CMS CH3 tune, ONE ME-level jet-pT slice.
+# Self-contained (inlines the CH3 tune) so it works in a flat condor sandbox.
+# CH3 source: CMSSW Herwig7CH3TuneSettings_cfi.py (arXiv:2011.03422).
+
+read snippets/PPCollider.in
+
+# --- CH3 tune: PDFs -------------------------------------------------------
+cd /Herwig/Partons
+create ThePEG::LHAPDF PDFSet_nnlo ThePEGLHAPDF.so
+set PDFSet_nnlo:PDFName NNPDF31_nnlo_as_0118.LHgrid
+set PDFSet_nnlo:RemnantHandler HadronRemnants
+set /Herwig/Particles/p+:PDF PDFSet_nnlo
+set /Herwig/Particles/pbar-:PDF PDFSet_nnlo
+set /Herwig/Partons/PPExtractor:FirstPDF  PDFSet_nnlo
+set /Herwig/Partons/PPExtractor:SecondPDF PDFSet_nnlo
+set /Herwig/Shower/ShowerHandler:PDFA PDFSet_nnlo
+set /Herwig/Shower/ShowerHandler:PDFB PDFSet_nnlo
+create ThePEG::LHAPDF PDFSet_lo ThePEGLHAPDF.so
+set PDFSet_lo:PDFName NNPDF31_lo_as_0130.LHgrid
+set PDFSet_lo:RemnantHandler HadronRemnants
+set /Herwig/Shower/ShowerHandler:PDFARemnant PDFSet_lo
+set /Herwig/Shower/ShowerHandler:PDFBRemnant PDFSet_lo
+set /Herwig/Partons/MPIExtractor:FirstPDF PDFSet_lo
+set /Herwig/Partons/MPIExtractor:SecondPDF PDFSet_lo
+
+# --- CH3 tune: alphaS + MPI + colour reconnection -------------------------
+# Herwig 7.3 split the shower coupling into ISR/FSR (was /Herwig/Shower/AlphaQCD
+# in the 7.1-era CMSSW block); CH3 = alphaS(mZ)=0.118 on both.
+set /Herwig/Shower/AlphaQCDFSR:AlphaIn 0.118
+set /Herwig/Shower/AlphaQCDISR:AlphaIn 0.118
+cd /
+set /Herwig/Hadronization/ColourReconnector:ReconnectionProbability 0.4712
+set /Herwig/UnderlyingEvent/MPIHandler:pTmin0 3.04
+set /Herwig/UnderlyingEvent/MPIHandler:InvRadius 1.284
+set /Herwig/UnderlyingEvent/MPIHandler:Power 0.1362
+
+cd /Herwig/Generators
+set EventGenerator:EventHandler:LuminosityFunction:Energy 13000.0
+
+# --- Matrix element: Z(->ll) + jet, ONE jet-pT slice ----------------------
+cd /Herwig/MatrixElements/
+insert SubProcess:MatrixElements[0] MEZJet
+set MEZJet:ZDecay ChargedLeptons
+# disjoint ME-level jet-pT window [MinKT, MaxKT) -> high-pT bins get full stats
+set /Herwig/Cuts/JetKtCut:MinKT __MINKT__*GeV
+set /Herwig/Cuts/JetKtCut:MaxKT __MAXKT__*GeV
+set /Herwig/Cuts/MassCut:MinM 60.*GeV
+set /Herwig/Cuts/MassCut:MaxM 120.*GeV
+
+# --- Rivet analysis hook (shower + hadronisation) -------------------------
+read snippets/Rivet.in
+insert /Herwig/Analysis/Rivet:Analyses 0 CMS_ZJET_JETMASS
+
+cd /Herwig/Generators
+saverun __RUN__ EventGenerator

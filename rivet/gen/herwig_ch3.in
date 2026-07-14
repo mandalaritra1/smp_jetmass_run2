@@ -1,0 +1,77 @@
+# Herwig 7.3 standalone: Z(->ll)+jet at the CMS CH3 tune, LO internal ME.
+# Same hard process as gen/herwig.in (MEZJet, ll+1 jet, recoil-jet pT>150 GeV at
+# ME level so the 200 GeV fiducial bin is unbiased) but with the CMS Herwig7 CH3
+# tune layered on: NNPDF3.1 NNLO shower PDF, alphaS(mZ)=0.118, NNPDF3.1 LO
+# (as=0.130) for MPI/remnants, and the CH3 MPI + colour-reconnection values.
+# Source: CMSSW Configuration/Generator Herwig7CH3TuneSettings_cfi.py
+# (CMS Herwig7 UE tunes, Eur.Phys.J.C81(2021)312, arXiv:2011.03422).
+#
+# NOTE vs the CMSSW DYToLL_TuneCH3 config: that uses MEqq2gZ2ff (inclusive DY,
+# 0-jet at ME level). We keep MEZJet so there is a hard recoil jet in the ME.
+#
+# usage:  Herwig read gen/herwig_ch3.in   then   Herwig run herwig_ch3.run -N <nevents>
+# Requires the NNPDF3.1 LHAPDF grids: NNPDF31_nnlo_as_0118, NNPDF31_lo_as_0130.
+
+read snippets/PPCollider.in
+
+##################################################
+# CH3 tune: PDFs  (override the PPCollider defaults)
+##################################################
+cd /Herwig/Partons
+create ThePEG::LHAPDF PDFSet_nnlo ThePEGLHAPDF.so
+set PDFSet_nnlo:PDFName NNPDF31_nnlo_as_0118.LHgrid
+set PDFSet_nnlo:RemnantHandler HadronRemnants
+set /Herwig/Particles/p+:PDF PDFSet_nnlo
+set /Herwig/Particles/pbar-:PDF PDFSet_nnlo
+set /Herwig/Partons/PPExtractor:FirstPDF  PDFSet_nnlo
+set /Herwig/Partons/PPExtractor:SecondPDF PDFSet_nnlo
+set /Herwig/Shower/ShowerHandler:PDFA PDFSet_nnlo
+set /Herwig/Shower/ShowerHandler:PDFB PDFSet_nnlo
+create ThePEG::LHAPDF PDFSet_lo ThePEGLHAPDF.so
+set PDFSet_lo:PDFName NNPDF31_lo_as_0130.LHgrid
+set PDFSet_lo:RemnantHandler HadronRemnants
+set /Herwig/Shower/ShowerHandler:PDFARemnant PDFSet_lo
+set /Herwig/Shower/ShowerHandler:PDFBRemnant PDFSet_lo
+set /Herwig/Partons/MPIExtractor:FirstPDF PDFSet_lo
+set /Herwig/Partons/MPIExtractor:SecondPDF PDFSet_lo
+
+##################################################
+# CH3 tune: alphaS and MPI / colour reconnection
+##################################################
+# Herwig 7.3 split the shower coupling into ISR/FSR (was AlphaQCD in 7.1).
+set /Herwig/Shower/AlphaQCDFSR:AlphaIn 0.118
+set /Herwig/Shower/AlphaQCDISR:AlphaIn 0.118
+cd /
+set /Herwig/Hadronization/ColourReconnector:ReconnectionProbability 0.4712
+set /Herwig/UnderlyingEvent/MPIHandler:pTmin0 3.04
+set /Herwig/UnderlyingEvent/MPIHandler:InvRadius 1.284
+set /Herwig/UnderlyingEvent/MPIHandler:Power 0.1362
+
+cd /Herwig/Generators
+# sqrt(s) = 13 TeV
+set EventGenerator:EventHandler:LuminosityFunction:Energy 13000.0
+
+##################################################
+# Matrix element: Z + jet, Z -> charged leptons.
+# (tau pairs are produced too but are removed by the routine's prompt-lepton
+#  selection, so the measured sample is effectively ee + mumu.)
+##################################################
+cd /Herwig/MatrixElements/
+insert SubProcess:MatrixElements[0] MEZJet
+set MEZJet:ZDecay ChargedLeptons
+
+# Recoil-jet pT cut at ME level, kept below the 200 GeV fiducial threshold so
+# the lowest measured pT bin is unbiased by the generation cut.
+set /Herwig/Cuts/JetKtCut:MinKT 150.0*GeV
+# Dilepton invariant-mass window around the Z.
+set /Herwig/Cuts/MassCut:MinM 60.*GeV
+set /Herwig/Cuts/MassCut:MaxM 120.*GeV
+
+##################################################
+# Rivet analysis hook (with shower/hadronisation)
+##################################################
+read snippets/Rivet.in
+insert /Herwig/Analysis/Rivet:Analyses 0 CMS_ZJET_JETMASS
+
+cd /Herwig/Generators
+saverun herwig_ch3 EventGenerator

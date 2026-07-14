@@ -32,6 +32,9 @@
 
 #include "fastjet/contrib/SoftDrop.hh"
 
+#include <fstream>
+#include <cstdlib>
+
 namespace Rivet {
 
   /// Z(ll)+jet groomed and ungroomed jet-mass cross sections
@@ -91,6 +94,21 @@ namespace Rivet {
       book(_h_z_pt,   "z_pt",   25, 90., 590.);
       book(_h_z_mass, "z_mass", 40, 71., 111.);
       book(_h_jet_pt, "jet_pt", 30, 200., 800.);
+
+      // --- Optional per-event gen ntuple --------------------------------
+      // If $CH3_NTUPLE is set, dump one row per selected event so the shape
+      // can be rebinned / reweighted at ANY granularity offline (the ratio
+      // Herwig/NLO for the model reweight). Off by default -> stays lightweight.
+      // NOTE: m_g here is the C/A-reclustered SoftDrop mass; the coffea gen
+      // path uses the SubGenJetAK8 subjet sum -> the GROOMED reweight carries a
+      // ~few-% grooming-definition offset (ungroomed is identical). See README.
+      const char* ntpath = std::getenv("CH3_NTUPLE");
+      _do_ntuple = (ntpath != nullptr && ntpath[0] != '\0');
+      if (_do_ntuple) {
+        _ntuple.open(ntpath);
+        _ntuple << "# jet_pt m_u m_g rho_u rho_g weight\n";
+        _ntuple.precision(8);
+      }
     }
 
     void analyze(const Event& event) {
@@ -183,6 +201,14 @@ namespace Rivet {
         if (rho_u > -99.0) _h_rho_u[ipt]->fill(rho_u);
         if (rho_g > -99.0) _h_rho_g[ipt]->fill(rho_g);
       }
+
+      // one row per selected event (jet pT > 200), raw generator weight; the
+      // per-run xsec/sumW are written in finalize() for absolute/slice norm.
+      if (_do_ntuple) {
+        const double w = (event.weights().size() > 0) ? event.weights()[0] : 1.0;
+        _ntuple << jet.pT() << ' ' << m_u << ' ' << m_g << ' '
+                << rho_u << ' ' << rho_g << ' ' << w << '\n';
+      }
     }
 
     void finalize() {
@@ -200,6 +226,15 @@ namespace Rivet {
       scale(_h_z_pt,   norm);
       scale(_h_z_mass, norm);
       scale(_h_jet_pt, norm);
+
+      // Footer: per-run cross section [pb] and sum of weights, so the ntuple
+      // rows can be normalised (w * xsec/sumW = absolute dsigma) and disjoint
+      // pT slices combined offline.
+      if (_do_ntuple) {
+        _ntuple << "# xsec_pb " << crossSection() << '\n';
+        _ntuple << "# sumw "    << sumOfWeights()  << '\n';
+        _ntuple.close();
+      }
     }
 
   private:
@@ -218,6 +253,9 @@ namespace Rivet {
     Histo1DPtr _h_mass_u[3], _h_mass_g[3], _h_rho_u[3], _h_rho_g[3];
     Histo1DPtr _h_mass_u_incl, _h_mass_g_incl;
     Histo1DPtr _h_z_pt, _h_z_mass, _h_jet_pt;
+
+    bool _do_ntuple = false;
+    std::ofstream _ntuple;
   };
 
   RIVET_DECLARE_PLUGIN(CMS_ZJET_JETMASS);

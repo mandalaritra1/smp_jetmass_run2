@@ -1,0 +1,24 @@
+# CERN lxplus HTCondor: Herwig-CH3 Z+jet, one job per (slice, seed), with per-event
+# ntuple output. Submit from rivet/condor/ after ./submit_herwig_ch3_lxplus.sh.
+universe                = vanilla
+executable              = herwig_ch3_job_lxplus.sh
+arguments               = $(slice) $(seed) $(nevents)
+
+should_transfer_files   = YES
+when_to_transfer_output = ON_EXIT
+transfer_input_files    = ../CMS_ZJET_JETMASS.cc, ../CMS_ZJET_JETMASS.info, ../CMS_ZJET_JETMASS.plot, ../gen/herwig_ch3_slice.in.tmpl
+transfer_output_files   = herwig_ch3_s$(slice)_seed$(seed).yoda, herwig_ch3_s$(slice)_seed$(seed).ntuple
+transfer_output_remaps  = "herwig_ch3_s$(slice)_seed$(seed).yoda = ../out/herwig_ch3/herwig_ch3_s$(slice)_seed$(seed).yoda; herwig_ch3_s$(slice)_seed$(seed).ntuple = ../out/herwig_ch3/herwig_ch3_s$(slice)_seed$(seed).ntuple"
+
+output                  = logs/hw_$(slice)_$(seed).out
+error                   = logs/hw_$(slice)_$(seed).err
+log                     = logs/condor.log
+
+# ~3.5-4 h/job on lxplus workers -> need a long flavour (default 'espresso'=20min kills it)
++JobFlavour             = "tomorrow"
+MY.WantOS               = "el9"
+request_cpus            = 1
+request_memory          = 2500 MB
+request_disk            = 2000 MB
+
+queue slice, seed, nevents from joblist.txt
