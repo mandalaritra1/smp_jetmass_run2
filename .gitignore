@@ -115,3 +115,16 @@ rivet/zjet_mglo_s*/
 # ARC review/ is a local working area (response documents + generated figures),
 # not tracked. The reusable diagnostic scripts live in tools/arc_diagnostics/.
 review/
+
+# ARC diagnostic outputs are regenerable from the tools/arc_diagnostics scripts
+# (and the physics results live in research-notes); track only the scripts.
+tools/arc_diagnostics/figs/
+
+# Generator LHE working data (hundreds of MB of event files)
+rivet/lhe_chunks/
+rivet/lhe_cp5/
+# auto-generated MadGraph LALR parser table that leaks into the run dir
+rivet/py.py
+
+# talks/ is a local working area (Typst decks + rendered slides), not tracked.
+talks/
