@@ -635,7 +635,12 @@ def ensure_client(
     test: bool,
     useDefault: bool,
     executor_mode: str | None = None,
+    worker_memory: str | None = None,
 ):
+    """worker_memory overrides the per-worker memory request (default 6 GiB)
+    on the casa/LPC/lxplus clusters. With the streaming executor (no
+    worker-side merges) workers only need chunk-processing headroom, so
+    e.g. "2 GiB" is viable for no-syst runs."""
     from dask.distributed import Client
     from dask.distributed import LocalCluster
     resolved_mode = _resolve_executor_mode(executor_mode=executor_mode, casa=casa)
@@ -666,7 +671,7 @@ def ensure_client(
 
         from coffea_casa import CoffeaCasaCluster
 
-        cluster = CoffeaCasaCluster(memory="6 GiB", cores=1)
+        cluster = CoffeaCasaCluster(memory=worker_memory or "6 GiB", cores=1)
         # Keep a worker floor: with minimum=0 the cluster scales to zero during the
         # idle gap between preprocessing and processing (heavy/many-file datasets like
         # data), which retires the workers holding the preprocessed data and drops the
@@ -688,7 +693,7 @@ def ensure_client(
 
         zip_path = make_package_archive()
         cluster = LPCCondorCluster(
-            memory="6 GiB",
+            memory=worker_memory or "6 GiB",
             transfer_input_files=[str(zip_path)],
             scheduler_options={"dashboard_address": ":8787"},
         )
@@ -725,7 +730,7 @@ def ensure_client(
 
         cluster = CernCluster(
             cores=1,
-            memory="6 GiB",
+            memory=worker_memory or "6 GiB",
             disk="10 GiB",
             death_timeout="60",
             lcg=True,
@@ -979,6 +984,7 @@ def run_from_config(cfg, *, client=None, repo_root=None, log=print):
         client = ensure_client(
             casa=cfg["casa"], test=cfg["test"],
             useDefault=cfg["useDefault"], executor_mode=cfg["executor_mode"],
+            worker_memory=cfg.get("worker_memory"),
         )
         upload_package_if_casa(client, casa=cfg["casa"])
 
