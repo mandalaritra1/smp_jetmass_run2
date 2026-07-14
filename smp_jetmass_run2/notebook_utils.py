@@ -572,16 +572,32 @@ def make_runner(
     chunksize: int = 200_000,
     maxchunks: int | None = 1,
     skipbadfiles: bool = False,
+    treereduce: bool = False,
 ):
     if use_dask:
         if client is None:
             raise ValueError("use_dask=True but no Dask client provided.")
-        executor = processor.DaskExecutor(
-            client=client,
-            status=True,
-            retries=10,
-            treereduction=10,
-        )
+        if treereduce:
+            # coffea DaskExecutor merges chunk outputs on the workers (tree
+            # reduction) -- the partial sums of many-axis histograms can OOM
+            # small condor workers at the end of a run.
+            executor = processor.DaskExecutor(
+                client=client,
+                status=True,
+                retries=10,
+                treereduction=10,
+            )
+        else:
+            # Default: stream each finished chunk back and merge on the client
+            # (peak = running total + one chunk; no worker-side merge spike).
+            # The client still has to hold the full accumulated output.
+            from .streaming_executor import StreamingDaskExecutor
+
+            executor = StreamingDaskExecutor(
+                client=client,
+                status=True,
+                retries=10,
+            )
     else:
         executor = processor.FuturesExecutor(
             workers=workers,

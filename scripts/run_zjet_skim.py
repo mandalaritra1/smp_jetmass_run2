@@ -15,6 +15,9 @@ Config keys (JSON):
     output_mode   : "parquet" | "accumulator"
     pt_min        : leading-jet pT floor (GeV)
     chunksize, maxchunks, workers
+    treereduce    : false (default) streams chunk outputs to the client as they
+                    finish (StreamingDaskExecutor, no worker-side merge spike);
+                    true restores coffea DaskExecutor's worker tree reduction
     samples       : list of {dataset, files:[...]} or {dataset, filelist: "path.txt"}
 """
 from __future__ import annotations
@@ -58,6 +61,7 @@ import numpy as np  # noqa: E402
 from coffea import processor  # noqa: E402
 from coffea.nanoevents import NanoAODSchema  # noqa: E402
 
+from smp_jetmass_run2.streaming_executor import StreamingDaskExecutor  # noqa: E402
 from smp_jetmass_run2.zjet_omnifold_skimmer import (  # noqa: E402
     ZJetOmniFoldSkimmer, to_ak_record)
 
@@ -122,6 +126,20 @@ def _sched_banner(client):
     print("=" * 60, flush=True)
 
 
+def _dask_executor(cfg, client, **dask_kwargs):
+    """Streaming (accumulate-as-completed) executor by default; the
+    ``treereduce`` config key / --treereduce flag restores coffea's
+    DaskExecutor with its worker-side tree reduction. Streaming keeps the
+    merge on the client -- (running total + one chunk) peak -- so many-axis
+    histogram skims can't OOM small workers at the end of the run. The client
+    must still hold the full accumulated output either way.
+    """
+    if cfg.get("treereduce", False):
+        return processor.DaskExecutor(client=client, **dask_kwargs)
+    dask_kwargs.pop("treereduction", None)
+    return StreamingDaskExecutor(client=client, **dask_kwargs)
+
+
 def _make_executor(cfg):
     _quiet_logs()
     mode = cfg.get("executor_mode", "futures")
@@ -136,7 +154,7 @@ def _make_executor(cfg):
         cluster = LocalCluster(n_workers=cfg.get("workers", 4), threads_per_worker=1)
         client = Client(cluster)
         _sched_banner(client)
-        return processor.DaskExecutor(client=client, retries=6), client
+        return _dask_executor(cfg, client, retries=6), client
 
     if mode == "dask-casa":
         import shutil
@@ -154,7 +172,7 @@ def _make_executor(cfg):
         client.upload_file(zip_path)
         _quiet_logs()
         _sched_banner(client)
-        return processor.DaskExecutor(client=client, retries=6, treereduction=8), client
+        return _dask_executor(cfg, client, retries=6, treereduction=8), client
 
     if mode == "dask-lpc":
         import shutil
@@ -182,8 +200,8 @@ def _make_executor(cfg):
         client.upload_file(zip_path)
         _quiet_logs()
         _sched_banner(client)
-        return processor.DaskExecutor(client=client, retries=6, treereduction=8,
-                                      status=False), client
+        return _dask_executor(cfg, client, retries=6, treereduction=8,
+                              status=False), client
 
     raise ValueError(f"unknown executor_mode: {mode}")
 
@@ -217,6 +235,9 @@ def main(argv=None):
     ap.add_argument("--executor-mode", default=None, help="Override config executor_mode.")
     ap.add_argument("--n-workers", type=int, default=None,
                     help="Fixed worker count (overrides adaptive scaling).")
+    ap.add_argument("--treereduce", action="store_true",
+                    help="Merge chunk outputs on the workers (coffea DaskExecutor "
+                         "tree reduction) instead of streaming them to the client.")
     args = ap.parse_args(argv)
 
     cfg = json.loads(args.config.read_text())
@@ -226,6 +247,8 @@ def main(argv=None):
         cfg["executor_mode"] = args.executor_mode
     if args.n_workers:
         cfg["n_workers"] = args.n_workers
+    if args.treereduce:
+        cfg["treereduce"] = True
     outdir = cfg.get("outdir", "outputs/skims")
     if not os.path.isabs(outdir):
         outdir = str(REPO_ROOT / outdir)
