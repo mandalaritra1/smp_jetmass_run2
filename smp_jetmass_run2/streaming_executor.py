@@ -28,6 +28,7 @@ this executor there.
 """
 
 from dataclasses import dataclass
+from functools import partial
 from typing import Optional
 
 from coffea.processor.accumulator import iadd
@@ -38,11 +39,35 @@ from coffea.processor.executor import (
 )
 
 
+def _process_group(function, items):
+    """Process a group of work items sequentially on one worker, merging each
+    chunk's output into a local partial as it is produced. Only (one chunk's
+    events + the partial) are alive at any time, so this cuts the number of
+    full-histogram outputs shipped to the client by len(items) without the
+    processing-memory cost of a larger chunksize."""
+    accumulator = None
+    for item in items:
+        result = function(item)
+        if accumulator is None:
+            accumulator = result
+        else:
+            iadd(accumulator, result)
+    return accumulator
+
+
 @dataclass
 class StreamingDaskExecutor(ExecutorBase):
+    """worker_merge > 1 groups that many consecutive chunks into one worker
+    task (see _process_group). Consecutive chunks usually share a dataset, so
+    the merged partial stays chunk-sized and client-bound traffic drops by
+    ~worker_merge. Trade-offs: a failed chunk retries its whole group, and the
+    per-task wall time scales with worker_merge -- keep n_chunks/worker_merge
+    well above the worker count."""
+
     client: Optional["distributed.Client"] = None  # noqa: F821
     retries: int = 3
     priority: int = 0
+    worker_merge: int = 1
 
     def __getstate__(self):
         # Dask clients are not picklable; drop it if the executor itself ever
@@ -57,6 +82,16 @@ class StreamingDaskExecutor(ExecutorBase):
         if len(items) == 0:
             return accumulator, 0
 
+        merge = max(int(self.worker_merge or 1), 1)
+        if merge > 1:
+            # Group BEFORE the compression wrapper so each chunk output stays
+            # uncompressed within the worker and only the merged partial is
+            # compressed for the trip back to the client.
+            work_items = [items[i:i + merge] for i in range(0, len(items), merge)]
+            function = partial(_process_group, function)
+        else:
+            work_items = items
+
         if self.compression is not None:
             function = _compression_wrapper(
                 self.compression, function, name=self.function_name
@@ -64,20 +99,24 @@ class StreamingDaskExecutor(ExecutorBase):
 
         futures = self.client.map(
             function,
-            items,
+            work_items,
             pure=False,
             priority=self.priority,
             retries=self.retries,
         )
         # KilledWorker only carries the task key; keep the mapping so the error
-        # can name the actual (file, chunk) work item.
-        key_to_item = {f.key: item for f, item in zip(futures, items)}
+        # can name the actual (file, chunk) work item(s).
+        key_to_item = {f.key: item for f, item in zip(futures, work_items)}
+        n_chunks = {
+            f.key: (len(item) if merge > 1 else 1)
+            for f, item in zip(futures, work_items)
+        }
 
         progress = None
         if self.status:
             from tqdm.auto import tqdm
 
-            progress = tqdm(total=len(futures), desc=self.desc, unit=self.unit)
+            progress = tqdm(total=len(items), desc=self.desc, unit=self.unit)
 
         try:
             for future in as_completed(futures):
@@ -99,7 +138,7 @@ class StreamingDaskExecutor(ExecutorBase):
                 else:
                     iadd(accumulator, result)
                 if progress is not None:
-                    progress.update(1)
+                    progress.update(n_chunks[future.key])
         finally:
             if progress is not None:
                 progress.close()

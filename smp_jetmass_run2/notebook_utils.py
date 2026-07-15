@@ -573,6 +573,7 @@ def make_runner(
     maxchunks: int | None = 1,
     skipbadfiles: bool = False,
     treereduce: bool = False,
+    worker_merge: int = 1,
 ):
     if use_dask:
         if client is None:
@@ -597,6 +598,10 @@ def make_runner(
                 client=client,
                 status=True,
                 retries=10,
+                # >1 merges that many consecutive chunks into one worker task,
+                # cutting client-bound traffic by the same factor (big win for
+                # all-syst runs whose per-chunk hist output is large).
+                worker_merge=worker_merge,
             )
     else:
         executor = processor.FuturesExecutor(
@@ -837,6 +842,7 @@ def run_once(
     executor_mode: str | None = None,
     reweight_source: str = "herwig",
     rho_refine: int | None = None,
+    worker_merge: int = 1,
 ):
     print("Running over:", list(fileset.keys())[:10], "..." if len(fileset) > 10 else "")
     mode = normalize_mode_for_channel(mode, channel)
@@ -857,6 +863,7 @@ def run_once(
             chunksize=chunksize_test,
             maxchunks=1,
             skipbadfiles=True,
+            worker_merge=worker_merge,
         )
         debug = True
     else:
@@ -867,6 +874,7 @@ def run_once(
             chunksize=chunksize,
             maxchunks=None,
             skipbadfiles=True,
+            worker_merge=worker_merge,
         )
         debug = False
 
@@ -1001,6 +1009,7 @@ def run_from_config(cfg, *, client=None, repo_root=None, log=print):
             executor_mode=cfg["executor_mode"],
             reweight_source=cfg.get("reweight_source", "herwig"),
             rho_refine=cfg.get("rho_refine", None),
+            worker_merge=cfg.get("worker_merge", 1),
         )
         tag = get_group_tag(index, cfg["era"], group_mode)
         fout = make_output_filename(

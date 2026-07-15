@@ -18,6 +18,9 @@ Config keys (JSON):
     treereduce    : false (default) streams chunk outputs to the client as they
                     finish (StreamingDaskExecutor, no worker-side merge spike);
                     true restores coffea DaskExecutor's worker tree reduction
+    worker_merge  : streaming only; merge this many consecutive chunks into one
+                    worker task (default 1), cutting client-bound traffic by the
+                    same factor -- keep n_chunks/worker_merge >> n_workers
     samples       : list of {dataset, files:[...]} or {dataset, filelist: "path.txt"}
 """
 from __future__ import annotations
@@ -137,7 +140,9 @@ def _dask_executor(cfg, client, **dask_kwargs):
     if cfg.get("treereduce", False):
         return processor.DaskExecutor(client=client, **dask_kwargs)
     dask_kwargs.pop("treereduction", None)
-    return StreamingDaskExecutor(client=client, **dask_kwargs)
+    return StreamingDaskExecutor(client=client,
+                                 worker_merge=cfg.get("worker_merge", 1),
+                                 **dask_kwargs)
 
 
 def _make_executor(cfg):

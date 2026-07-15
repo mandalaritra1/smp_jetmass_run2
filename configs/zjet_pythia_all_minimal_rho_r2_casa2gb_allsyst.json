@@ -14,5 +14,6 @@
   "redirector": "casa",
   "prependstr": "root://xcache/",
   "rho_refine": 2,
-  "worker_memory": "2 GiB"
+  "worker_memory": "3 GiB",
+  "worker_merge": 4
 }
