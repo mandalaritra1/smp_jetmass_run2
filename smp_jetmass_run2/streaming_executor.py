@@ -138,6 +138,14 @@ class StreamingDaskExecutor(ExecutorBase):
                 else:
                     iadd(accumulator, result)
                 if progress is not None:
+                    # scheduler_info() is the client's locally cached view --
+                    # no round-trip, cheap to read per completed chunk.
+                    try:
+                        n_workers = len(self.client.scheduler_info()["workers"])
+                        progress.set_postfix_str(
+                            f"{n_workers} workers", refresh=False)
+                    except Exception:
+                        pass
                     progress.update(n_chunks[future.key])
         finally:
             if progress is not None:

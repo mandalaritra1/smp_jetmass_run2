@@ -4,8 +4,16 @@ import pickle
 import shutil
 import time
 import logging
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
+
+# LCG_110's jupyter_client signs every kernel message with datetime.utcnow(),
+# which python 3.13 deprecates -- one warning PER MESSAGE floods notebook cell
+# output. Harness noise, not analysis code; silence it.
+warnings.filterwarnings(
+    "ignore", message=".*utcnow.*", category=DeprecationWarning
+)
 
 from coffea import processor
 from coffea.nanoevents import NanoAODSchema
