@@ -643,6 +643,21 @@ def _resolve_executor_mode(
     return "dask-casa" if casa else "futures"
 
 
+def normalize_worker_memory(worker_memory):
+    """A bare number ('4', 4, 4.0) means GiB. Without this, dask parses a
+    unitless string as BYTES -- CernCluster(memory='4') spawns workers with
+    `--memory-limit 4.0B`, which pause instantly and hang the whole run."""
+    if worker_memory is None:
+        return None
+    if isinstance(worker_memory, (int, float)):
+        return f"{worker_memory} GiB"
+    s = str(worker_memory).strip()
+    try:
+        return f"{float(s)} GiB"
+    except ValueError:
+        return s
+
+
 def ensure_client(
     casa: bool,
     test: bool,
@@ -654,6 +669,7 @@ def ensure_client(
     on the casa/LPC/lxplus clusters. With the streaming executor (no
     worker-side merges) workers only need chunk-processing headroom, so
     e.g. "2 GiB" is viable for no-syst runs."""
+    worker_memory = normalize_worker_memory(worker_memory)
     from dask.distributed import Client
     from dask.distributed import LocalCluster
     resolved_mode = _resolve_executor_mode(executor_mode=executor_mode, casa=casa)

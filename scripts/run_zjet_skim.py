@@ -64,6 +64,7 @@ import numpy as np  # noqa: E402
 from coffea import processor  # noqa: E402
 from coffea.nanoevents import NanoAODSchema  # noqa: E402
 
+from smp_jetmass_run2.notebook_utils import normalize_worker_memory  # noqa: E402
 from smp_jetmass_run2.streaming_executor import StreamingDaskExecutor  # noqa: E402
 from smp_jetmass_run2.zjet_omnifold_skimmer import (  # noqa: E402
     ZJetOmniFoldSkimmer, to_ak_record)
@@ -166,7 +167,8 @@ def _make_executor(cfg):
         from coffea_casa import CoffeaCasaCluster
         from distributed import Client
 
-        cluster = CoffeaCasaCluster(cores=1, memory=cfg.get("worker_memory", "6 GiB"))
+        cluster = CoffeaCasaCluster(
+            cores=1, memory=normalize_worker_memory(cfg.get("worker_memory", "6 GiB")))
         cluster.adapt(minimum=cfg.get("min_workers", 1), maximum=cfg.get("max_workers", 100))
         client = Client(cluster)
         # Ship the user package so ZJetOmniFoldSkimmer is importable on every
@@ -191,7 +193,7 @@ def _make_executor(cfg):
         shutil.make_archive(zip_path[:-4], "zip", str(pkg_dir.parent), pkg_dir.name)
 
         cluster = LPCCondorCluster(
-            memory=cfg.get("worker_memory", "6GB"),
+            memory=normalize_worker_memory(cfg.get("worker_memory", "6GB")),
             transfer_input_files=[zip_path],
             scheduler_options={"dashboard_address": ":%d" % cfg.get("dashboard_port", 8787)},
         )
