@@ -14,6 +14,19 @@ from pathlib import Path
 warnings.filterwarnings(
     "ignore", message=".*utcnow.*", category=DeprecationWarning
 )
+# The filter alone does not stick (libraries in the run path reset warning
+# filters), so also fix the emitter: replace jupyter_client's deprecated
+# utcnow() with the timezone-aware equivalent it is warning about.
+try:
+    import datetime as _datetime
+    import jupyter_client.session as _jc_session
+
+    def _utcnow_tz_aware():
+        return _datetime.datetime.now(_datetime.timezone.utc)
+
+    _jc_session.utcnow = _utcnow_tz_aware
+except Exception:  # no jupyter_client outside notebook kernels -- fine
+    pass
 
 from coffea import processor
 from coffea.nanoevents import NanoAODSchema
