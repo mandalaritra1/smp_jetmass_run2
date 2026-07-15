@@ -63,10 +63,9 @@ EXECUTOR_MODE_OPTIONS = [
     "dask-casa",
     "dask-lpc",
     "dask-lxplus",
-    # analysis facilities (see ensure_client; both UNTESTED -- added 2026-07-15
-    # while casa/LPC access was down, pending accounts to validate):
+    # Purdue AF via Dask Gateway (see ensure_client): login works, but the
+    # worker software env is unresolved -- NOT yet usable, kept as a stub.
     "dask-purdue",
-    "dask-infn",
 ]
 REDIRECTOR_PREPENDS = {
     "local": "",
@@ -797,8 +796,13 @@ def ensure_client(
 
     if resolved_mode == "dask-purdue":
         # Purdue Analysis Facility (cms.geddes.rcac.purdue.edu), Dask Gateway
-        # backend. UNTESTED as of 2026-07-15 (added while casa/LPC were down;
-        # needs a Purdue AF account to validate). Docs:
+        # backend. STATUS 2026-07-15: login works (CERN account) and this code
+        # follows their docs, but the mode is NOT yet usable: the facility's
+        # global pixi env did not actually provide coffea when we tried it, so
+        # the worker software environment still has to be figured out --
+        # probably a project pixi env in this repo pinning coffea==2026.5.0,
+        # passed via PURDUE_AF_PIXI_PROJECT. Left in place as the starting
+        # point for that work. Docs:
         # https://purdue-af.readthedocs.io/en/latest/guide-dask-gateway.html
         try:
             from dask_gateway import Gateway
@@ -839,48 +843,10 @@ def ensure_client(
         print("Created Purdue AF Dask Gateway client.")
         return client
 
-    if resolved_mode == "dask-infn":
-        # INFN CMS Analysis Facility (cms-it-hub.cloud.cnaf.infn.it):
-        # Dask-on-HTCondor via dask_remote_jobqueue. Works from their
-        # JupyterLab or from a laptop/CI inside their jupyterlab docker image
-        # with IAM tokens exported (JUPYTERHUB_API_TOKEN, REFRESH_TOKEN,
-        # IAM_SERVER, IAM_CLIENT_ID, IAM_CLIENT_SECRET). UNTESTED as of
-        # 2026-07-15 (needs an INFN AF account to validate). Docs:
-        # https://infn-cms-analysisfacility.readthedocs.io/en/latest/tutorials/CI_access/
-        try:
-            from dask_remote_jobqueue import RemoteHTCondor
-        except ImportError as exc:
-            raise ImportError(
-                "executor_mode='dask-infn' requires the dask_remote_jobqueue "
-                "package (available in the INFN AF jupyterlab image, e.g. "
-                "ghcr.io/comp-dev-cms-ita/jupyterlab:AF20-alma9-*)."
-            ) from exc
-
-        import getpass
-
-        # worker_memory is not plumbed here: worker resources are set by the
-        # facility's HTCondor job template, not by the client.
-        cluster = RemoteHTCondor(
-            user=os.environ.get("INFN_AF_USER", getpass.getuser()),
-            ssh_url=os.environ.get("INFN_AF_SSH_URL",
-                                   "cms-it-hub.cloud.cnaf.infn.it"),
-            ssh_url_port=int(os.environ.get("INFN_AF_SSH_PORT", "31023")),
-            sitename=os.environ.get("INFN_AF_SITE", ""),
-            singularity_wn_image=os.environ.get(
-                "INFN_AF_WN_IMAGE",
-                "/cvmfs/unpacked.cern.ch/registry.hub.docker.com/dodasts/"
-                "root-in-docker:ubuntu22-kernel-v1"),
-            asynchronous=False,
-        )
-        cluster.start()
-        n_workers = int(os.environ.get("INFN_AF_WORKERS", "50"))
-        if hasattr(cluster, "adapt"):
-            cluster.adapt(minimum=2, maximum=n_workers)
-        else:
-            cluster.scale(n_workers)
-        client = Client(cluster)
-        print("Created INFN AF RemoteHTCondor client.")
-        return client
+    # (An INFN CMS AF backend via dask_remote_jobqueue existed briefly; removed
+    # because the facility requires registration we don't have. See git history
+    # -- "Add dask-purdue and dask-infn executor modes" -- if it becomes
+    # relevant again.)
 
     raise ValueError(f"Unsupported executor_mode '{resolved_mode}'")
 
