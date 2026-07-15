@@ -1201,7 +1201,15 @@ def run_from_config(cfg, *, client=None, repo_root=None, log=print):
         raise
     finally:
         if own_client and client is not None:
+            # client.close() only disconnects -- the cluster (and its claimed
+            # batch slots, e.g. a fixed n_workers pool on lxplus) survives in
+            # this process until closed. client.cluster is None for clients
+            # connected by address (useDefault -> casa's prespawned cluster,
+            # which must NOT be torn down here).
+            cluster = getattr(client, "cluster", None)
             client.close()
+            if cluster is not None:
+                cluster.close()
 
     log(f"Number of group outputs: {len(outputs)}")
     return outputs, last_out
