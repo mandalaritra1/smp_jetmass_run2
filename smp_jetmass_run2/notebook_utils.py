@@ -684,11 +684,17 @@ def ensure_client(
     useDefault: bool,
     executor_mode: str | None = None,
     worker_memory: str | None = None,
+    n_workers: int | None = None,
 ):
     """worker_memory overrides the per-worker memory request (default 6 GiB)
     on the casa/LPC/lxplus clusters. With the streaming executor (no
     worker-side merges) workers only need chunk-processing headroom, so
-    e.g. "2 GiB" is viable for no-syst runs."""
+    e.g. "2 GiB" is viable for no-syst runs.
+
+    n_workers requests a FIXED pool (cluster.scale) on the lxplus/LPC batch
+    clusters instead of adaptive scaling -- recommended for production:
+    HTCondor's slow worker startup makes adapt flap and can leave a
+    single-worker straggler tail."""
     worker_memory = normalize_worker_memory(worker_memory)
     from dask.distributed import Client
     from dask.distributed import LocalCluster
@@ -746,7 +752,10 @@ def ensure_client(
             transfer_input_files=[str(zip_path)],
             scheduler_options={"dashboard_address": ":8787"},
         )
-        cluster.adapt(minimum=1, maximum=100)
+        if n_workers:
+            cluster.scale(n_workers)
+        else:
+            cluster.adapt(minimum=1, maximum=100)
         client = Client(cluster)
         print("Created LPCCondorCluster client.")
         return client
@@ -809,9 +818,9 @@ def ensure_client(
         )
         # Adaptive scaling flaps on HTCondor (minutes of worker startup
         # latency + eager retirement as the queue drains -> single-worker
-        # tails). For production, set DASK_LXPLUS_WORKERS=N to request a
-        # fixed pool instead.
-        n_fixed = os.environ.get("DASK_LXPLUS_WORKERS")
+        # tails). For production, request a fixed pool: n_workers config key
+        # (the notebook's "lx workers" widget) or DASK_LXPLUS_WORKERS env.
+        n_fixed = n_workers or os.environ.get("DASK_LXPLUS_WORKERS")
         if n_fixed:
             cluster.scale(int(n_fixed))
             scale_msg = f"fixed scale {n_fixed} workers"
@@ -1104,6 +1113,7 @@ def run_from_config(cfg, *, client=None, repo_root=None, log=print):
             casa=cfg["casa"], test=cfg["test"],
             useDefault=cfg["useDefault"], executor_mode=cfg["executor_mode"],
             worker_memory=cfg.get("worker_memory"),
+            n_workers=int(cfg.get("n_workers") or 0) or None,
         )
         upload_package_if_casa(client, casa=cfg["casa"])
 
