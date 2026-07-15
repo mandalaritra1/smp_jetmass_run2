@@ -807,11 +807,24 @@ def ensure_client(
                 "use_x509userproxy": "true",
             },
         )
-        cluster.adapt(minimum=1, maximum=100)
+        # Adaptive scaling flaps on HTCondor (minutes of worker startup
+        # latency + eager retirement as the queue drains -> single-worker
+        # tails). For production, set DASK_LXPLUS_WORKERS=N to request a
+        # fixed pool instead.
+        n_fixed = os.environ.get("DASK_LXPLUS_WORKERS")
+        if n_fixed:
+            cluster.scale(int(n_fixed))
+            scale_msg = f"fixed scale {n_fixed} workers"
+        else:
+            cluster.adapt(
+                minimum=int(os.environ.get("DASK_LXPLUS_MIN_WORKERS", "1")),
+                maximum=int(os.environ.get("DASK_LXPLUS_MAX_WORKERS", "100")),
+            )
+            scale_msg = "adaptive 1-100 workers"
         client = Client(cluster)
         print(
             f"Created CernCluster (lxplus) client "
-            f"[JobFlavour={job_flavour}, logs={log_dir}]."
+            f"[JobFlavour={job_flavour}, {scale_msg}, logs={log_dir}]."
         )
         return client
 

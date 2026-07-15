@@ -170,6 +170,8 @@ otherwise):
 |---|---|---|
 | `DASK_LXPLUS_JOB_FLAVOUR` | `longlunch` | HTCondor walltime tier: `espresso`(20m) · `microcentury`(1h) · `longlunch`(2h) · `workday`(8h) · `tomorrow`(1d) · `testmatch`(3d) · `nextweek`(1w) |
 | `DASK_LXPLUS_LOG_DIR` | `~/dask_lxplus_logs` | where condor writes worker job logs (point at EOS for long-lived logs) |
+| `DASK_LXPLUS_WORKERS` | (unset) | request a **fixed** pool of N workers (`cluster.scale`) instead of adaptive scaling — recommended for production; HTCondor's slow worker startup makes adapt flap and can leave a 1-worker straggler tail |
+| `DASK_LXPLUS_MIN_WORKERS` / `DASK_LXPLUS_MAX_WORKERS` | `1` / `100` | adaptive-scaling bounds when `DASK_LXPLUS_WORKERS` is unset |
 
 The cluster auto-scales `adapt(minimum=1, maximum=100)`. If most of your input
 files live on European sites, swap the redirector for the closer
