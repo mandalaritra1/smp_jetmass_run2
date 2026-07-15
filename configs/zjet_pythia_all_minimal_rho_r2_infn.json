@@ -1,0 +1,18 @@
+{
+  "channel": "zjet",
+  "dataset": "pythia",
+  "era": "all",
+  "mode": "minimal_rho",
+  "systematic_profile": "no_syst",
+  "executor_mode": "dask-infn",
+  "casa": false,
+  "test": false,
+  "useDefault": false,
+  "chunksize": 50000,
+  "chunksize_test": 200000,
+  "group_mode": "all_in_one",
+  "redirector": "eu",
+  "prependstr": "root://xrootd-cms.infn.it/",
+  "rho_refine": 2,
+  "worker_merge": 4
+}

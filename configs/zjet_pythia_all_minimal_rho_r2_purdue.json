@@ -1,0 +1,19 @@
+{
+  "channel": "zjet",
+  "dataset": "pythia",
+  "era": "all",
+  "mode": "minimal_rho",
+  "systematic_profile": "no_syst",
+  "executor_mode": "dask-purdue",
+  "casa": false,
+  "test": false,
+  "useDefault": false,
+  "chunksize": 50000,
+  "chunksize_test": 200000,
+  "group_mode": "all_in_one",
+  "redirector": "global",
+  "prependstr": "root://cms-xrd-global.cern.ch/",
+  "rho_refine": 2,
+  "worker_memory": "4 GiB",
+  "worker_merge": 4
+}

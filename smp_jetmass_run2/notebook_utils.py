@@ -63,6 +63,10 @@ EXECUTOR_MODE_OPTIONS = [
     "dask-casa",
     "dask-lpc",
     "dask-lxplus",
+    # analysis facilities (see ensure_client; both UNTESTED -- added 2026-07-15
+    # while casa/LPC access was down, pending accounts to validate):
+    "dask-purdue",
+    "dask-infn",
 ]
 REDIRECTOR_PREPENDS = {
     "local": "",
@@ -71,6 +75,10 @@ REDIRECTOR_PREPENDS = {
     # CERN/lxplus: CMS global redirector. Swap for the closer Europe redirector
     # root://xrootd-cms.infn.it/ if most inputs live on EU sites.
     "lxplus": "root://cms-xrd-global.cern.ch/",
+    # AAA fallbacks for facilities without a local xcache (Purdue/INFN AF):
+    # global redirector, and the EU redirector which is closer to INFN sites.
+    "global": "root://cms-xrd-global.cern.ch/",
+    "eu": "root://xrootd-cms.infn.it/",
 }
 REDIRECTOR_OPTIONS = list(REDIRECTOR_PREPENDS)
 
@@ -769,6 +777,93 @@ def ensure_client(
             f"Created CernCluster (lxplus) client "
             f"[JobFlavour={job_flavour}, logs={log_dir}]."
         )
+        return client
+
+    if resolved_mode == "dask-purdue":
+        # Purdue Analysis Facility (cms.geddes.rcac.purdue.edu), Dask Gateway
+        # backend. UNTESTED as of 2026-07-15 (added while casa/LPC were down;
+        # needs a Purdue AF account to validate). Docs:
+        # https://purdue-af.readthedocs.io/en/latest/guide-dask-gateway.html
+        try:
+            from dask_gateway import Gateway
+        except ImportError as exc:
+            raise ImportError(
+                "executor_mode='dask-purdue' requires the dask-gateway package "
+                "and is meant to run inside a Purdue AF JupyterLab session "
+                "(https://cms.geddes.rcac.purdue.edu/hub)."
+            ) from exc
+
+        from dask.utils import parse_bytes
+
+        # Inside the AF, Gateway() picks up address/auth from the session env.
+        gateway = Gateway()
+        cluster_kwargs = {
+            "worker_cores": 1,
+            # Gateway expects a number in GB, not a "6 GiB" string.
+            "worker_memory": parse_bytes(worker_memory or "4 GiB") / 2**30,
+            # Forward the session environment (tokens, X509 proxy path).
+            "env": dict(os.environ),
+        }
+        # Workers import software from a shared pixi/conda env, NOT from an
+        # image. The global env (/work/pixi/global) had coffea 2025.12.0 when
+        # this was written -- older than the 2026.5.0 this repo is validated
+        # on -- so prefer pointing PURDUE_AF_PIXI_PROJECT at a project env
+        # that pins coffea. The analysis package itself still arrives via
+        # client.upload_file (upload_package_if_casa).
+        pixi_project = os.environ.get("PURDUE_AF_PIXI_PROJECT")
+        conda_env = os.environ.get("PURDUE_AF_CONDA_ENV")
+        if pixi_project:
+            cluster_kwargs["pixi_project"] = pixi_project
+        elif conda_env:
+            cluster_kwargs["conda_env"] = conda_env
+        cluster = gateway.new_cluster(**cluster_kwargs)
+        # Same worker floor rationale as dask-casa (see above).
+        cluster.adapt(minimum=2, maximum=int(os.environ.get("PURDUE_AF_MAX_WORKERS", "200")))
+        client = cluster.get_client()
+        print("Created Purdue AF Dask Gateway client.")
+        return client
+
+    if resolved_mode == "dask-infn":
+        # INFN CMS Analysis Facility (cms-it-hub.cloud.cnaf.infn.it):
+        # Dask-on-HTCondor via dask_remote_jobqueue. Works from their
+        # JupyterLab or from a laptop/CI inside their jupyterlab docker image
+        # with IAM tokens exported (JUPYTERHUB_API_TOKEN, REFRESH_TOKEN,
+        # IAM_SERVER, IAM_CLIENT_ID, IAM_CLIENT_SECRET). UNTESTED as of
+        # 2026-07-15 (needs an INFN AF account to validate). Docs:
+        # https://infn-cms-analysisfacility.readthedocs.io/en/latest/tutorials/CI_access/
+        try:
+            from dask_remote_jobqueue import RemoteHTCondor
+        except ImportError as exc:
+            raise ImportError(
+                "executor_mode='dask-infn' requires the dask_remote_jobqueue "
+                "package (available in the INFN AF jupyterlab image, e.g. "
+                "ghcr.io/comp-dev-cms-ita/jupyterlab:AF20-alma9-*)."
+            ) from exc
+
+        import getpass
+
+        # worker_memory is not plumbed here: worker resources are set by the
+        # facility's HTCondor job template, not by the client.
+        cluster = RemoteHTCondor(
+            user=os.environ.get("INFN_AF_USER", getpass.getuser()),
+            ssh_url=os.environ.get("INFN_AF_SSH_URL",
+                                   "cms-it-hub.cloud.cnaf.infn.it"),
+            ssh_url_port=int(os.environ.get("INFN_AF_SSH_PORT", "31023")),
+            sitename=os.environ.get("INFN_AF_SITE", ""),
+            singularity_wn_image=os.environ.get(
+                "INFN_AF_WN_IMAGE",
+                "/cvmfs/unpacked.cern.ch/registry.hub.docker.com/dodasts/"
+                "root-in-docker:ubuntu22-kernel-v1"),
+            asynchronous=False,
+        )
+        cluster.start()
+        n_workers = int(os.environ.get("INFN_AF_WORKERS", "50"))
+        if hasattr(cluster, "adapt"):
+            cluster.adapt(minimum=2, maximum=n_workers)
+        else:
+            cluster.scale(n_workers)
+        client = Client(cluster)
+        print("Created INFN AF RemoteHTCondor client.")
         return client
 
     raise ValueError(f"Unsupported executor_mode '{resolved_mode}'")

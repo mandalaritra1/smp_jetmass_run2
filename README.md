@@ -175,6 +175,33 @@ The cluster auto-scales `adapt(minimum=1, maximum=100)`. If most of your input
 files live on European sites, swap the redirector for the closer
 `root://xrootd-cms.infn.it/`.
 
+### Purdue / INFN Analysis Facilities (UNTESTED)
+
+Two additional executor modes target CMS analysis facilities; both were added
+2026-07-15 from their public docs while casa/LPC were unavailable and are
+**not yet validated** (they need facility accounts):
+
+- **`dask-purdue`** — [Purdue AF](https://purdue-af.readthedocs.io/)
+  (`cms.geddes.rcac.purdue.edu/hub`; Purdue, CERN, or FNAL login). Runs inside
+  their JupyterLab via Dask Gateway. Workers import software from a shared
+  pixi/conda env: the global env pins an older coffea than this repo is
+  validated on, so set `PURDUE_AF_PIXI_PROJECT` (or `PURDUE_AF_CONDA_ENV`) to
+  a project env pinning `coffea==2026.5.0`. `PURDUE_AF_MAX_WORKERS` caps the
+  adaptive scaling (default 200; facility limit 400 cores/user).
+  Example config: `configs/zjet_pythia_all_minimal_rho_r2_purdue.json`.
+- **`dask-infn`** — [INFN CMS AF](https://infn-cms-analysisfacility.readthedocs.io/)
+  (`cms-it-hub.cloud.cnaf.infn.it`; CMS IAM login). Dask-on-HTCondor via
+  `dask_remote_jobqueue.RemoteHTCondor`; works from their JupyterLab or from a
+  laptop/CI inside their jupyterlab docker image with the IAM token env vars
+  exported (see their "Access from laptop/CI" tutorial). Knobs (all env vars):
+  `INFN_AF_USER`, `INFN_AF_SITE`, `INFN_AF_WORKERS`, `INFN_AF_WN_IMAGE`,
+  `INFN_AF_SSH_URL`/`INFN_AF_SSH_PORT`. Worker memory is set by the facility's
+  job template, not by `worker_memory`.
+  Example config: `configs/zjet_pythia_all_minimal_rho_r2_infn.json`.
+
+Both paths ship the analysis package via `client.upload_file` like the other
+dask modes and default to AAA redirectors (`"global"` / `"eu"`).
+
 ### coffea.casa Setup
 
 Go to [coffea.casa](https://coffea.casa), log in, choose a recent coffea-2025
@@ -238,7 +265,7 @@ Key fields (defaults filled in by `validate_analysis_config`):
 | `era` | data-taking period | `2016APV` · `2016` · `2017` · `2018` · `all` |
 | `mode` | histogram set | `minimal` (mass+response) · `minimal_rho` (rho+response) · `validation`/`full` (diagnostics) · `mass_jk`/`rho_jk` (jackknife) |
 | `systematic_profile` | which systematics | `all_syst` · `minimal_syst` · `no_syst` |
-| `executor_mode` | where it runs | `iterative` · `futures` · `dask-local` · `dask-lpc` · `dask-lxplus` · `dask-casa` |
+| `executor_mode` | where it runs | `iterative` · `futures` · `dask-local` · `dask-lpc` · `dask-lxplus` · `dask-casa` · `dask-purdue` · `dask-infn` (last two untested) |
 | `casa` / `redirector` / `prependstr` | file access | `dask-casa` uses `casa`+`root://xcache/`; LPC uses `lpc`+`root://cmsxrootd.fnal.gov/`; lxplus uses `lxplus`+`root://cms-xrd-global.cern.ch/` |
 | `test` | 1 file / 1 chunk smoke run | `true`/`false` |
 | `dataset_filter` | hadronic only: keep DAS names containing this substring | e.g. `"HT1000to1500"` |
