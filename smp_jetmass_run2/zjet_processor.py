@@ -2364,23 +2364,34 @@ class QJetMassProcessor(processor.ProcessorABC):
                                     fill_hist(self.hists, "y_flavor_jet0_gen", dataset = dataset, y = gen_jet_truth.rapidity, n = parton_flavor, systematic = syst, weight = weights_gen )
 
                                     #### Second flavor definition: nearest outgoing
-                                    #### hard-process parton within dR < jetR. The central
-                                    #### madgraphMLM-herwig7 NanoAODv9 samples have
-                                    #### GenJetAK8.partonFlavour == 0 everywhere (the CMSSW
-                                    #### jet-flavour ghost clustering selects shower partons
-                                    #### by Pythia-specific status codes absent in Herwig
-                                    #### events), so the ghost-based split above is empty
-                                    #### there; this dR-based definition works for every
-                                    #### sample and doubles as a matching-definition
-                                    #### cross-check.
-                                    gen_parts = events0.GenPart[sel_gen]
-                                    abs_gp_pdg = np.abs(gen_parts.pdgId)
-                                    hard_partons = gen_parts[
-                                        ((abs_gp_pdg <= 5) | (abs_gp_pdg == 21))
-                                        & (abs_gp_pdg >= 1)
-                                        & gen_parts.hasFlags(["isHardProcess"])
-                                        & (gen_parts.pt > 10)  # drops incoming beam-axis partons
-                                    ]
+                                    #### hard-scattering (matrix-element) parton within
+                                    #### dR < jetR. The central madgraphMLM-herwig7
+                                    #### NanoAODv9 samples have GenJetAK8.partonFlavour == 0
+                                    #### everywhere AND empty isHardProcess statusFlags
+                                    #### (both keyed on Pythia-specific status codes), so
+                                    #### neither ghost association nor GenPart flags work
+                                    #### there. LHEPart (the MLM matrix-element record,
+                                    #### status 1 = outgoing) is shared by construction
+                                    #### between the pythia8 and herwig7 productions and
+                                    #### is generator-independent; fall back to GenPart
+                                    #### isHardProcess for non-LHE samples.
+                                    if hasattr(events0, "LHEPart"):
+                                        lhe_parts = events0.LHEPart[sel_gen]
+                                        abs_lhe_pdg = np.abs(lhe_parts.pdgId)
+                                        hard_partons = lhe_parts[
+                                            (lhe_parts.status == 1)
+                                            & ((abs_lhe_pdg <= 5) | (abs_lhe_pdg == 21))
+                                            & (abs_lhe_pdg >= 1)
+                                        ]
+                                    else:
+                                        gen_parts = events0.GenPart[sel_gen]
+                                        abs_gp_pdg = np.abs(gen_parts.pdgId)
+                                        hard_partons = gen_parts[
+                                            ((abs_gp_pdg <= 5) | (abs_gp_pdg == 21))
+                                            & (abs_gp_pdg >= 1)
+                                            & gen_parts.hasFlags(["isHardProcess"])
+                                            & (gen_parts.pt > 10)  # drops incoming beam-axis partons
+                                        ]
                                     dr23 = hard_partons.delta_r(gen_jet_truth)
                                     imin23 = ak.argmin(dr23, axis=1, keepdims=True)
                                     nearest_pdg23 = ak.fill_none(
