@@ -1,0 +1,16 @@
+{
+  "channel": "zjet",
+  "dataset": "herwig",
+  "era": "2018",
+  "mode": "validation",
+  "systematic_profile": "no_syst",
+  "executor_mode": "futures",
+  "casa": false,
+  "test": true,
+  "useDefault": false,
+  "chunksize": 50000,
+  "chunksize_test": 50000,
+  "group_mode": "all_in_one",
+  "redirector": "casa",
+  "prependstr": "root://xcache/"
+}

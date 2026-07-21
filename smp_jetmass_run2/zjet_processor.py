@@ -308,6 +308,7 @@ class QJetMassProcessor(processor.ProcessorABC):
             
             register_hist(self.hists, "pt_jet0", [dataset_axis, pt_axis, syst_axis])
             register_hist(self.hists, "pt_flavor_jet0_gen", [dataset_axis, pt_axis, n_axis, syst_axis])
+            register_hist(self.hists, "pt_flavor23_jet0_gen", [dataset_axis, pt_axis, n_axis, syst_axis])
             register_hist(self.hists, "y_flavor_jet0_gen", [dataset_axis, y_axis, n_axis, syst_axis])
             register_hist(self.hists, "mass_flavor_jet0_gen", [dataset_axis, mass_axis, parton_flavor_axis, syst_axis])
             register_hist(self.hists, "mpt_flavor_jet0_gen", [dataset_axis, mgen_over_pt_axis, parton_flavor_axis, syst_axis])
@@ -2361,6 +2362,36 @@ class QJetMassProcessor(processor.ProcessorABC):
 
                                     fill_hist(self.hists, "pt_flavor_jet0_gen", dataset = dataset, pt = ptgen, n = parton_flavor, systematic = syst, weight = weights_gen )
                                     fill_hist(self.hists, "y_flavor_jet0_gen", dataset = dataset, y = gen_jet_truth.rapidity, n = parton_flavor, systematic = syst, weight = weights_gen )
+
+                                    #### Second flavor definition: nearest outgoing
+                                    #### hard-process parton within dR < jetR. The central
+                                    #### madgraphMLM-herwig7 NanoAODv9 samples have
+                                    #### GenJetAK8.partonFlavour == 0 everywhere (the CMSSW
+                                    #### jet-flavour ghost clustering selects shower partons
+                                    #### by Pythia-specific status codes absent in Herwig
+                                    #### events), so the ghost-based split above is empty
+                                    #### there; this dR-based definition works for every
+                                    #### sample and doubles as a matching-definition
+                                    #### cross-check.
+                                    gen_parts = events0.GenPart[sel_gen]
+                                    abs_gp_pdg = np.abs(gen_parts.pdgId)
+                                    hard_partons = gen_parts[
+                                        ((abs_gp_pdg <= 5) | (abs_gp_pdg == 21))
+                                        & (abs_gp_pdg >= 1)
+                                        & gen_parts.hasFlags(["isHardProcess"])
+                                        & (gen_parts.pt > 10)  # drops incoming beam-axis partons
+                                    ]
+                                    dr23 = hard_partons.delta_r(gen_jet_truth)
+                                    imin23 = ak.argmin(dr23, axis=1, keepdims=True)
+                                    nearest_pdg23 = ak.fill_none(
+                                        ak.firsts(np.abs(hard_partons[imin23].pdgId)), 0
+                                    )
+                                    matched23 = ak.fill_none(ak.firsts(dr23[imin23]) < jetR, False)
+                                    flavor23 = ak.where(
+                                        matched23 & (nearest_pdg23 >= 1) & (nearest_pdg23 <= 5), 1,
+                                        ak.where(matched23 & (nearest_pdg23 == 21), 2, 0),
+                                    )
+                                    fill_hist(self.hists, "pt_flavor23_jet0_gen", dataset = dataset, pt = ptgen, n = flavor23, systematic = syst, weight = weights_gen )
 
                                     valid_validation_jet = (
                                         ~ak.is_none(gen_jet_truth.pt)

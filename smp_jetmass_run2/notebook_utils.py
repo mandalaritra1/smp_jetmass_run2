@@ -696,8 +696,6 @@ def ensure_client(
     HTCondor's slow worker startup makes adapt flap and can leave a
     single-worker straggler tail."""
     worker_memory = normalize_worker_memory(worker_memory)
-    from dask.distributed import Client
-    from dask.distributed import LocalCluster
     resolved_mode = _resolve_executor_mode(executor_mode=executor_mode, casa=casa)
 
     if test:
@@ -706,6 +704,10 @@ def ensure_client(
     if resolved_mode == "futures":
         print("Using FuturesExecutor without a Dask client.")
         return None
+
+    # deferred: the futures executor must work without distributed installed
+    from dask.distributed import Client
+    from dask.distributed import LocalCluster
 
     if resolved_mode == "dask-local":
         cluster = LocalCluster(

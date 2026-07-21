@@ -36,23 +36,32 @@ def parse_args() -> argparse.Namespace:
         metavar="LABEL=PATH",
         help="One or more labeled validation pickles, e.g. Pythia=outputs/validation_pythia_all.pkl",
     )
+    parser.add_argument(
+        "--hist",
+        default="pt_flavor_jet0_gen",
+        help="Flavor histogram to use: pt_flavor_jet0_gen (GenJetAK8.partonFlavour ghost "
+        "association) or pt_flavor23_jet0_gen (nearest outgoing hard-process parton, "
+        "dR < 0.8 — works for the private Herwig NanoAOD where partonFlavour is empty).",
+    )
     return parser.parse_args()
 
 
-def load_pt_flavor(path: Path):
+def load_pt_flavor(path: Path, hist_name: str):
     with path.open("rb") as handle:
         out = pickle.load(handle)
-    if "pt_flavor_jet0_gen" not in out:
+    if hist_name not in out:
         raise KeyError(
-            f"{path}: no pt_flavor_jet0_gen histogram. "
+            f"{path}: no {hist_name} histogram. "
             "Re-run the zjet processor in validation mode (configs/zjet_*_validation.json)."
         )
-    h = out["pt_flavor_jet0_gen"]
-    if "syst" in h.axes.name:
-        try:
-            h = h[{"syst": "nominal"}]
-        except Exception:
-            pass
+    h = out[hist_name]
+    for syst_axis in ("syst", "systematic"):
+        if syst_axis in h.axes.name:
+            try:
+                h = h[{syst_axis: "nominal"}]
+            except Exception:
+                pass
+            break
     return h.project("pt", "n")
 
 
@@ -97,7 +106,7 @@ def main() -> int:
         label, _, path = spec.partition("=")
         if not path:
             raise SystemExit(f"Bad input spec '{spec}': expected LABEL=PATH")
-        results[label] = load_pt_flavor(Path(path))
+        results[label] = load_pt_flavor(Path(path), args.hist)
 
     header = f"{'pT window [GeV]':<18}" + "".join(
         f"{label + ' f_q [%]':>20}{label + ' other [%]':>18}" for label in results
