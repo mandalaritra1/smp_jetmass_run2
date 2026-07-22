@@ -60,3 +60,48 @@ Rules of thumb:
   For all-years all-syst on a small submit machine, use
   `"group_mode": "per_group"` → one output file per year, one year in memory
   at a time.
+
+## JMS/JMR unity reskim (2026-07-22) — comparison vs arc_r2
+
+The arc_r2 pythia production ran the **old per-year JMS/JMR tables** (JMS
+0.982/0.999 and JMR 1.09/1.108 centrals in 2017/2018; 2016 JMR ±20%); the UL
+recommendation is **SF = 1 with 1% (JMS) / 2% (JMR)** for the groomed mass,
+deviations doubled for ungroomed (see
+`ai-wiki/wiki/bugs/zjet_stale_jmsjmr_tables_arc_r2.md`). The fix lives in
+`smp_jetmass_run2/corrections.py` (`jmssf`/`jmrsf`) — **commit and push it
+before running; the configs are identical to the arc_r2 ones and carry no
+JMS/JMR knob of their own.**
+
+Two configs:
+
+- `zjet_pythia_all_minimal_rho_r2_casa2gb_jmsjmr_unity.json` — comparison run,
+  `minimal_syst` (nominal + JER/JMS/JMR up/down). Enough to see the
+  nominal-response shift and the new JMS/JMR bands. Run this first.
+- `zjet_pythia_all_minimal_rho_r2_casa2gb_allsyst_jmsjmr_unity.json` — full 87
+  systematics, to replace the arc_r2 pkls once the comparison is understood.
+
+On coffea-casa (same session setup as the arc_r2 production):
+
+```bash
+git pull    # must include the corrections.py unity port
+python scripts/run_analysis_cli.py --config configs/zjet_pythia_all_minimal_rho_r2_casa2gb_jmsjmr_unity.json
+```
+
+**Staging (filenames collide with arc_r2 — do not overwrite):** copy the
+per-era `pythia_*.pkl` outputs into `unfold/inputs/zjet/rho/jmsjmr_unity/`,
+pre-merge the four era pkls into `pythia_all.pkl` (same gotcha as arc_r2:
+`_make_inputs_numpy` reads it before any merge step would write it), and copy
+`data_all.pkl` + `herwig_all.pkl` over from `inputs/zjet/rho/arc_r2/` — data
+carries no JMS/JMR, and herwig is overlay/bias-test only for this comparison.
+
+Unfold-side comparison (tag registered in `unfolder_core.py`):
+
+```bash
+python scripts/run_unfolding.py --channel zjet --observable rho --tag jmsjmr_unity
+```
+
+then compare `outputs/zjet/rho/jmsjmr_unity/` against `outputs/zjet/rho/arc_r2/`
+(response matrices, nominal unfolded, JMS/JMR uncertainty curves) in the
+comparison app or via the `_previews/` PNG pairing. Expected differences:
+2017/2018 response nominals shift (the 0.982 scale and 1.09/1.108 smearing go
+away), the 2016 JMR band collapses ±20%→±2%, JMS bands go to a flat 1%.

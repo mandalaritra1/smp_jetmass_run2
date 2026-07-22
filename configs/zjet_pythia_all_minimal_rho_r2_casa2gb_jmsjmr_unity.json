@@ -1,0 +1,20 @@
+{
+  "_comment": "JMS/JMR unity+-1%/2% comparison reskim (2026-07-22). Identical running conditions to the arc_r2 minimal production; the physics change is corrections.py jmssf/jmrsf ported to the UL SoftDropJMSJMRULRun2 unity tables (old per-year values kept as comments there). minimal_syst = nominal + JER/JMS/JMR up/down: enough to compare the nominal response shift and the JMS/JMR bands against arc_r2 without the 87-systematic cost. Stage outputs into unfold/inputs/zjet/rho/jmsjmr_unity/ -- filenames collide with the arc_r2 pkls.",
+  "channel": "zjet",
+  "dataset": "pythia",
+  "era": "all",
+  "mode": "minimal_rho",
+  "systematic_profile": "minimal_syst",
+  "executor_mode": "dask-casa",
+  "casa": true,
+  "test": false,
+  "useDefault": false,
+  "chunksize": 50000,
+  "chunksize_test": 200000,
+  "group_mode": "all_in_one",
+  "redirector": "casa",
+  "prependstr": "root://xcache/",
+  "rho_refine": 2,
+  "worker_memory": "3 GiB",
+  "worker_merge": 4
+}

@@ -686,15 +686,25 @@ def _inflate_ungroomed_sf(nom, var_val):
 
 
 def jmssf(IOV, FatJet,  var = ''):
+    # Old per-year JMAR values (pre SoftDropJMSJMRULRun2 recommendation), kept
+    # for provenance -- these were still applied in the arc_r2 reskims. The
+    # GluonJetMass side switched to unity +- 1% in 15ae99c (2025-07-01); this
+    # port brings the zjet lineage in line with it.
+    # "2016APV":{"sf": 1.00, "sfup": 1.0094, "sfdown": 0.9906},
+    # "2016"   :{"sf": 1.00, "sfup": 1.0094, "sfdown": 0.9906},
+    # "2017"   :{"sf": 0.982, "sfup": 0.986, "sfdown": 0.978},
+    # "2018"   :{"sf": 0.999, "sfup": 1.001, "sfdown": 0.997}}
+    # UL recommendation: SF = 1 with 1% uncertainty (groomed), see
+    # https://twiki.cern.ch/twiki/bin/viewauth/CMS/SoftDropJMSJMRULRun2
     jmsSF = {
 
-        "2016APV":{"sf": 1.00, "sfup": 1.0094, "sfdown": 0.9906},
+        "2016APV":{"sf": 1.00, "sfup": 1.01, "sfdown": 0.99},
 
-        "2016"   :{"sf": 1.00, "sfup": 1.0094, "sfdown": 0.9906},
+        "2016"   :{"sf": 1.00, "sfup": 1.01, "sfdown": 0.99},
 
-        "2017"   :{"sf": 0.982, "sfup": 0.986, "sfdown": 0.978},
+        "2017"   :{"sf": 1.00, "sfup": 1.01, "sfdown": 0.99},
 
-        "2018"   :{"sf": 0.999, "sfup": 1.001, "sfdown": 0.997}}
+        "2018"   :{"sf": 1.00, "sfup": 1.01, "sfdown": 0.99}}
 
     nom = jmsSF[IOV]["sf"]
     out = jmsSF[IOV]["sf"+var]
@@ -707,15 +717,23 @@ def jmssf(IOV, FatJet,  var = ''):
     return FatJet
 
 def jmrsf(IOV, FatJet, var = ''):
+    # Old per-year JMAR values (pre SoftDropJMSJMRULRun2 recommendation), kept
+    # for provenance -- these were still applied in the arc_r2 reskims,
+    # including the +-20% placeholder for 2016(APV).
+    # "2016APV":{"sf": 1.00, "sfup": 1.2, "sfdown": 0.8},
+    # "2016"   :{"sf": 1.00, "sfup": 1.2, "sfdown": 0.8},
+    # "2017"   :{"sf": 1.09, "sfup": 1.14, "sfdown": 1.04},
+    # "2018"   :{"sf": 1.108, "sfup": 1.142, "sfdown": 1.074}}
+    # UL recommendation: SF = 1 with 2% uncertainty (groomed), see
+    # https://twiki.cern.ch/twiki/bin/viewauth/CMS/SoftDropJMSJMRULRun2
     jmrSF = {
 
-       #"2016APV":{"sf": 1.00, "sfup": 1.2, "sfdown": 0.8},
-        "2016APV":{"sf": 1.00, "sfup": 1.2, "sfdown": 0.8},
-        "2016"   :{"sf": 1.00, "sfup": 1.2, "sfdown": 0.8},
+        "2016APV":{"sf": 1.00, "sfup": 1.02, "sfdown": 0.98},
+        "2016"   :{"sf": 1.00, "sfup": 1.02, "sfdown": 0.98},
 
-        "2017"   :{"sf": 1.09, "sfup": 1.14, "sfdown": 1.04},
+        "2017"   :{"sf": 1.00, "sfup": 1.02, "sfdown": 0.98},
 
-        "2018"   :{"sf": 1.108, "sfup": 1.142, "sfdown": 1.074}}
+        "2018"   :{"sf": 1.00, "sfup": 1.02, "sfdown": 0.98}}
 
     nom = jmrSF[IOV]["sf"]
     jmrvalnom = jmrSF[IOV]["sf"+var]
