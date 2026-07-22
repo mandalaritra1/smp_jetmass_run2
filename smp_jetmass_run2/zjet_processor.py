@@ -230,6 +230,11 @@ class QJetMassProcessor(processor.ProcessorABC):
         if self._mode in ("minimal_rho", "minimal_rho_fine", "reweight_pythia_rho", "reweight_data_prior_rho"):
             register_hist(self.hists, "ptjet_rhojet_u_reco", [dataset_axis, ptreco_axis, mreco_over_pt_axis, syst_axis ])
             register_hist(self.hists, "ptjet_rhojet_g_reco", [dataset_axis, ptreco_axis, mreco_over_pt_g_axis, syst_axis ])
+            # Channel-split (mm/ee) rho siblings for per-channel data/MC validation
+            # (AN-24-162 L535). Separate names so the unfolder's ptjet_rhojet_*
+            # input axes stay unchanged. Filled for the nominal systematic only.
+            register_hist(self.hists, "ptjet_rhojet_u_reco_chan", [dataset_axis, channel_axis, ptreco_axis, mreco_over_pt_axis, syst_axis])
+            register_hist(self.hists, "ptjet_rhojet_g_reco_chan", [dataset_axis, channel_axis, ptreco_axis, mreco_over_pt_g_axis, syst_axis])
             register_hist(self.hists, "m_g_over_m_u_reco", [dataset_axis, channel_axis, ptreco_axis, mass_ratio_axis, syst_axis])
             register_hist(self.hists, "m_g_vs_m_u_reco", [dataset_axis, channel_axis, m_u_reco_5gev_axis, m_g_reco_5gev_axis, syst_axis])
             register_hist(self.hists, "m_g_over_m_u_raw_reco", [dataset_axis, channel_axis, ptreco_axis, mass_ratio_axis, syst_axis])
@@ -277,6 +282,11 @@ class QJetMassProcessor(processor.ProcessorABC):
                               [dataset_axis, channel_axis, ptgen_axis, mpt_g_gen_cov_axis, mpt_u_gen_cov_axis, syst_axis])
 
         if self._mode == "validation":
+            # Channel-split (mm/ee) rho spectra for per-channel data/MC validation
+            # (AN-24-162 L535); also registered in the minimal_rho family. A cheap
+            # no_syst validation run is enough to produce them.
+            register_hist(self.hists, "ptjet_rhojet_u_reco_chan", [dataset_axis, channel_axis, ptreco_axis, mreco_over_pt_axis, syst_axis])
+            register_hist(self.hists, "ptjet_rhojet_g_reco_chan", [dataset_axis, channel_axis, ptreco_axis, mreco_over_pt_g_axis, syst_axis])
             register_hist(self.hists, "pt_mupos", [dataset_axis, pt_axis, syst_axis])
             register_hist(self.hists, "eta_mupos", [dataset_axis, eta_axis, syst_axis])
             register_hist(self.hists, "phi_mupos", [dataset_axis, phi_axis, syst_axis])
@@ -2849,6 +2859,12 @@ class QJetMassProcessor(processor.ProcessorABC):
                                 
 
 
+                            if syst == "nominal":
+                                fill_hist(self.hists, "ptjet_rhojet_u_reco_chan", dataset = dataset, channel = channel, ptreco = ptreco,
+                                          mpt_reco = 2*np.log10(mreco/(ptreco*jetR)), systematic = syst, weight = weights_reco)
+                                fill_hist(self.hists, "ptjet_rhojet_g_reco_chan", dataset = dataset, channel = channel, ptreco = ptreco_g,
+                                          mpt_reco = 2*np.log10(mreco_g/(ptreco*jetR)), systematic = syst, weight = weights_reco_g)
+
                             if self._do_jk:## Rho jk
                                 fill_hist(self.hists, "ptjet_rhojet_u_reco", dataset = dataset, ptreco = ptreco,
                                       mpt_reco = 2*np.log10(mreco/(ptreco*jetR)), jk = jk_index, weight = weights_reco, systematic = syst)
@@ -3110,9 +3126,14 @@ class QJetMassProcessor(processor.ProcessorABC):
                             
                         fill_hist(self.hists, "ptjet_rhojet_u_reco", dataset = dataset, ptreco = ptreco,
                                   mpt_reco = 2*np.log10(mreco/(ptreco*jetR)), systematic = jet_syst, weight = weights_reco)
-                        
+
                         fill_hist(self.hists, "ptjet_rhojet_g_reco", dataset = dataset, ptreco = ptreco_g,
                                   mpt_reco = 2*np.log10(mreco_g/(ptreco*jetR)), systematic = jet_syst, weight = weights_reco_g)
+                        if jet_syst == "nominal":
+                            fill_hist(self.hists, "ptjet_rhojet_u_reco_chan", dataset = dataset, channel = channel, ptreco = ptreco,
+                                      mpt_reco = 2*np.log10(mreco/(ptreco*jetR)), systematic = jet_syst, weight = weights_reco)
+                            fill_hist(self.hists, "ptjet_rhojet_g_reco_chan", dataset = dataset, channel = channel, ptreco = ptreco_g,
+                                      mpt_reco = 2*np.log10(mreco_g/(ptreco*jetR)), systematic = jet_syst, weight = weights_reco_g)
                         print("HOW IS DOJK TRUE?")
                         print(self._do_jk)
                         ## Filling Rho
