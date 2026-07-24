@@ -737,12 +737,15 @@ def jmrsf(IOV, FatJet, var = ''):
 
     nom = jmrSF[IOV]["sf"]
     jmrvalnom = jmrSF[IOV]["sf"+var]
-    print("How many none in Fatjet.mass before processing inside jmrnom", ak.sum(ak.is_none(ak.firsts(FatJet).mass)))
     recomass = FatJet.mass
     genmass = FatJet.matched_gen.mass
 
     def _jmr_factor(jval):
-        deltamass = (recomass-genmass)*(jval-1.0)
+        # dR-unmatched jets have no gen mass to smear against: leave them
+        # unsmeared (factor 1, deltamass -> 0) instead of propagating None --
+        # otherwise fakes get an undefined mass and silently drop out of the
+        # reco spectra (and the unfolder's fakes-by-subtraction).
+        deltamass = ak.fill_none((recomass-genmass)*(jval-1.0), 0.0, axis=-1)
         condition = ((recomass+deltamass)/recomass) > 0
         return ak.where( recomass <= 0.0, 0 , ak.where( condition , (recomass+deltamass)/recomass, 0 ))
 
@@ -751,8 +754,6 @@ def jmrsf(IOV, FatJet, var = ''):
     # ungroomed: no dedicated calibration -> inflate the up/down deviation
     jmrval_ung = _inflate_ungroomed_sf(nom, jmrvalnom)
     FatJet = ak.with_field(FatJet, FatJet.mass * _jmr_factor(jmrval_ung), 'mass')
-
-    print("How many none in Fatjet.mass that is being returned inside jmrnom", ak.sum(ak.is_none(ak.firsts(FatJet).mass)))
     return FatJet
 
 
@@ -1146,8 +1147,9 @@ def METXYCorr(met_pt, met_phi, npv, iov, isMC=False, run=None):
 # filesystem `correctionFiles/` directory.
 #
 # Per user decisions:
-#   - JMS/JMR keep the GluonJetMass values (flat sf=1.0, +-1% / +-2%) ->
-#     applyjmsSF / applyjmrSF below (NOT zjet's jmssf/jmrsf).
+#   - JMS/JMR: since the zjet unity port (54bb33f) jmssf/jmrsf carry the
+#     same flat sf=1.0, +-1% / +-2% tables as GluonJetMass, so all three
+#     channels share them; applyjmsSF / applyjmrSF are kept as aliases.
 #   - q2 kept split as GetQ2muF + GetQ2muR.
 #   - HEM uses the weight-based zjet HEMVeto(FatJets, runs, isMC, year)
 #     above; gluon's HEMCleaning jet-pt-scaling is intentionally NOT
@@ -1182,59 +1184,11 @@ MET_filters = {
 }
 
 
-def applyjmsSF(IOV, FatJet, var=''):
-    """JMS scale factor (GluonJetMass values: flat sf=1.0, +-1%).
-
-    Groomed (soft-drop) mass uses the JMAR +-1% directly; the ungroomed mass has
-    no dedicated calibration, so its up/down deviation is inflated (ARC / see
-    ``UNGROOMED_JMSJMR_INFLATION``).
-    """
-    jmsSF = {
-        "2016APV": {"sf": 1.00, "sfup": 1.01, "sfdown": 0.99},
-        "2016":    {"sf": 1.00, "sfup": 1.01, "sfdown": 0.99},
-        "2017":    {"sf": 1.0,  "sfup": 1.01, "sfdown": 0.99},
-        "2018":    {"sf": 1.0,  "sfup": 1.01, "sfdown": 0.99},
-    }
-    nom = jmsSF[IOV]["sf"]
-    out = jmsSF[IOV]["sf" + var]
-    # groomed (soft-drop): JMAR value applied directly
-    FatJet = ak.with_field(FatJet, FatJet.msoftdrop * out, 'msoftdrop')
-    # ungroomed: no dedicated calibration -> inflate the up/down deviation
-    out_ung = _inflate_ungroomed_sf(nom, out)
-    FatJet = ak.with_field(FatJet, FatJet.mass * out_ung, 'mass')
-    return FatJet
-
-
-def applyjmrSF(IOV, FatJet, var=''):
-    """JMR scale factor (GluonJetMass values: flat sf=1.0, +-2%).
-
-    Groomed (soft-drop) mass uses the JMAR +-2% directly; the ungroomed mass has
-    no dedicated calibration, so its up/down deviation is inflated (ARC / see
-    ``UNGROOMED_JMSJMR_INFLATION``).
-    """
-    jmrSF = {
-        "2016APV": {"sf": 1.0, "sfup": 1.02, "sfdown": 0.98},
-        "2016":    {"sf": 1.0, "sfup": 1.02, "sfdown": 0.98},
-        "2017":    {"sf": 1.0, "sfup": 1.02, "sfdown": 0.98},
-        "2018":    {"sf": 1.0, "sfup": 1.02, "sfdown": 0.98},
-    }
-    nom = jmrSF[IOV]["sf"]
-    jmrvalnom = jmrSF[IOV]["sf" + var]
-    recomass = FatJet.mass
-    genmass = FatJet.matched_gen.mass
-
-    def _jmr_factor(jval):
-        deltamass = (recomass - genmass) * (jval - 1.0)
-        condition = ((recomass + deltamass) / recomass) > 0
-        return ak.where(recomass <= 0.0, 0,
-                        ak.where(condition, (recomass + deltamass) / recomass, 0))
-
-    # groomed (soft-drop): JMAR value applied directly
-    FatJet = ak.with_field(FatJet, FatJet.msoftdrop * _jmr_factor(jmrvalnom), 'msoftdrop')
-    # ungroomed: no dedicated calibration -> inflate the up/down deviation
-    jmrval_ung = _inflate_ungroomed_sf(nom, jmrvalnom)
-    FatJet = ak.with_field(FatJet, FatJet.mass * _jmr_factor(jmrval_ung), 'mass')
-    return FatJet
+# JMS/JMR: identical unity tables in all channels since the zjet UL port
+# (54bb33f) -- the hadronic processors import these aliases, the shared
+# implementation lives in jmssf/jmrsf above.
+applyjmsSF = jmssf
+applyjmrSF = jmrsf
 
 
 def GetPSWeights(df, shower="ISR"):

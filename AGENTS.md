@@ -59,8 +59,9 @@ read-only unless the user asks to edit them.
 3. **Canonical systematic names** on the `systematic` axis: `pu`, `l1prefiring`,
    `pdf`, `isr`, `fsr`, `JES_<source>Up/Down`, `JER/JMS/JMRUp/Down`. (Kept extras:
    `Luminosity`, and the split `Q2muF`/`Q2muR` — not collapsed to `q2` yet.)
-4. **JMS/JMR** use GluonJetMass values (`applyjmsSF`/`applyjmrSF`, flat sf=1.0,
-   ±1% / ±2%) — NOT zjet's `jmssf`/`jmrsf`.
+4. **JMS/JMR**: all three channels share `jmssf`/`jmrsf` (flat sf=1.0, ±1% /
+   ±2% UL unity tables; `applyjmsSF`/`applyjmrSF` are aliases). dR-unmatched
+   jets get JMR factor 1 (unsmeared), never a None mass.
 5. **rho** is `2*log10(m/(pt*R))` with `R=0.8` (`self._rho`), matching zjet — not the
    bare `2*log10(m/pt)`.
 6. **XS/lumi normalization** (`xs*lumi*1000/sumw`) happens in `postprocess`, per
