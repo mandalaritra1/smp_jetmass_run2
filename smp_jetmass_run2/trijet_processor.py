@@ -76,6 +76,8 @@ class TrijetProcessor(processor.ProcessorABC):
         mass_gen_bin = b.mgen_axis
         rho_bin = b.mreco_over_pt_axis
         rho_gen_bin = b.mgen_over_pt_axis
+        rho_g_bin = b.mreco_over_pt_g_axis
+        rho_gen_g_bin = b.mgen_over_pt_g_axis
         jet_cat = hist.axis.StrCategory([], growth=True, name="jetNumb", label="Jet")
         parton_cat = hist.axis.StrCategory([],growth=True,name="partonFlav", label="Parton Flavour")
         fine_mass_bin = hist.axis.Regular(500, 0.0, 1000.0, name="mass", label=r"mass [GeV]")
@@ -116,12 +118,12 @@ class TrijetProcessor(processor.ProcessorABC):
 
         if self._mode in rho_modes:
             register_hist(self.hists, 'ptjet_rhojet_u_reco', [dataset_axis, syst_cat, *jk_axes, pt_bin, rho_bin])
-            register_hist(self.hists, 'ptjet_rhojet_g_reco', [dataset_axis, syst_cat, *jk_axes, pt_bin, rho_bin])
+            register_hist(self.hists, 'ptjet_rhojet_g_reco', [dataset_axis, syst_cat, *jk_axes, pt_bin, rho_g_bin])
             if self.do_gen:
                 register_hist(self.hists, 'ptjet_rhojet_u_gen', [dataset_axis, syst_cat, *jk_axes, pt_gen_bin, rho_gen_bin])
-                register_hist(self.hists, 'ptjet_rhojet_g_gen', [dataset_axis, syst_cat, *jk_axes, pt_gen_bin, rho_gen_bin])
+                register_hist(self.hists, 'ptjet_rhojet_g_gen', [dataset_axis, syst_cat, *jk_axes, pt_gen_bin, rho_gen_g_bin])
                 register_hist(self.hists, 'response_matrix_rho_u', [dataset_axis, syst_cat, *jk_axes, pt_bin, pt_gen_bin, rho_bin, rho_gen_bin])
-                register_hist(self.hists, 'response_matrix_rho_g', [dataset_axis, syst_cat, *jk_axes, pt_bin, pt_gen_bin, rho_bin, rho_gen_bin])
+                register_hist(self.hists, 'response_matrix_rho_g', [dataset_axis, syst_cat, *jk_axes, pt_bin, pt_gen_bin, rho_g_bin, rho_gen_g_bin])
 
         if self._mode in ("validation", "full"):
             register_hist(self.hists, 'misses_u', [dataset_axis, syst_cat, *jk_axes, pt_gen_bin, mass_gen_bin])

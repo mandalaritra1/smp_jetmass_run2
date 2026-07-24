@@ -252,11 +252,18 @@ class util_binning :
         #            with extra low-rho bins (-8,-7) for the gluon tail.
         # -----------------------------------------------------------------
         if channel in ("dijet", "trijet"):
+            # Low-pt sink is [185,200] as in zjet (ARC round-2 rationale above:
+            # keep the near-200 resolution migration inside the response, route
+            # everything further below into the pt underflow as fake/miss); the
+            # additional high-pt bins beyond zjet's 400 are kept (hadronic
+            # triggers reach much higher).  Same unfold-side caveat as zjet:
+            # fake/miss-by-subtraction must sum the matched matrix over the
+            # IN-RANGE pt bins only (exclude pt flow).
             self.ptgen_axis  = hist.axis.Variable(
-                [0, 200., 290., 400., 480., 570., 680., 760., 820., 13000.],
+                [185., 200., 290., 400., 480., 570., 680., 760., 820., 13000.],
                 name="ptgen",  label=r"$p_{T,GEN}$ (GeV)")
             self.ptreco_axis = hist.axis.Variable(
-                [0, 200., 290., 400., 480., 570., 680., 760., 820., 13000.],
+                [185., 200., 290., 400., 480., 570., 680., 760., 820., 13000.],
                 name="ptreco", label=r"$p_{T,RECO}$ (GeV)")
             self.mgen_axis  = hist.axis.Variable(
                 [0, 10, 20, 30, 50, 70, 90, 110, 130, 150, 170, 200, 300, 500, 13000],
@@ -272,3 +279,16 @@ class util_binning :
                 [-10, -8, -7, -6, -5.5, -5, -4.75, -4.5, -4.25, -4, -3.75, -3.5, -3.25,
                  -3, -2.75, -2.5, -2.25, -2, -1.75, -1.5, -1.25, -1, -0.75, -0.5, -0.25, 0],
                 name="mpt_reco", label=r"$\log(\rho^2)$ (Detector)")
+            # Groomed rho: zjet's buffer scheme verbatim (0.5-wide shown region,
+            # 0.25-wide hidden buffer resolving -5..-3.5, coarse deep-tail sink)
+            # with the hadronic -8/-7 tail edges prepended for the gluon tail.
+            # The detector axis is the exact 2:1 refinement of the truth axis,
+            # same as zjet (mreco_over_pt_g_axis == gen edges halved).
+            _had_rho_gen_g = [-10, -8, -7, -6, -5, -4.75, -4.5, -4.25, -4,
+                              -3.75, -3.5, -3, -2.5, -2, -1.5, -1, 0]
+            self.mgen_over_pt_g_axis = hist.axis.Variable(
+                _refine_edges(_had_rho_gen_g, self.rho_refine),
+                name='mpt_gen', label=r'$\log(\rho^2)$')
+            self.mreco_over_pt_g_axis = hist.axis.Variable(
+                _refine_edges(_refine_edges(_had_rho_gen_g, 2), self.rho_refine),
+                name='mpt_reco', label=r'$\log(\rho^2)$ (Detector)')
