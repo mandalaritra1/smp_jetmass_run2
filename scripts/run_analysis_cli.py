@@ -29,9 +29,18 @@ def main(argv: list[str] | None = None) -> int:
         "--config", required=True, type=Path,
         help="Path to JSON config (see configs/*.json).",
     )
+    parser.add_argument(
+        "--reducer", choices=["streaming", "treereduce"], default=None,
+        help="Override the config's chunk-merge strategy: 'streaming' merges "
+             "finished chunks on the client (StreamingDaskExecutor, default "
+             "when the config has no 'treereduce' key); 'treereduce' merges "
+             "on the workers (coffea DaskExecutor -- needs more worker mem).",
+    )
     args = parser.parse_args(argv)
 
     cfg = nbutils.validate_analysis_config(json.loads(args.config.read_text()))
+    if args.reducer is not None:
+        cfg["treereduce"] = args.reducer == "treereduce"
     outputs, _ = nbutils.run_from_config(cfg, repo_root=REPO_ROOT, log=_flush_print)
 
     print("---OUTPUT-FILES---", flush=True)
