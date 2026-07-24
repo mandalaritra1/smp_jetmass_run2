@@ -40,10 +40,29 @@ class DijetProcessor(processor.ProcessorABC):
 
     Ported from GluonJetMass python/dijetProcessor.py to the zjet QJetMassProcessor
     coding conventions. The event selection is byte-for-byte identical to the
-    original; the only intentional change is HEM handling (weight-based for 2018
-    MC, hard veto for 2018 data) and canonical systematic-axis names
-    (PUSF->pu, L1prefiring->l1prefiring, PDF->pdf, ISR->isr, FSR->fsr).
+    original; the intentional changes are:
+      - HEM handling (weight-based for 2018 MC, hard veto for 2018 data);
+      - canonical systematic-axis names (PUSF->pu, L1prefiring->l1prefiring,
+        PDF->pdf, ISR->isr, FSR->fsr);
+      - unfolding-hist fill semantics follow zjet, not GluonJetMass: gen hists
+        are the FULL gen truth (all genTot_seq events, no matched_gen
+        requirement) and reco hists the FULL reco spectrum (all recoTot_seq
+        events, no matched_reco requirement), so the unfolder's subtraction
+        misses = gen - response / fakes = reco - response is complete;
+      - gen hists are also filled per weight systematic with theory-only
+        partial weights (isr/fsr/pdf/Q2 move the gen truth, detector
+        systematics leave it nominal), mirroring zjet.
     '''
+    #### Weight systematics that genuinely change the gen-level prediction
+    #### (theory reweightings, nominal weight 1.0). Under these the gen truth,
+    #### the response and the misses must move consistently; every other weight
+    #### systematic is detector-side and leaves the gen truth nominal
+    #### (mirrors zjet's _theory_gen_systs; dijet keeps the split Q2muF/Q2muR).
+    _THEORY_GEN_SYSTS = frozenset({
+        "isrUp", "isrDown", "fsrUp", "fsrDown", "pdfUp", "pdfDown",
+        "Q2muFUp", "Q2muFDown", "Q2muRUp", "Q2muRDown",
+    })
+
     def __init__(self, do_gen=True, mode="minimal", debug=False,
                  jet_systematics=None, systematics=None,
                  ptcut=200., ycut=2.5, jk=False, jk_range=None):
@@ -84,6 +103,8 @@ class DijetProcessor(processor.ProcessorABC):
         mass_gen_bin  = b.mgen_axis
         rho_bin       = b.mreco_over_pt_axis
         rho_gen_bin   = b.mgen_over_pt_axis
+        rho_g_bin     = b.mreco_over_pt_g_axis
+        rho_gen_g_bin = b.mgen_over_pt_g_axis
         #### diagnostic-only axes (validation/full)
         jet_cat   = hist.axis.StrCategory([], growth=True, name="jetNumb", label="Jet")
         parton_cat= hist.axis.StrCategory([], growth=True, name="partonFlav", label="Parton Flavour")
@@ -129,12 +150,31 @@ class DijetProcessor(processor.ProcessorABC):
         #### Rho unfolding inputs
         if self._mode in rho_modes:
             register_hist(self.hists, 'ptjet_rhojet_u_reco', [dataset_axis, syst_cat, *jk_axes, pt_bin, rho_bin])
-            register_hist(self.hists, 'ptjet_rhojet_g_reco', [dataset_axis, syst_cat, *jk_axes, pt_bin, rho_bin])
+            register_hist(self.hists, 'ptjet_rhojet_g_reco', [dataset_axis, syst_cat, *jk_axes, pt_bin, rho_g_bin])
+            #### Event-clustered covariance of the reco (pt, rho) spectrum:
+            #### V_ij = sum_e w_e^2 n_{e,i} n_{e,j}. Two jets per event make the
+            #### input covariance non-diagonal (~10% off-diag correlations, up to
+            #### ~15% same-bin variance inflation on the UL18 QCD test file) --
+            #### this is EXACT for a Poisson event count, no bootstrap needed.
+            #### Filled nominal-only; 4D (pt_i, rho_i, pt_j, rho_j) by value so
+            #### the axes' own flow handles out-of-range jets. Channel-specific:
+            #### zjet fills one jet/event (its V is exactly diagonal sumw2);
+            #### trijet will adopt it with its fill-semantics port. NB scales as
+            #### scale^2 under XS normalization -- see postprocess.
+            if not self._do_jk:
+                def _axis_copy(ax, name):
+                    return hist.axis.Variable(ax.edges, name=name, label=ax.label)
+                register_hist(self.hists, 'reco_cov_rho_u', [dataset_axis, syst_cat,
+                    _axis_copy(pt_bin, 'ptreco_i'), _axis_copy(rho_bin, 'mpt_reco_i'),
+                    _axis_copy(pt_bin, 'ptreco_j'), _axis_copy(rho_bin, 'mpt_reco_j')])
+                register_hist(self.hists, 'reco_cov_rho_g', [dataset_axis, syst_cat,
+                    _axis_copy(pt_bin, 'ptreco_i'), _axis_copy(rho_g_bin, 'mpt_reco_i'),
+                    _axis_copy(pt_bin, 'ptreco_j'), _axis_copy(rho_g_bin, 'mpt_reco_j')])
             if self.do_gen:
                 register_hist(self.hists, 'ptjet_rhojet_u_gen', [dataset_axis, syst_cat, *jk_axes, pt_gen_bin, rho_gen_bin])
-                register_hist(self.hists, 'ptjet_rhojet_g_gen', [dataset_axis, syst_cat, *jk_axes, pt_gen_bin, rho_gen_bin])
+                register_hist(self.hists, 'ptjet_rhojet_g_gen', [dataset_axis, syst_cat, *jk_axes, pt_gen_bin, rho_gen_g_bin])
                 register_hist(self.hists, 'response_matrix_rho_u', [dataset_axis, syst_cat, *jk_axes, pt_bin, pt_gen_bin, rho_bin, rho_gen_bin])
-                register_hist(self.hists, 'response_matrix_rho_g', [dataset_axis, syst_cat, *jk_axes, pt_bin, pt_gen_bin, rho_bin, rho_gen_bin])
+                register_hist(self.hists, 'response_matrix_rho_g', [dataset_axis, syst_cat, *jk_axes, pt_bin, pt_gen_bin, rho_g_bin, rho_gen_g_bin])
 
         #### Diagnostics (validation / full only)
         if self._mode in ("validation", "full"):
@@ -186,6 +226,30 @@ class DijetProcessor(processor.ProcessorABC):
         if self.systematics is None:
             return list(weights_obj.variations)
         return [syst for syst in self.systematics if syst != "nominal" and syst in weights_obj.variations]
+
+    def _fill_reco_cov(self, out, dataset, name, ptvals, rhovals, ok, w_event):
+        """Accumulate the event-clustered reco covariance V_ij = sum_e w_e^2 n_ei n_ej.
+
+        ptvals/rhovals/ok are flat per-jet arrays (2 jets per event, event-major
+        order, as produced by ak.flatten(FatJet[:,:2])); w_event is the
+        per-event weight. For every ordered pair (a, b) of an event's jets --
+        including a == b, so a same-bin pair adds 4 w^2 on the diagonal -- fill
+        (bin_a, bin_b) with w^2. Fills by VALUE into the 4D hist so binning and
+        flow stay consistent with the spectrum fills by construction.
+        """
+        if name not in out:
+            return
+        pt2 = np.asarray(ptvals, dtype=float).reshape(-1, 2)
+        rho2 = np.asarray(rhovals, dtype=float).reshape(-1, 2)
+        ok2 = (np.asarray(ok).reshape(-1, 2)) & np.isfinite(rho2)
+        w2 = np.asarray(w_event, dtype=float) ** 2
+        for a in (0, 1):
+            for b in (0, 1):
+                m = ok2[:, a] & ok2[:, b]
+                fill_hist(out, name, dataset=dataset, systematic="nominal",
+                          ptreco_i=pt2[m, a], mpt_reco_i=rho2[m, a],
+                          ptreco_j=pt2[m, b], mpt_reco_j=rho2[m, b],
+                          weight=w2[m])
 
     def process(self, events):
         out = self.hists
@@ -418,7 +482,9 @@ class DijetProcessor(processor.ProcessorABC):
                 ##### Get weights object ready
                 ###################################
                 self.logging.debug("Weights ", weights)
-                weights_obj = Weights(len(weights))
+                #### storeIndividual so partial_weight can build the theory-only
+                #### gen-truth weights (zjet parity)
+                weights_obj = Weights(len(weights), storeIndividual=True)
                 weights_obj.add('initWeight', weight=weights)
                 if self.do_gen:
                     #### Apply L1 prefiring weights
@@ -639,25 +705,35 @@ class DijetProcessor(processor.ProcessorABC):
                     #### Make final selection and fill gen plots
                     #######################
                     sel.add("final_seq", sel.all("genTot_seq", "recoTot_seq", "matched_gen", "matched_reco"))
-                    
-                    gen_weights = np.repeat(weights[sel.all("genTot_seq","matched_gen")], 2)
-                    genjet0 = events_corr[sel.all("genTot_seq","matched_gen")].GenJetAK8[:,0]
-                    genjet1 = events_corr[sel.all("genTot_seq","matched_gen")].GenJetAK8[:,1]
-                    gen_dijet = ak.concatenate([ak.unflatten(genjet0, 1),  ak.unflatten(genjet1, 1)], axis=1)
-                    gen_dijet = ak.flatten(gen_dijet, axis=1)
-                    groomed_genjet0 = get_gen_sd_mass_jet(genjet0, events_corr[sel.all("genTot_seq","matched_gen")].SubGenJetAK8)
-                    groomed_genjet1 = get_gen_sd_mass_jet(genjet1, events_corr[sel.all("genTot_seq","matched_gen")].SubGenJetAK8)
-                    groomed_gen_dijet = ak.concatenate([ak.unflatten(groomed_genjet0, 1),  ak.unflatten(groomed_genjet1, 1)], axis=1)
-                    groomed_gen_dijet = ak.flatten(groomed_gen_dijet, axis=1)
-                    fill_hist(out, "ptjet_mjet_u_gen", dataset=dataset, systematic=jetsyst, **jkkw, ptgen=gen_dijet.pt, mgen=gen_dijet.mass, weight=gen_weights )
-                    fill_hist(out, "ptjet_mjet_g_gen", dataset=dataset, systematic=jetsyst, **jkkw, ptgen=gen_dijet.pt, mgen=groomed_gen_dijet.mass, weight=gen_weights )
+
+                    #### GEN truth = ALL events passing the gen selection, matched or not
+                    #### (zjet semantics). The unfolder derives misses = gen - response
+                    #### projection, so requiring matched_gen here (as GluonJetMass did)
+                    #### silently drops the dR-unmatched component of the misses.
+                    gen_weights = np.repeat(weights[sel.all("genTot_seq")], 2)
+                    genjet0 = events_corr[sel.all("genTot_seq")].GenJetAK8[:,0]
+                    genjet1 = events_corr[sel.all("genTot_seq")].GenJetAK8[:,1]
+                    gen_dijet_truth = ak.concatenate([ak.unflatten(genjet0, 1),  ak.unflatten(genjet1, 1)], axis=1)
+                    gen_dijet_truth = ak.flatten(gen_dijet_truth, axis=1)
+                    groomed_genjet0 = get_gen_sd_mass_jet(genjet0, events_corr[sel.all("genTot_seq")].SubGenJetAK8)
+                    groomed_genjet1 = get_gen_sd_mass_jet(genjet1, events_corr[sel.all("genTot_seq")].SubGenJetAK8)
+                    groomed_gen_dijet_truth = ak.concatenate([ak.unflatten(groomed_genjet0, 1),  ak.unflatten(groomed_genjet1, 1)], axis=1)
+                    groomed_gen_dijet_truth = ak.flatten(groomed_gen_dijet_truth, axis=1)
+                    #### Without the matched_gen requirement the groomed gen mass can be
+                    #### None per jet (no SubGenJetAK8 near an unmatched jet) -- the
+                    #### event-level is_none in genTot_seq does not catch per-jet Nones.
+                    #### Mask groomed fills explicitly (zjet masks ~is_none(mgen) too).
+                    ok_g_truth = ak.to_numpy(ak.fill_none(~ak.is_none(groomed_gen_dijet_truth.mass), False))
+                    groomed_mgen_truth = ak.to_numpy(ak.fill_none(groomed_gen_dijet_truth.mass, np.nan))
+                    fill_hist(out, "ptjet_mjet_u_gen", dataset=dataset, systematic=jetsyst, **jkkw, ptgen=gen_dijet_truth.pt, mgen=gen_dijet_truth.mass, weight=gen_weights )
+                    fill_hist(out, "ptjet_mjet_g_gen", dataset=dataset, systematic=jetsyst, **jkkw, ptgen=gen_dijet_truth.pt[ok_g_truth], mgen=groomed_mgen_truth[ok_g_truth], weight=gen_weights[ok_g_truth] )
                     #### rho reweight: weight gen rho hists by the gen-rho Herwig/Pythia ratio
                     gen_rw_u, gen_rw_g = gen_weights, gen_weights
                     if self._do_reweight:
-                        hw_u, hw_g = self._herwig_rho_weights(gen_dijet.pt, gen_dijet.mass, groomed_gen_dijet.mass)
+                        hw_u, hw_g = self._herwig_rho_weights(gen_dijet_truth.pt, gen_dijet_truth.mass, groomed_mgen_truth)
                         gen_rw_u, gen_rw_g = gen_weights * hw_u, gen_weights * hw_g
-                    fill_hist(out, "ptjet_rhojet_u_gen", dataset=dataset, systematic=jetsyst, **jkkw, ptgen=gen_dijet.pt, mpt_gen=self._rho(gen_dijet.mass, gen_dijet.pt), weight=gen_rw_u )
-                    fill_hist(out, "ptjet_rhojet_g_gen", dataset=dataset, systematic=jetsyst, **jkkw, ptgen=gen_dijet.pt, mpt_gen=self._rho(groomed_gen_dijet.mass, gen_dijet.pt), weight=gen_rw_g )
+                    fill_hist(out, "ptjet_rhojet_u_gen", dataset=dataset, systematic=jetsyst, **jkkw, ptgen=gen_dijet_truth.pt, mpt_gen=self._rho(gen_dijet_truth.mass, gen_dijet_truth.pt), weight=gen_rw_u )
+                    fill_hist(out, "ptjet_rhojet_g_gen", dataset=dataset, systematic=jetsyst, **jkkw, ptgen=gen_dijet_truth.pt[ok_g_truth], mpt_gen=self._rho(groomed_mgen_truth, ak.to_numpy(gen_dijet_truth.pt))[ok_g_truth], weight=gen_rw_g[ok_g_truth] )
                     #######################
                     #### Check jec's with selection
                     #######################
@@ -741,8 +817,21 @@ class DijetProcessor(processor.ProcessorABC):
                 ##################
                 
                 if self.do_gen:
-                    reco_weights = np.repeat(weights_obj.weight()[sel.all("recoTot_seq", "matched_reco")], 2)
-                    reco_dijet = ak.flatten(events_corr[sel.all("recoTot_seq", "matched_reco")].FatJet[:,:2], axis=1)
+                    #### RECO spectrum = ALL events passing the reco selection, fakes
+                    #### included (zjet semantics). The unfolder derives fakes =
+                    #### reco - response projection, so requiring matched_reco here
+                    #### (as GluonJetMass did) drops the dR-unmatched fakes.
+                    reco_weights = np.repeat(weights_obj.weight()[sel.all("recoTot_seq")], 2)
+                    reco_dijet = ak.flatten(events_corr[sel.all("recoTot_seq")].FatJet[:,:2], axis=1)
+                    #### JMR smearing leaves dR-unmatched jets with an undefined (None)
+                    #### mass (the smear factor needs matched_gen.mass), so mask per jet
+                    #### and per mass type -- the same masking the explicit fakes fills
+                    #### use. Only these jets drop out of the reco spectra.
+                    ok_reco_u = ak.to_numpy(ak.fill_none(~ak.is_none(reco_dijet.mass), False))
+                    ok_reco_g = ak.to_numpy(ak.fill_none(~ak.is_none(reco_dijet.msoftdrop), False))
+                    mreco_u_filled = ak.to_numpy(ak.fill_none(reco_dijet.mass, np.nan))
+                    mreco_g_filled = ak.to_numpy(ak.fill_none(reco_dijet.msoftdrop, np.nan))
+                    ptreco_np = ak.to_numpy(reco_dijet.pt)
                     genjet0 = events_corr[sel.all("final_seq")].FatJet[:,0].matched_gen
                     genjet1 = events_corr[sel.all("final_seq")].FatJet[:,1].matched_gen
                     # print("Number of mismatched leading dijets", ak.sum(events_corr[sel.all("final_seq")].GenJetAK8[:,0].pt!=genjet0.pt))
@@ -776,14 +865,21 @@ class DijetProcessor(processor.ProcessorABC):
                     if self._do_reweight:
                         hw_resp_u, hw_resp_g = self._herwig_rho_weights(dijet.pt, dijet.mass, dijet.msoftdrop)
                         resp_rw_u, resp_rw_g = dijet_weights * hw_resp_u, dijet_weights * hw_resp_g
-                        hw_reco_u, hw_reco_g = self._herwig_rho_weights(reco_dijet.pt, reco_dijet.mass, reco_dijet.msoftdrop)
+                        hw_reco_u, hw_reco_g = self._herwig_rho_weights(reco_dijet.pt, mreco_u_filled, mreco_g_filled)
                         reco_rw_u, reco_rw_g = reco_weights * hw_reco_u, reco_weights * hw_reco_g
                     fill_hist(out, "response_matrix_rho_u", dataset=dataset, systematic=jetsyst, **jkkw,  mpt_reco=self._rho(dijet.mass, dijet.pt), mpt_gen=self._rho(gen_dijet.mass, gen_dijet.pt), ptreco=dijet.pt, ptgen=gen_dijet.pt, weight=resp_rw_u)
                     fill_hist(out, "response_matrix_rho_g", dataset=dataset, systematic=jetsyst, **jkkw, mpt_reco=self._rho(dijet.msoftdrop, dijet.pt), mpt_gen=self._rho(groomed_gen_dijet.mass, gen_dijet.pt), ptreco=dijet.pt, ptgen=gen_dijet.pt, weight=resp_rw_g)
-                    fill_hist(out, "ptjet_mjet_u_reco", dataset=dataset, systematic=jetsyst, **jkkw, ptreco=reco_dijet.pt, mreco=reco_dijet.mass, weight=reco_weights )
-                    fill_hist(out, "ptjet_mjet_g_reco", dataset=dataset, systematic=jetsyst, **jkkw, ptreco=reco_dijet.pt, mreco=reco_dijet.msoftdrop, weight=reco_weights )
-                    fill_hist(out, "ptjet_rhojet_u_reco", dataset=dataset, systematic=jetsyst, **jkkw, ptreco=reco_dijet.pt, mpt_reco=self._rho(reco_dijet.mass, reco_dijet.pt), weight=reco_rw_u)
-                    fill_hist(out, "ptjet_rhojet_g_reco", dataset=dataset, systematic=jetsyst, **jkkw, ptreco=reco_dijet.pt, mpt_reco=self._rho(reco_dijet.msoftdrop, reco_dijet.pt), weight=reco_rw_g )
+                    fill_hist(out, "ptjet_mjet_u_reco", dataset=dataset, systematic=jetsyst, **jkkw, ptreco=ptreco_np[ok_reco_u], mreco=mreco_u_filled[ok_reco_u], weight=reco_weights[ok_reco_u] )
+                    fill_hist(out, "ptjet_mjet_g_reco", dataset=dataset, systematic=jetsyst, **jkkw, ptreco=ptreco_np[ok_reco_g], mreco=mreco_g_filled[ok_reco_g], weight=reco_weights[ok_reco_g] )
+                    fill_hist(out, "ptjet_rhojet_u_reco", dataset=dataset, systematic=jetsyst, **jkkw, ptreco=ptreco_np[ok_reco_u], mpt_reco=self._rho(mreco_u_filled, ptreco_np)[ok_reco_u], weight=reco_rw_u[ok_reco_u])
+                    fill_hist(out, "ptjet_rhojet_g_reco", dataset=dataset, systematic=jetsyst, **jkkw, ptreco=ptreco_np[ok_reco_g], mpt_reco=self._rho(mreco_g_filled, ptreco_np)[ok_reco_g], weight=reco_rw_g[ok_reco_g] )
+                    #### event-clustered covariance of the reco spectra (nominal only)
+                    if jetsyst == "nominal":
+                        cov_w_ev = weights_obj.weight()[sel.all("recoTot_seq")]
+                        self._fill_reco_cov(out, dataset, "reco_cov_rho_u", ptreco_np,
+                                            self._rho(mreco_u_filled, ptreco_np), ok_reco_u, cov_w_ev)
+                        self._fill_reco_cov(out, dataset, "reco_cov_rho_g", ptreco_np,
+                                            self._rho(mreco_g_filled, ptreco_np), ok_reco_g, cov_w_ev)
                     if not self.do_minimal:
                         fill_hist(out, "jet_pt_eta_phi", dataset=dataset, systematic=jetsyst, ptreco=dijet.pt, phi=dijet.phi, eta=dijet.eta, weight=dijet_weights)
                         
@@ -796,7 +892,7 @@ class DijetProcessor(processor.ProcessorABC):
                         for syst in self._weight_variations(weights_obj):
                             #### define weights based on which systematic variation considered
                             dijet_weights = np.repeat(weights_obj.weight(syst)[sel.all("final_seq")], 2)
-                            reco_weights = np.repeat(weights_obj.weight(syst)[sel.all("recoTot_seq", "matched_reco")], 2)
+                            reco_weights = np.repeat(weights_obj.weight(syst)[sel.all("recoTot_seq")], 2)
                             #### fill nominal, up, and down variations for each         
                             fill_hist(out, "response_matrix_u", dataset=dataset,systematic=syst, **jkkw, ptreco=dijet.pt, mreco=dijet.mass,
                                                           ptgen=gen_dijet.pt, mgen=gen_dijet.mass, weight= dijet_weights)
@@ -810,12 +906,29 @@ class DijetProcessor(processor.ProcessorABC):
                                 reco_rw_u_v, reco_rw_g_v = reco_weights * hw_reco_u, reco_weights * hw_reco_g
                             fill_hist(out, "response_matrix_rho_u", dataset=dataset, systematic=syst, **jkkw, mpt_reco=self._rho(dijet.mass, dijet.pt), mpt_gen=self._rho(gen_dijet.mass, gen_dijet.pt), ptreco=dijet.pt, ptgen=gen_dijet.pt, weight= resp_rw_u_v)
                             fill_hist(out, "response_matrix_rho_g", dataset=dataset, systematic=syst, **jkkw, mpt_reco=self._rho(dijet.msoftdrop, dijet.pt), mpt_gen=self._rho(groomed_gen_dijet.mass, gen_dijet.pt), ptreco=dijet.pt, ptgen=gen_dijet.pt, weight= resp_rw_g_v)
-                            fill_hist(out, "ptjet_mjet_u_reco", dataset=dataset,systematic=syst, **jkkw, ptreco=reco_dijet.pt, mreco=reco_dijet.mass, weight= reco_weights )
-                            fill_hist(out, "ptjet_mjet_g_reco", dataset=dataset,systematic=syst, **jkkw, ptreco=reco_dijet.pt, mreco=reco_dijet.msoftdrop, weight= reco_weights )
-                            fill_hist(out, "ptjet_rhojet_u_reco", dataset=dataset, systematic=syst, **jkkw, ptreco=reco_dijet.pt, mpt_reco=self._rho(reco_dijet.mass, reco_dijet.pt), weight=reco_rw_u_v)
-                            fill_hist(out, "ptjet_rhojet_g_reco", dataset=dataset, systematic=syst, **jkkw, ptreco=reco_dijet.pt, mpt_reco=self._rho(reco_dijet.msoftdrop, reco_dijet.pt), weight=reco_rw_g_v )
+                            fill_hist(out, "ptjet_mjet_u_reco", dataset=dataset,systematic=syst, **jkkw, ptreco=ptreco_np[ok_reco_u], mreco=mreco_u_filled[ok_reco_u], weight=reco_weights[ok_reco_u] )
+                            fill_hist(out, "ptjet_mjet_g_reco", dataset=dataset,systematic=syst, **jkkw, ptreco=ptreco_np[ok_reco_g], mreco=mreco_g_filled[ok_reco_g], weight=reco_weights[ok_reco_g] )
+                            fill_hist(out, "ptjet_rhojet_u_reco", dataset=dataset, systematic=syst, **jkkw, ptreco=ptreco_np[ok_reco_u], mpt_reco=self._rho(mreco_u_filled, ptreco_np)[ok_reco_u], weight=reco_rw_u_v[ok_reco_u])
+                            fill_hist(out, "ptjet_rhojet_g_reco", dataset=dataset, systematic=syst, **jkkw, ptreco=ptreco_np[ok_reco_g], mpt_reco=self._rho(mreco_g_filled, ptreco_np)[ok_reco_g], weight=reco_rw_g_v[ok_reco_g] )
+                            #### GEN truth per weight systematic (zjet parity): only the
+                            #### theory weights enter (nominal 1.0, so the nominal gen
+                            #### spectrum is unchanged) and only theory variations shift
+                            #### it; detector systematics pass modifier=None.
+                            _gen_modifier = syst if syst in self._THEORY_GEN_SYSTS else None
+                            _gen_include = [n for n in ('initWeight', 'isr', 'fsr', 'pdf', 'Q2muF', 'Q2muR')
+                                            if n in weights_obj._weights]
+                            gen_syst_weights = np.repeat(
+                                weights_obj.partial_weight(include=_gen_include, modifier=_gen_modifier)[sel.all("genTot_seq")], 2)
+                            gen_rw_u_v, gen_rw_g_v = gen_syst_weights, gen_syst_weights
+                            if self._do_reweight:
+                                #### reuse the per-jet gen-rho ratios from the nominal gen fill
+                                gen_rw_u_v, gen_rw_g_v = gen_syst_weights * hw_u, gen_syst_weights * hw_g
+                            fill_hist(out, "ptjet_mjet_u_gen", dataset=dataset, systematic=syst, **jkkw, ptgen=gen_dijet_truth.pt, mgen=gen_dijet_truth.mass, weight=gen_syst_weights)
+                            fill_hist(out, "ptjet_mjet_g_gen", dataset=dataset, systematic=syst, **jkkw, ptgen=gen_dijet_truth.pt[ok_g_truth], mgen=groomed_mgen_truth[ok_g_truth], weight=gen_syst_weights[ok_g_truth])
+                            fill_hist(out, "ptjet_rhojet_u_gen", dataset=dataset, systematic=syst, **jkkw, ptgen=gen_dijet_truth.pt, mpt_gen=self._rho(gen_dijet_truth.mass, gen_dijet_truth.pt), weight=gen_rw_u_v)
+                            fill_hist(out, "ptjet_rhojet_g_gen", dataset=dataset, systematic=syst, **jkkw, ptgen=gen_dijet_truth.pt[ok_g_truth], mpt_gen=self._rho(groomed_mgen_truth, ak.to_numpy(gen_dijet_truth.pt))[ok_g_truth], weight=gen_rw_g_v[ok_g_truth])
                         #################
-                        #### Gluon purity plots   
+                        #### Gluon purity plots
                         #################
                         jet1flav = getJetFlavors(events_corr[sel.all("final_seq")].FatJet[:,0])
                         jet2flav = getJetFlavors(events_corr[sel.all("final_seq")].FatJet[:,1])
@@ -848,6 +961,15 @@ class DijetProcessor(processor.ProcessorABC):
                                                weight=dijet_weights )
                     fill_hist(out, "ptjet_rhojet_u_reco", dataset=dataset, systematic=jetsyst, **jkkw, ptreco=dijet.pt, mpt_reco=self._rho(dijet.mass, dijet.pt), weight=dijet_weights)
                     fill_hist(out, "ptjet_rhojet_g_reco", dataset=dataset, systematic=jetsyst, **jkkw, ptreco=dijet.pt, mpt_reco=self._rho(dijet.msoftdrop, dijet.pt), weight=dijet_weights )
+                    #### event-clustered covariance of the data reco spectra
+                    #### (prescale weights enter as w^2)
+                    if jetsyst == "nominal":
+                        _pt_np = ak.to_numpy(dijet.pt)
+                        _ok_all = np.ones(len(_pt_np), dtype=bool)
+                        self._fill_reco_cov(out, dataset, "reco_cov_rho_u", _pt_np,
+                                            ak.to_numpy(self._rho(dijet.mass, dijet.pt)), _ok_all, final_weights)
+                        self._fill_reco_cov(out, dataset, "reco_cov_rho_g", _pt_np,
+                                            ak.to_numpy(self._rho(dijet.msoftdrop, dijet.pt)), _ok_all, final_weights)
                     if not self.do_minimal and jetsyst=="nominal":
                         HT = ak.sum(events_corr[sel.all("final_seq")].FatJet.pt, axis=-1)
                         #### plots for checking MET/sumET
@@ -897,8 +1019,14 @@ class DijetProcessor(processor.ProcessorABC):
                 if scale is None:
                     scale = 1.0
                 idx = ds_axis.index(ds)
-                view['value'][idx] *= scale
-                view['variance'][idx] *= scale * scale
+                if key.startswith('reco_cov_'):
+                    #### covariance hists are second-moment quantities: the
+                    #### VALUE is V_ij = sum w^2 n_i n_j and scales as scale^2
+                    view['value'][idx] *= scale * scale
+                    view['variance'][idx] *= scale ** 4
+                else:
+                    view['value'][idx] *= scale
+                    view['variance'][idx] *= scale * scale
         return accumulator
 
 ##### TO DO #####
