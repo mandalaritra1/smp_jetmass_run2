@@ -691,10 +691,10 @@ def ensure_client(
     worker-side merges) workers only need chunk-processing headroom, so
     e.g. "2 GiB" is viable for no-syst runs.
 
-    n_workers requests a FIXED pool (cluster.scale) on the lxplus/LPC batch
+    n_workers requests a FIXED pool (cluster.scale) on the casa/lxplus/LPC
     clusters instead of adaptive scaling -- recommended for production:
-    HTCondor's slow worker startup makes adapt flap and can leave a
-    single-worker straggler tail."""
+    slow worker startup makes adapt flap and can leave a single-worker
+    straggler tail."""
     worker_memory = normalize_worker_memory(worker_memory)
     resolved_mode = _resolve_executor_mode(executor_mode=executor_mode, casa=casa)
 
@@ -729,11 +729,15 @@ def ensure_client(
         from coffea_casa import CoffeaCasaCluster
 
         cluster = CoffeaCasaCluster(memory=worker_memory or "6 GiB", cores=1)
-        # Keep a worker floor: with minimum=0 the cluster scales to zero during the
-        # idle gap between preprocessing and processing (heavy/many-file datasets like
-        # data), which retires the workers holding the preprocessed data and drops the
-        # scheduler<->client comm ("CommClosedError: Scheduler->Client already closed").
-        cluster.adapt(minimum=2, maximum=300)
+        if n_workers:
+            cluster.scale(n_workers)
+            print(f"Requested fixed pool of {n_workers} workers.")
+        else:
+            # Keep a worker floor: with minimum=0 the cluster scales to zero during the
+            # idle gap between preprocessing and processing (heavy/many-file datasets like
+            # data), which retires the workers holding the preprocessed data and drops the
+            # scheduler<->client comm ("CommClosedError: Scheduler->Client already closed").
+            cluster.adapt(minimum=2, maximum=300)
         client = Client(cluster)
         print("Created CoffeaCasaCluster client.")
         return client
