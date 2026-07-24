@@ -1,0 +1,21 @@
+{
+  "_comment": "Per-era slice of the jmsjmr_unity all_syst production (2026-07-23). Reruns for 2016 & 2017 after casa server bounce: switched to the regular coffea DaskExecutor (treereduce=true, worker-side tree reduction) with 9 GiB workers to survive the 'Client lost connection to scheduler' crashes the streaming path hit on these two eras. 2016APV & 2018 already completed on streaming. chunksize 25000.",
+  "channel": "zjet",
+  "dataset": "pythia",
+  "era": "2017",
+  "mode": "minimal_rho",
+  "systematic_profile": "all_syst",
+  "executor_mode": "dask-casa",
+  "casa": true,
+  "test": false,
+  "useDefault": false,
+  "chunksize": 25000,
+  "chunksize_test": 200000,
+  "group_mode": "all_in_one",
+  "redirector": "casa",
+  "prependstr": "root://xcache/",
+  "rho_refine": 2,
+  "worker_memory": "9 GiB",
+  "worker_merge": 4,
+  "treereduce": true
+}

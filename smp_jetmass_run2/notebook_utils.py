@@ -965,6 +965,7 @@ def run_once(
     reweight_source: str = "herwig",
     rho_refine: int | None = None,
     worker_merge: int = 1,
+    treereduce: bool = False,
 ):
     print("Running over:", list(fileset.keys())[:10], "..." if len(fileset) > 10 else "")
     mode = normalize_mode_for_channel(mode, channel)
@@ -986,6 +987,7 @@ def run_once(
             maxchunks=1,
             skipbadfiles=True,
             worker_merge=worker_merge,
+            treereduce=treereduce,
         )
         debug = True
     else:
@@ -997,6 +999,7 @@ def run_once(
             maxchunks=None,
             skipbadfiles=True,
             worker_merge=worker_merge,
+            treereduce=treereduce,
         )
         debug = False
 
@@ -1133,6 +1136,7 @@ def run_from_config(cfg, *, client=None, repo_root=None, log=print):
             reweight_source=cfg.get("reweight_source", "herwig"),
             rho_refine=cfg.get("rho_refine", None),
             worker_merge=cfg.get("worker_merge", 1),
+            treereduce=cfg.get("treereduce", False),
         )
         tag = get_group_tag(index, cfg["era"], group_mode)
         fout = make_output_filename(

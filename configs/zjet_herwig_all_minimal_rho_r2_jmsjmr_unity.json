@@ -1,0 +1,20 @@
+{
+  "_comment": "HERWIG companion to the jmsjmr_unity production (2026-07-22): herwig is MC and receives JMS/JMR, so the overlay/bias-test input must be reskimmed with the unity tables too. minimal_rho + no_syst (nominal only), matching the arc_r2 herwig_all.pkl role.",
+  "channel": "zjet",
+  "dataset": "herwig",
+  "era": "all",
+  "mode": "minimal_rho",
+  "systematic_profile": "no_syst",
+  "executor_mode": "dask-casa",
+  "casa": true,
+  "test": false,
+  "useDefault": false,
+  "chunksize": 50000,
+  "chunksize_test": 200000,
+  "group_mode": "all_in_one",
+  "redirector": "casa",
+  "prependstr": "root://xcache/",
+  "rho_refine": 2,
+  "worker_memory": "3 GiB",
+  "worker_merge": 4
+}

@@ -35,7 +35,7 @@ except Exception:
     hep.style.use("CMS")
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-OUTDIR = os.path.normpath(os.path.join(HERE, "..", "review", "figs"))
+OUTDIR = os.path.expanduser("~/Projects/smp25010-docs/review/figs")
 # --no-vincia (anywhere on argv): drop the Shower (Vincia) source so the envelope +
 # Total exclude the baseline-tune-dependent shower-model swap. Outputs get a
 # "novincia_" tag so they never overwrite the with-Vincia figures.

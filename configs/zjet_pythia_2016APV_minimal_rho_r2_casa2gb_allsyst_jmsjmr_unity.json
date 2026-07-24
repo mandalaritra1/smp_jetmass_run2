@@ -1,0 +1,20 @@
+{
+  "_comment": "Per-era slice of the jmsjmr_unity all_syst production (2026-07-23). Sequential per-era running after the all-era run hit streaming backpressure (dense 87-syst accumulators, client-side merge; workers 177->54). chunksize halved to 25000; worker_merge kept at 4 (worker-side merge memory). Outputs stage into unfold/inputs/zjet/rho/jmsjmr_unity/ as the per-era pkls.",
+  "channel": "zjet",
+  "dataset": "pythia",
+  "era": "2016APV",
+  "mode": "minimal_rho",
+  "systematic_profile": "all_syst",
+  "executor_mode": "dask-casa",
+  "casa": true,
+  "test": false,
+  "useDefault": false,
+  "chunksize": 25000,
+  "chunksize_test": 200000,
+  "group_mode": "all_in_one",
+  "redirector": "casa",
+  "prependstr": "root://xcache/",
+  "rho_refine": 2,
+  "worker_memory": "3 GiB",
+  "worker_merge": 4
+}
