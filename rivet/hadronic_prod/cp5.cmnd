@@ -1,0 +1,29 @@
+! CMS CP5 tune (Pythia8) -- arXiv:1903.12179, the tune of the central UL samples.
+! Base for the SMP-25-010 gen-level modelling-variation rebase (was Monash default).
+! Prepended to each variation .cmnd AFTER the Beams/LHEF/MPI block and BEFORE the
+! variation knob (so the knob overrides CP5 where they touch the same parameter).
+! NB: the SigmaTotal UE-xsec lines from the Run-2 CP5 fragment are dropped -- they
+! use Pythia-8.2 names invalid in 8.3 and are negligible for the jet-mass shape.
+Tune:pp = 14
+Tune:ee = 7
+MultipartonInteractions:ecmPow = 0.03344
+MultipartonInteractions:bProfile = 2
+MultipartonInteractions:pT0Ref = 1.41
+MultipartonInteractions:coreRadius = 0.7634
+MultipartonInteractions:coreFraction = 0.63
+ColourReconnection:range = 5.176
+SpaceShower:alphaSorder = 2
+SpaceShower:alphaSvalue = 0.118
+SigmaProcess:alphaSvalue = 0.118
+SigmaProcess:alphaSorder = 2
+MultipartonInteractions:alphaSvalue = 0.118
+MultipartonInteractions:alphaSorder = 2
+TimeShower:alphaSorder = 2
+TimeShower:alphaSvalue = 0.118
+! CP5 PDF is NNPDF3.1 NNLO; that LHAPDF set is not installed in the image and the
+! ephemeral container has no network to fetch it. For SHOWERING an existing LHE the
+! beam PDF only affects ISR backward evolution (subdominant for groomed jet mass);
+! the jet-mass-critical CP5 changes (FSR/ISR alphaS=0.118, MPI, CR) are all kept.
+! -> fall back to the Tune:pp=14 default PDF (NNPDF2.3 LO, internal). Revisit if a
+!    publication-grade ISR/PDF treatment is needed.
+! PDF:pSet = LHAPDF6:NNPDF31_nnlo_as_0118
