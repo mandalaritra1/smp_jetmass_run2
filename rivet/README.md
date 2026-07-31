@@ -1,4 +1,37 @@
-# Rivet routine — Z(ll)+jet jet mass
+# Rivet routines — jet mass
+
+Two routines live here:
+
+| Routine | Scope | Observables |
+| --- | --- | --- |
+| [`CMS_2026_PAS_SMP_25_010`](CMS_2026_PAS_SMP_25_010.cc) | Z+jet | `log10(rho^2)` in the published pT slices, groomed + ungroomed |
+| [`CMS_ZJET_JETMASS`](CMS_ZJET_JETMASS.cc) | Z+jet | mass [GeV] + rho, finer binning, `CH3_NTUPLE` per-event dump |
+
+`CMS_2026_PAS_SMP_25_010` is the one to publish/share: it carries the PAS name,
+the HepData reference binning (pT `[200, 290, 400, inf]`, `log10(rho^2)`
+`[-10, -4.5, -4, ..., 0]`), and matches the `zjet_processor.py` gen selection
+cut for cut — validated against it on the same FullSim events, see
+[closure/](closure/). Histogram names `zjets_ungroomed` / `zjets_groomed` are 2D
+(pT × log10(rho²)), deliberately matching what `rappoccio/zjets_comparison`'s
+`build_comparison.py` expects, so this routine is a drop-in replacement there.
+The `_slice0/1/2` companions are the per-slice unit-area distributions.
+
+A three-channel version (adding dijet and trijet, each matching its own
+processor) exists on the `smp-25-010-match-analysis-selection` branch of
+`gitlab.cern.ch/srappocc/Rivet` at commit `6e91362`, if those channels are
+wanted once they have a measurement behind them.
+
+Build it the same way as below, swapping the file name:
+
+```bash
+docker run --rm --platform linux/amd64 -v "$PWD":/work -w /work hepstore/rivet-pythia:latest rivet-build RivetCMS_2026_PAS_SMP_25_010.so CMS_2026_PAS_SMP_25_010.cc
+```
+
+`CMS_ZJET_JETMASS` stays as the working/diagnostic routine (it keeps the
+per-event ntuple hook used for the Herwig CH3 reweight). The rest of this file
+describes it.
+
+---
 
 `CMS_ZJET_JETMASS` is a particle-level Rivet routine that reproduces the
 **generator-level (fiducial) selection** of the `zjet` channel

@@ -1,0 +1,50 @@
+Name: CMS_2026_PAS_SMP_25_010
+Year: 2026
+Summary: Normalized groomed and ungroomed jet mass in Z+jet events at 13 TeV
+Experiment: CMS
+Collider: LHC
+InspireID:
+Status: UNVALIDATED
+Reentrant: true
+Authors:
+ - Aritra Mandal <mandalaritra1@gmail.com>
+References:
+  - CMS-PAS-SMP-25-010
+RunInfo: 'Drell-Yan events with $Z \to ee$ or $Z \to \mu\mu$ and at least one AK8
+  jet. Generate with a jet $p_\mathrm{T}$ threshold well below 200 GeV so the
+  first measured $p_\mathrm{T}$ slice is not sculpted.'
+Beams: [p+, p+]
+Energies: [13000]
+Luminosity_fb: 138
+Description:
+  'Normalized differential distributions of $\log_{10}(\rho^2)$, where
+  $\rho = m / (p_\mathrm{T} R)$ for the anti-$k_\mathrm{T}$ $R = 0.8$ jet
+  recoiling against a Z boson, measured separately for the ungroomed jet mass and
+  the soft-drop groomed jet mass ($\beta = 0$, $z_\mathrm{cut} = 0.1$), in three
+  slices of ungroomed jet $p_\mathrm{T}$: [200, 290], [290, 400] and
+  [400, $\infty$) GeV. Distributions are normalized to unit area within each
+  $p_\mathrm{T}$ slice.
+
+  Fiducial selection: exactly two same-flavour opposite-sign dressed leptons
+  (electrons $p_\mathrm{T} > 40$ GeV, muons $p_\mathrm{T} > 29$ GeV,
+  $|\eta| < 2.4$, dressing cone $\Delta R = 0.1$) and no additional lepton
+  passing those cuts; $p_\mathrm{T}(Z) > 90$ GeV; $71 < m_{\ell\ell} < 111$ GeV.
+  AK8 jets with $|y| < 2.4$ are cleaned of dressed leptons within
+  $\Delta R < 0.4$. The leading cleaned jet is required to satisfy
+  $\Delta\phi(Z, \mathrm{jet}) > 1.57$ and a $p_\mathrm{T}$ asymmetry
+  $|p_\mathrm{T}^Z - p_\mathrm{T}^\mathrm{jet}| /
+  (p_\mathrm{T}^Z + p_\mathrm{T}^\mathrm{jet}) < 0.3$, and is the measured jet;
+  the event is rejected if that jet fails the topology requirement.
+
+  The 2D histograms zjets_{ungroomed,groomed} carry the absolute fiducial cross
+  section in the reference ($p_\mathrm{T}$, $\log_{10}(\rho^2)$) binning; the
+  corresponding _slice0/1/2 histograms are the per-slice unit-area distributions
+  that are directly comparable to the measurement.'
+Keywords: [zjet, jet mass, jet substructure, soft drop, grooming]
+BibKey:
+BibTeX:
+ToDo:
+ - 'Rename to CMS_2026_I<InspireID> and add the BibTeX entry once the paper is on
+   arXiv and the HepData record exists.'
+ - 'Replace the hard-coded pT and log10(rho^2) edges with refData() lookups against
+   the HepData YODA, and add the reference data file.'
