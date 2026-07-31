@@ -16,24 +16,14 @@ from coffea.analysis_tools import Weights, PackedSelection
 from collections import defaultdict
 from .corrections import *
 from .hist_utils import util_binning, register_hist, fill_hist
+from .hadronic_base import HadronicProcessorBase, Log
 from copy import deepcopy
 import hist
 import time
 
 
-class Log:
-    def __init__(self, mode="info"):
-        self.mode = mode
-    def info(self, *msg):
-        if self.mode in ["info", "debug"]:
-            print("[INFO]", *msg)
-    def debug(self, *msg):
-        if self.mode == "debug":
-            print("[DEBUG]", *msg)
-
-
 #### currently only for MC --> makes hists and response matrix
-class DijetProcessor(processor.ProcessorABC):
+class DijetProcessor(HadronicProcessorBase):
     '''
     Processor to run a dijet jet mass cross section analysis.
     With "do_gen == True", will perform GEN selection and create response matrices.
@@ -285,15 +275,6 @@ class DijetProcessor(processor.ProcessorABC):
             register_hist(self.hists, 'm_u_jet_reco_over_gen', [dataset_axis, pt_gen_bin, mass_gen_bin, frac_axis])
             register_hist(self.hists, 'm_g_jet_reco_over_gen', [dataset_axis, pt_gen_bin, mass_gen_bin, frac_axis])
 
-    @property
-    def accumulator(self):
-        return self.hists
-
-    def _rho(self, mass, pt):
-        #### rho = 2*log10(m/(pt*R)) -- matches the zjet QJetMassProcessor definition
-        #### (includes the jet radius R), not the bare 2*log10(m/pt).
-        return 2 * np.log10(mass / (pt * self._jetR))
-
     #############################################################
     #### Binning-study skim ("rho_skim" mode)
     #############################################################
@@ -358,208 +339,9 @@ class DijetProcessor(processor.ProcessorABC):
     #### are prescaled this much harder than the physics tables on top of the
     #### mode's own prescale (rho_skim10 -> 1 event in 1000 here).
     _SKIM_EVENT_FACTOR = 100
-
-    @staticmethod
-    def _skim_dataset_id(dataset):
-        return np.uint32(zlib.crc32(dataset.encode()))
-
-    @staticmethod
-    def _skim_f32(x):
-        #### None -> NaN so downstream masks are a single np.isfinite
-        return ak.to_numpy(ak.fill_none(x, np.nan)).astype(np.float32)
-
-    def _skim_subjet_cols(self, jets, n):
-        #### zg/Rg need the SubJet cross-reference, which does not always survive
-        #### the corrected-jet rebuild. Degrade to NaN rather than crash -- these
-        #### are diagnostic columns, not unfolding inputs.
-        nsub = np.full(n, -1, dtype=np.int8)
-        zg = np.full(n, np.nan, dtype=np.float32)
-        rg = np.full(n, np.nan, dtype=np.float32)
-        try:
-            sj = jets.subjets
-            nsub = ak.to_numpy(ak.num(sj, axis=1)).astype(np.int8)
-            sj2 = ak.pad_none(sj, 2, clip=True)
-            p1, p2 = sj2[:, 0], sj2[:, 1]
-            a, b = self._skim_f32(p1.pt), self._skim_f32(p2.pt)
-            with np.errstate(invalid="ignore"):
-                zg = (np.minimum(a, b) / (a + b)).astype(np.float32)
-            rg = self._skim_f32(p1.delta_r(p2))
-        except Exception as exc:
-            self.logging.debug(f"rho_skim: subjet columns unavailable ({exc})")
-        return nsub, zg, rg
-
-    def _fill_skim(self, out, table, dataset, weights, evt,
-                   reco=None, gen=None, gen_groomed=None):
-        """Append one block of per-jet rows to out['skim'][table].
-
-        `weights`/`reco`/`gen` are already flattened to 2 jets per event, in
-        (leading, subleading) order -- the same ordering every hist fill uses.
-        """
-        n = len(weights)
-        if n == 0:
-            return
-        #### prescale on the EVENT number so both jets of an event survive or
-        #### neither, and so the decision is identical in all three tables
-        keep = None
-        if self._skim_prescale > 1:
-            ev = ak.to_numpy(evt.event).astype(np.int64)
-            keep = np.repeat(ev % self._skim_prescale == 0, 2)
-            if not keep.any():
-                return
-        cols = {
-            "weight":     np.asarray(weights, dtype=np.float64) * self._skim_prescale,
-            "dataset_id": np.full(n, self._skim_dataset_id(dataset), dtype=np.uint32),
-            "jetidx":     np.tile(np.array([0, 1], dtype=np.int8), n // 2),
-        }
-        for name, src, dtype in (("pu_rho", "fixedGridRhoFastjetAll", np.float32),
-                                 ("npv", "PV", np.int16)):
-            try:
-                v = evt.PV.npvsGood if src == "PV" else evt[src]
-                cols[name] = np.repeat(ak.to_numpy(ak.fill_none(v, -1)), 2).astype(dtype)
-            except Exception:
-                cols[name] = np.full(n, -1, dtype=dtype)
-        if reco is not None:
-            nsub, zg, rg = self._skim_subjet_cols(reco, n)
-            cols.update(
-                ptreco=self._skim_f32(reco.pt), etareco=self._skim_f32(reco.eta),
-                phireco=self._skim_f32(reco.phi), mreco_u=self._skim_f32(reco.mass),
-                mreco_g=self._skim_f32(reco.msoftdrop),
-                nconst=ak.to_numpy(ak.fill_none(reco.nConstituents, -1)).astype(np.int16),
-                nsub=nsub, zg=zg, Rg=rg,
-            )
-        if gen is not None:
-            cols.update(
-                ptgen=self._skim_f32(gen.pt), etagen=self._skim_f32(gen.eta),
-                phigen=self._skim_f32(gen.phi), mgen_u=self._skim_f32(gen.mass),
-                mgen_g=self._skim_f32(gen_groomed.mass),
-            )
-        out['skim']['datasets'].add(dataset)
-        acc = out['skim'][table]
-        for name, arr in cols.items():
-            arr = np.asarray(arr)
-            acc[name] += processor.column_accumulator(arr if keep is None else arr[keep])
-
-    def _fill_skim_event(self, out, dataset, weights, evt, sel):
-        """Append the event-display block: one `events` row per event plus one
-        `alljets`/`allgenjets` row per jet in the FULL collections.
-
-        Filled once per chunk at the point where every cut in _SKIM_CUTS is
-        defined, so `cutbits` records exactly where each event died.
-        """
-        n = len(evt)
-        if n == 0:
-            return
-        stride = self._skim_prescale * self._SKIM_EVENT_FACTOR
-        ev = ak.to_numpy(evt.event).astype(np.int64)
-        keep = ev % stride == 0
-        if not keep.any():
-            return
-        did = self._skim_dataset_id(dataset)
-
-        def key(counts=None):
-            #### (run, lumi, event, dataset_id) -- repeated per jet when counts given
-            k = {"run": ak.to_numpy(evt.run).astype(np.uint32)[keep],
-                 "lumi": ak.to_numpy(evt.luminosityBlock).astype(np.uint32)[keep],
-                 "event": ev[keep],
-                 "dataset_id": np.full(int(keep.sum()), did, dtype=np.uint32)}
-            if counts is None:
-                return k
-            return {c: np.repeat(v, counts) for c, v in k.items()}
-
-        #### cut bitmask. A cut absent from this path (gen cuts in data) stays 0.
-        cutbits = np.zeros(n, dtype=np.uint32)
-        for i, cut in enumerate(self._SKIM_CUTS):
-            if cut not in sel.names:
-                continue
-            cutbits |= (ak.to_numpy(sel.all(cut)).astype(np.uint32) << np.uint32(i))
-
-        def num(coll):
-            try:
-                return ak.to_numpy(ak.num(evt[coll], axis=1)).astype(np.int64)
-            except Exception:
-                return np.zeros(n, dtype=np.int64)
-
-        def ht(coll):
-            try:
-                return self._skim_f32(ak.sum(evt[coll].pt, axis=-1))
-            except Exception:
-                return np.full(n, np.nan, dtype=np.float32)
-
-        try:
-            met = self._skim_f32(evt.MET.pt)
-        except Exception:
-            met = np.full(n, np.nan, dtype=np.float32)
-        try:
-            purho = ak.to_numpy(ak.fill_none(evt.fixedGridRhoFastjetAll, -1)).astype(np.float32)
-        except Exception:
-            purho = np.full(n, -1, dtype=np.float32)
-
-        ev_cols = dict(
-            key(),
-            weight=np.asarray(weights, dtype=np.float64)[keep] * stride,
-            npv=ak.to_numpy(ak.fill_none(evt.PV.npvsGood, -1)).astype(np.int16)[keep],
-            pu_rho=purho[keep],
-            njet_reco=num("FatJet")[keep].astype(np.int16),
-            njet_gen=num("GenJetAK8")[keep].astype(np.int16),
-            ht_reco=ht("FatJet")[keep], ht_gen=ht("GenJetAK8")[keep],
-            met=met[keep], cutbits=cutbits[keep],
-        )
-
-        blocks = [("events", ev_cols)]
-        for table, coll, extra in (("alljets", "FatJet", True),
-                                   ("allgenjets", "GenJetAK8", False)):
-            try:
-                jets = evt[coll][keep]
-            except Exception:
-                continue
-            counts = ak.to_numpy(ak.num(jets, axis=1)).astype(np.int64)
-            flat = ak.flatten(jets, axis=1)
-            if len(flat) == 0:
-                continue
-            cols = dict(
-                key(counts),
-                #### index WITHIN the event, so jetidx>1 is the extra-jet activity
-                jetidx=ak.to_numpy(ak.flatten(ak.local_index(jets, axis=1))).astype(np.int16),
-                pt=self._skim_f32(flat.pt), eta=self._skim_f32(flat.eta),
-                phi=self._skim_f32(flat.phi), mass=self._skim_f32(flat.mass),
-            )
-            if extra:
-                cols.update(
-                    msoftdrop=self._skim_f32(flat.msoftdrop),
-                    jetId=ak.to_numpy(ak.fill_none(flat.jetId, -1)).astype(np.int16),
-                    nconst=ak.to_numpy(ak.fill_none(flat.nConstituents, -1)).astype(np.int16),
-                )
-            blocks.append((table, cols))
-
-        out['skim']['datasets'].add(dataset)
-        for table, cols in blocks:
-            acc = out['skim'][table]
-            for name, arr in cols.items():
-                acc[name] += processor.column_accumulator(np.asarray(arr))
-
-    def _scale_skim_weights(self, accumulator, iov_of):
-        #### Same xs*lumi*1000/sumw scale the hists get, applied per dataset to
-        #### the flat `weight` column (postprocess only walks hist.Hist objects).
-        skim = accumulator.get('skim')
-        if skim is None:
-            return
-        names = sorted(skim.get('datasets', set()))
-        for table, acc in skim.items():
-            #### alljets/allgenjets carry no weight -- they join to `events` on
-            #### (run, lumi, event, dataset_id) and inherit its weight.
-            if table == 'datasets' or 'weight' not in acc:
-                continue
-            w = np.asarray(acc['weight'].value, dtype=np.float64)
-            if len(w) == 0:
-                continue
-            ids = np.asarray(acc['dataset_id'].value, dtype=np.uint32)
-            for d in names:
-                scale = getXSweight(d, iov_of(d))
-                if scale is None or scale == 1.0:
-                    self.logging.info(f"rho_skim[{table}]: no scale for {d}")
-                    continue
-                w[ids == self._skim_dataset_id(d)] *= scale
-            acc['weight'] = processor.column_accumulator(w)
+    #### dijet measures BOTH leading jets: two skim rows per event
+    _SKIM_JETS_PER_EVENT = 2
+    _SKIM_JETIDX = np.array([0, 1], dtype=np.int8)
 
     def _herwig_rho_weights(self, pt, ungroomed_mass, groomed_mass):
         #### Per-jet Herwig/Pythia weights vs rho for the dijet channel,
@@ -572,15 +354,6 @@ class DijetProcessor(processor.ProcessorABC):
         w_u = get_herwig_weight_u(mode="rho", channel="dijet").weight_array(pt, rho_u)
         w_g = get_herwig_weight_g(mode="rho", channel="dijet").weight_array(pt, rho_g)
         return np.nan_to_num(w_u, nan=1.0), np.nan_to_num(w_g, nan=1.0)
-
-    def _rapidity(self, p4):
-        #### Preserve the original GluonJetMass selection helper exactly.
-        return 0.5 * np.log((p4.energy + p4.pz) / (p4.energy - p4.pz))
-
-    def _weight_variations(self, weights_obj):
-        if self.systematics is None:
-            return list(weights_obj.variations)
-        return [syst for syst in self.systematics if syst != "nominal" and syst in weights_obj.variations]
 
     def _fill_reco_cov(self, out, dataset, name, ptvals, rhovals, ok, w_event):
         """Accumulate the event-clustered reco covariance V_ij = sum_e w_e^2 n_ei n_ej.
@@ -929,16 +702,7 @@ class DijetProcessor(processor.ProcessorABC):
                     #### one-sided migration). Floor = the trijet pt axis low
                     #### edge, 185-200 sink included.
                     if self.trijet_veto:
-                        genjet3 = ak.firsts(GenJetAK8[:, 2:])
-                        gdphimin3 = ak.min([dphi12_gen,
-                                            np.abs(genjet1.delta_phi(genjet3)),
-                                            np.abs(genjet2.delta_phi(genjet3))], axis=0)
-                        in_trijet_gen = ak.fill_none(ak.where(
-                            ak.num(events_corr.GenJetAK8) > 2,
-                            (np.abs(self._rapidity(genjet3.p4)) < self.ycut)
-                            & (gdphimin3 > 1.0) & (genjet3.pt > 185.),
-                            False), False)
-                        sel.add("vetoTrijetGen", ~in_trijet_gen)
+                        sel.add("vetoTrijetGen", ~self._in_trijet_phase_space(GenJetAK8))
                     else:
                         sel.add("vetoTrijetGen", ak.ones_like(weights, dtype=bool))
                     sel.add("genTot_seq", sel.all("genRap_seq", "dphiGen2", "genAsym0p3", "vetoTrijetGen")& ~ak.is_none(events_corr.GenJet[:,:2].mass) & ~ak.is_none(groomed_gen_dijet[:,:2].mass))
@@ -1005,16 +769,7 @@ class DijetProcessor(processor.ProcessorABC):
                 #### axis floor, 185-200 sink included). Study:
                 #### scripts/channel_orthogonality.py.
                 if self.trijet_veto:
-                    jet3 = ak.firsts(FatJet[:, 2:])
-                    dphimin3 = ak.min([np.abs(jet1.delta_phi(jet2)),
-                                       np.abs(jet1.delta_phi(jet3)),
-                                       np.abs(jet2.delta_phi(jet3))], axis=0)
-                    in_trijet = ak.fill_none(ak.where(
-                        ak.num(events_corr.FatJet) > 2,
-                        (np.abs(self._rapidity(jet3.p4)) < self.ycut)
-                        & (dphimin3 > 1.0) & (jet3.pt > 185.),
-                        False), False)
-                    sel.add("vetoTrijetReco", ~in_trijet)
+                    sel.add("vetoTrijetReco", ~self._in_trijet_phase_space(FatJet))
                 else:
                     sel.add("vetoTrijetReco", ak.ones_like(weights, dtype=bool))
                 if jetsyst == "nominal":
@@ -1482,47 +1237,6 @@ class DijetProcessor(processor.ProcessorABC):
             del events_jk
         out['cutflow'][datastr]['chunks'] += 1
         return out    
-    def postprocess(self, accumulator):
-        #### Apply MC xs*lumi*1000/sumw normalization here (zjet-style), per dataset.
-        #### Data carries no genWeight scaling. The `dataset` axis holds the full
-        #### dataset name so we can infer the IOV and look up xs/sumw.
-        if not self.do_gen:
-            return accumulator
-
-        def _iov(ds):
-            if re.findall(r'APV', ds) or re.findall(r'HIPM', ds):
-                return '2016APV'
-            if re.findall(r'UL18', ds) or re.findall(r'UL2018', ds):
-                return '2018'
-            if re.findall(r'UL17', ds) or re.findall(r'UL2017', ds):
-                return '2017'
-            return '2016'
-
-        self._scale_skim_weights(accumulator, _iov)
-
-        for key, h in accumulator.items():
-            if not isinstance(h, hist.Hist):
-                continue
-            axnames = [ax.name for ax in h.axes]
-            if 'dataset' not in axnames:
-                continue
-            ds_axis = h.axes['dataset']
-            view = h.view(flow=True)
-            for ds in list(ds_axis):
-                scale = getXSweight(ds, _iov(ds))
-                if scale is None:
-                    scale = 1.0
-                idx = ds_axis.index(ds)
-                if key.startswith('reco_cov_'):
-                    #### covariance hists are second-moment quantities: the
-                    #### VALUE is V_ij = sum w^2 n_i n_j and scales as scale^2
-                    view['value'][idx] *= scale * scale
-                    view['variance'][idx] *= scale ** 4
-                else:
-                    view['value'][idx] *= scale
-                    view['variance'][idx] *= scale * scale
-        return accumulator
-
 ##### TO DO #####
 #make mass vs pt and response matrix (pt_gen, mass_gen, pt_reco, mass_reco)
 # Add eta/phi/delta_r/pt cuts fully
