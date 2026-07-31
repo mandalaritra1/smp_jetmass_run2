@@ -259,6 +259,11 @@ class util_binning :
             # triggers reach much higher).  Same unfold-side caveat as zjet:
             # fake/miss-by-subtraction must sum the matched matrix over the
             # IN-RANGE pt bins only (exclude pt flow).
+            # Both binning-study results are SUBSETS of these edges (dijet
+            # 200/290/400/480/570/inf, trijet 200/290/400/inf), so the pt
+            # binning is an unfold-time merge and this axis stays as-is --
+            # merge pt on BOTH axes, never gen-only (see the study's chi2_A
+            # jump when only the gen pt binning was merged).
             self.ptgen_axis  = hist.axis.Variable(
                 [185., 200., 290., 400., 480., 570., 680., 760., 820., 13000.],
                 name="ptgen",  label=r"$p_{T,GEN}$ (GeV)")
@@ -279,13 +284,24 @@ class util_binning :
                 [-10, -8, -7, -6, -5.5, -5, -4.75, -4.5, -4.25, -4, -3.75, -3.5, -3.25,
                  -3, -2.75, -2.5, -2.25, -2, -1.75, -1.5, -1.25, -1, -0.75, -0.5, -0.25, 0],
                 name="mpt_reco", label=r"$\log(\rho^2)$ (Detector)")
-            # Groomed rho: zjet's buffer scheme verbatim (0.5-wide shown region,
-            # 0.25-wide hidden buffer resolving -5..-3.5, coarse deep-tail sink)
-            # with the hadronic -8/-7 tail edges prepended for the gluon tail.
+            # Groomed rho: the binning-study result (2026-07-25), replacing the
+            # inherited zjet buffer scheme.  Edges above -4 are the dijet 12-bin
+            # reco proposal; the trijet 7-bin proposal was deliberately chosen as
+            # a SUBSET of it (-2.85, -2.25, -1.8, -1.5, -1.1, -0.75), so one
+            # shared axis serves both channels and the two are comparable by
+            # rebinning instead of interpolation.  Below the -4 floor two coarse
+            # sink bins stand in for the study's single [-10,-4] buffer: they are
+            # never reported, they keep low-rho migrations inside the response
+            # instead of being subtracted as fakes, and they merge to that single
+            # buffer bin at unfold time.  Nothing here is the *reported* binning
+            # -- the reported gen binning coarsens this one (dijet: two lowest
+            # pairs merged -> 10 bins; trijet: lowest pair -> 6), which stays an
+            # unfold-time choice because every candidate is nested in this axis.
+            # Research-notes topics/{dijet,trijet}_rho_binning_proposal_and_unfold_stability.
             # The detector axis is the exact 2:1 refinement of the truth axis,
             # same as zjet (mreco_over_pt_g_axis == gen edges halved).
-            _had_rho_gen_g = [-10, -8, -7, -6, -5, -4.75, -4.5, -4.25, -4,
-                              -3.75, -3.5, -3, -2.5, -2, -1.5, -1, 0]
+            _had_rho_gen_g = [-10, -5, -4, -3.4, -2.85, -2.25, -1.8, -1.5,
+                              -1.3, -1.1, -0.9, -0.75, -0.65, -0.55, 0]
             self.mgen_over_pt_g_axis = hist.axis.Variable(
                 _refine_edges(_had_rho_gen_g, self.rho_refine),
                 name='mpt_gen', label=r'$\log(\rho^2)$')

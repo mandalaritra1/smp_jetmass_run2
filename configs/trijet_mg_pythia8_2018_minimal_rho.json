@@ -1,0 +1,20 @@
+{
+  "channel": "trijet",
+  "dataset": "mg_pythia8",
+  "era": "2018",
+  "mode": "minimal_rho",
+  "systematic_profile": "minimal_syst",
+  "executor_mode": "dask-casa",
+  "casa": true,
+  "test": false,
+  "useDefault": false,
+  "chunksize": 50000,
+  "chunksize_test": 50000,
+  "group_mode": "all_in_one",
+  "redirector": "casa",
+  "prependstr": "root://xcache/",
+  "worker_memory": "6 GiB",
+  "worker_merge": 4,
+  "treereduce": true,
+  "_comment": "Full-statistics histogram production on the 2026-07-25 hadronic groomed-rho axis (hist_utils._had_rho_gen_g: 14 gen / 28 reco bins containing both the dijet 12-bin and trijet 7-bin proposals). Replaces the rho_skim runs: the binning is settled, so no per-jet ntuples -- histograms only, at full statistics instead of the skim's 1-in-10 prescale. minimal_syst so these double as unfolding inputs (JES/JER/JMS/JMR + weight systematics). QCD madgraphMLM HT bins."
+}

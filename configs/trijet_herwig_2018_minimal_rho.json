@@ -1,0 +1,20 @@
+{
+  "channel": "trijet",
+  "dataset": "herwig",
+  "era": "2018",
+  "mode": "minimal_rho",
+  "systematic_profile": "no_syst",
+  "executor_mode": "dask-casa",
+  "casa": true,
+  "test": false,
+  "useDefault": false,
+  "chunksize": 50000,
+  "chunksize_test": 50000,
+  "group_mode": "all_in_one",
+  "redirector": "casa",
+  "prependstr": "root://xcache/",
+  "worker_memory": "6 GiB",
+  "worker_merge": 4,
+  "treereduce": true,
+  "_comment": "Full-statistics nominal MG+Herwig7 CH3 response on the adopted hadronic rho axis with inclusive trijet gen/reco marginals. Histogram-only alternate-generator response test; no skims or prescale."
+}
