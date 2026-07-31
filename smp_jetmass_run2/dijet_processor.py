@@ -225,6 +225,15 @@ class DijetProcessor(processor.ProcessorABC):
             #### Full-stat diagnostic for the historical m_g > 2 GeV floor.
             #### Separate keys keep the adopted no-floor result untouched.
             register_hist(self.hists, 'ptjet_rhojet_g_reco_mfloor2', [dataset_axis, syst_cat, *jk_axes, pt_bin, rho_g_bin])
+            #### Quark/gluon content per measurement bin: reco (pt, rho_g) of
+            #### the MATCHED (final_seq) measured jets, split by the matched
+            #### gen jet's partonFlavour, nominal weights only. Categories
+            #### follow corrections.getJetFlavors except partonFlavour==0
+            #### (no matching parton) is split out as "Undefined" instead of
+            #### being silently counted as UDS. MC only; fakes are excluded
+            #### by construction (no matched gen jet -> no flavour).
+            if self.do_gen:
+                register_hist(self.hists, 'ptjet_rhojet_g_reco_flav', [dataset_axis, parton_cat, pt_bin, rho_g_bin])
             #### Event-clustered covariance of the reco (pt, rho) spectrum:
             #### V_ij = sum_e w_e^2 n_{e,i} n_{e,j}. Two jets per event make the
             #### input covariance non-diagonal (~10% off-diag correlations, up to
@@ -1314,6 +1323,14 @@ class DijetProcessor(processor.ProcessorABC):
                                   mpt_gen=self._rho(groomed_gen_dijet.mass[floor_response_g], gen_dijet.pt[floor_response_g]),
                                   ptreco=dijet.pt[floor_response_g], ptgen=gen_dijet.pt[floor_response_g],
                                   weight=resp_rw_g[floor_response_g])
+                        #### q/g content of the measured (matched) jets per
+                        #### reco (pt, rho_g) bin -- nominal weights, no
+                        #### reweight variants
+                        rho_g_flav = self._rho(dijet.msoftdrop, dijet.pt)
+                        for _fl, _m in partonFlavourMasks(gen_dijet).items():
+                            fill_hist(out, "ptjet_rhojet_g_reco_flav", dataset=dataset, partonFlav=_fl,
+                                      ptreco=dijet.pt[_m], mpt_reco=rho_g_flav[_m],
+                                      weight=dijet_weights[_m])
                     fill_hist(out, "ptjet_mjet_u_reco", dataset=dataset, systematic=jetsyst, **jkkw, ptreco=ptreco_np[ok_reco_u], mreco=mreco_u_filled[ok_reco_u], weight=reco_weights[ok_reco_u] )
                     fill_hist(out, "ptjet_mjet_g_reco", dataset=dataset, systematic=jetsyst, **jkkw, ptreco=ptreco_np[ok_reco_g], mreco=mreco_g_filled[ok_reco_g], weight=reco_weights[ok_reco_g] )
                     fill_hist(out, "ptjet_rhojet_u_reco", dataset=dataset, systematic=jetsyst, **jkkw, ptreco=ptreco_np[ok_reco_u], mpt_reco=self._rho(mreco_u_filled, ptreco_np)[ok_reco_u], weight=reco_rw_u[ok_reco_u])

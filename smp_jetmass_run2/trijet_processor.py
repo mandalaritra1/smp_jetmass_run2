@@ -181,6 +181,10 @@ class TrijetProcessor(processor.ProcessorABC):
             register_hist(self.hists, 'ptjet_rhojet_u_reco', [dataset_axis, syst_cat, *jk_axes, pt_bin, rho_bin])
             register_hist(self.hists, 'ptjet_rhojet_g_reco', [dataset_axis, syst_cat, *jk_axes, pt_bin, rho_g_bin])
             register_hist(self.hists, 'ptjet_rhojet_g_reco_mfloor2', [dataset_axis, syst_cat, *jk_axes, pt_bin, rho_g_bin])
+            #### Quark/gluon content per measurement bin (see dijet_processor
+            #### for the category definitions -- getJetFlavors + "Undefined").
+            if self.do_gen:
+                register_hist(self.hists, 'ptjet_rhojet_g_reco_flav', [dataset_axis, parton_cat, pt_bin, rho_g_bin])
             if self.do_gen:
                 register_hist(self.hists, 'ptjet_rhojet_u_gen', [dataset_axis, syst_cat, *jk_axes, pt_gen_bin, rho_gen_bin])
                 register_hist(self.hists, 'ptjet_rhojet_g_gen', [dataset_axis, syst_cat, *jk_axes, pt_gen_bin, rho_gen_g_bin])
@@ -1056,6 +1060,13 @@ class TrijetProcessor(processor.ProcessorABC):
                                   mpt_gen=self._rho(groomed_genjet.mass[floor_response_g], genjet.pt[floor_response_g]),
                                   ptreco=jet.pt[floor_response_g], ptgen=genjet.pt[floor_response_g],
                                   weight=final_weights[floor_response_g])
+                        #### q/g content of the measured (matched) jet 3 per
+                        #### reco (pt, rho_g) bin -- nominal weights
+                        rho_g_flav = self._rho(jet.msoftdrop, jet.pt)
+                        for _fl, _m in partonFlavourMasks(genjet).items():
+                            fill_hist(out, "ptjet_rhojet_g_reco_flav", dataset=dataset, partonFlav=_fl,
+                                      ptreco=jet.pt[_m], mpt_reco=rho_g_flav[_m],
+                                      weight=final_weights[_m])
                     fill_hist(out, "ptjet_mjet_u_reco", dataset=dataset, systematic=jetsyst, **jkkw, ptreco=recojet.pt, mreco=recojet.mass, weight=reco_weights)
                     fill_hist(out, "ptjet_mjet_g_reco", dataset=dataset, systematic=jetsyst, **jkkw, ptreco=recojet.pt, mreco=recojet.msoftdrop, weight=reco_weights )
                     fill_hist(out, "ptjet_rhojet_u_reco", dataset=dataset, systematic=jetsyst, **jkkw, ptreco=recojet.pt, mpt_reco=self._rho(recojet.mass, recojet.pt), weight=reco_weights)
