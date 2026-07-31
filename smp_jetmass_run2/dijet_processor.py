@@ -633,7 +633,11 @@ class DijetProcessor(HadronicProcessorBase):
                         weights_obj.add("Q2muF", weight=q2muFNom, weightUp=q2muFUp,weightDown=q2muFDown) 
                         q2muRNom, q2muRUp, q2muRDown = GetQ2muR(events_corr)
                         weights_obj.add("Q2muR", weight=q2muRNom, weightUp=q2muRUp, weightDown=q2muRDown) 
-                    if "PSWeight" in events_corr.fields and 'herwig' not in dataset:                
+                    #### require >=4 stored PSWeights: the flat-pT QCD_Pt pythia8
+                    #### samples carry a dummy nPSWeight=1 branch (PSWeight=[1.0]),
+                    #### which GetPSWeights would pad into all-unity isr/fsr
+                    if ("PSWeight" in events_corr.fields and 'herwig' not in dataset
+                            and ak.any(ak.num(events_corr.PSWeight) >= 4)):
                         ISRNom, ISRUp, ISRDown = GetPSWeights(events_corr, shower="ISR")
                         weights_obj.add("isr", weight=ISRNom, weightUp=ISRUp, weightDown=ISRDown,)
                         FSRNom, FSRUp, FSRDown = GetPSWeights(events_corr, shower="FSR")

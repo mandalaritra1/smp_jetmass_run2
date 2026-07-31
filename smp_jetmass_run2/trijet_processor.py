@@ -32,6 +32,16 @@ class TrijetProcessor(HadronicProcessorBase):
     MC, hard veto for 2018 data) and canonical systematic-axis names
     (PUSF->pu, L1prefiring->l1prefiring, PDF->pdf, ISR->isr, FSR->fsr).
     '''
+    #### Weight systematics that genuinely change the gen-level prediction
+    #### (theory reweightings, nominal weight 1.0). Under these the gen truth,
+    #### the response and the misses must move consistently; every other weight
+    #### systematic is detector-side and leaves the gen truth nominal
+    #### (mirrors dijet/zjet).
+    _THEORY_GEN_SYSTS = frozenset({
+        "isrUp", "isrDown", "fsrUp", "fsrDown", "pdfUp", "pdfDown",
+        "Q2muFUp", "Q2muFDown", "Q2muRUp", "Q2muRDown",
+    })
+
     def __init__(self, do_gen=True, mode="minimal", debug=False,
                  jet_systematics=None, systematics=None,
                  ycut=2.5, btag='None', jk=False, jk_range=None):
@@ -490,7 +500,9 @@ class TrijetProcessor(HadronicProcessorBase):
                 ##### Intitialize and fill weights object
                 ###################################
                 
-                weights_obj = Weights(len(weights))
+                #### storeIndividual so partial_weight can build the theory-only
+                #### gen-truth weights (dijet/zjet parity)
+                weights_obj = Weights(len(weights), storeIndividual=True)
                 self.logging.debug("weights ", weights)
                 weights_obj.add('initWeight', weight=weights)
                 if self.do_gen:
@@ -513,7 +525,11 @@ class TrijetProcessor(HadronicProcessorBase):
                         q2muRNom, q2muRUp, q2muRDown = GetQ2muR(events_corr)
                         weights_obj.add("Q2muR", weight=q2muRNom, weightUp=q2muRUp, weightDown=q2muRDown) 
                                         #### Apply L1 prefiring weights
-                    if "PSWeight" in events_corr.fields and 'herwig' not in dataset:
+                    #### require >=4 stored PSWeights: the flat-pT QCD_Pt pythia8
+                    #### samples carry a dummy nPSWeight=1 branch (PSWeight=[1.0]),
+                    #### which GetPSWeights would pad into all-unity isr/fsr
+                    if ("PSWeight" in events_corr.fields and 'herwig' not in dataset
+                            and ak.any(ak.num(events_corr.PSWeight) >= 4)):
                         ISRNom, ISRUp, ISRDown = GetPSWeights(events_corr, shower="ISR")
                         weights_obj.add("isr", weight=ISRNom, weightUp=ISRUp, weightDown=ISRDown)
                         FSRNom, FSRUp, FSRDown = GetPSWeights(events_corr, shower="FSR")
@@ -874,7 +890,21 @@ class TrijetProcessor(HadronicProcessorBase):
                             fill_hist(out, "ptjet_rhojet_g_reco", dataset=dataset, systematic=syst, **jkkw, ptreco=recojet.pt,mpt_reco=self._rho(recojet.msoftdrop, recojet.pt), weight=reco_weights )
                             if not self.do_minimal:
                                 fill_hist(out, "jet_pt_eta_phi", dataset=dataset, systematic=syst, ptreco=jet.pt, phi=jet.phi, eta=jet.eta, weight=final_weights)
-                        #### Gluon purity plots        
+                            #### GEN truth per weight systematic (dijet/zjet parity):
+                            #### only the theory weights enter (nominal 1.0, so the
+                            #### nominal gen spectrum is unchanged) and only theory
+                            #### variations shift it; detector systematics pass
+                            #### modifier=None.
+                            _gen_modifier = syst if syst in self._THEORY_GEN_SYSTS else None
+                            _gen_include = [n for n in ('initWeight', 'isr', 'fsr', 'pdf', 'Q2muF', 'Q2muR')
+                                            if n in weights_obj._weights]
+                            gen_syst_weights = weights_obj.partial_weight(
+                                include=_gen_include, modifier=_gen_modifier)[gen_truth_sel]
+                            fill_hist(out, 'ptjet_mjet_u_gen', dataset=dataset, systematic=syst, **jkkw, ptgen=genjet_truth.pt, mgen=genjet_truth.mass, weight=gen_syst_weights)
+                            fill_hist(out, 'ptjet_mjet_g_gen', dataset=dataset, systematic=syst, **jkkw, ptgen=genjet_truth.pt, mgen=groomed_genjet_truth.mass, weight=gen_syst_weights)
+                            fill_hist(out, 'ptjet_rhojet_u_gen', dataset=dataset, systematic=syst, **jkkw, ptgen=genjet_truth.pt, mpt_gen=self._rho(genjet_truth.mass, genjet_truth.pt), weight=gen_syst_weights)
+                            fill_hist(out, 'ptjet_rhojet_g_gen', dataset=dataset, systematic=syst, **jkkw, ptgen=genjet_truth.pt, mpt_gen=self._rho(groomed_genjet_truth.mass, genjet_truth.pt), weight=gen_syst_weights)
+                        #### Gluon purity plots
                         jet1flav = getJetFlavors(events_corr[sel.all("final_seq")].FatJet[:,0])
                         jet2flav = getJetFlavors(events_corr[sel.all("final_seq")].FatJet[:,1])
                         jet3flav = getJetFlavors(events_corr[sel.all("final_seq")].FatJet[:,2])
