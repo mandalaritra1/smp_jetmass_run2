@@ -31,6 +31,8 @@ hep.style.use(hep.style.CMS)
 P6 = ["#5790fc", "#f89c20", "#e42536", "#964a8b", "#9c9ca1", "#7a21dd"]
 FLAVS = ["Gluon", "UDS", "Charm", "Bottom"]
 INPUT_TAG = "minrho_veto_20260731 (adb7024)"
+#### publication sizes (reviewer-driven; mirrors unfold's unfolder_core PUB_*)
+PUB_LABEL_FS, PUB_TICK_FS, PUB_LEGEND_FS, PUB_ANNOT_FS = 30, 26, 20, 22
 #### display cap for the open-ended last pt bin (real edge 13000)
 PT_CAP = 1000.0
 
@@ -77,10 +79,18 @@ def reco_pt(out):
     return hh.axes[0].edges, hh.values()
 
 
-def new_panel(rlabel):
+def new_panel(rlabel, data=False):
     fig, ax = plt.subplots(layout="constrained")
-    hep.cms.label("Preliminary", data=False, loc=0, rlabel=rlabel, ax=ax)
+    #### CMS block INSIDE the frame (loc=2) -- house preference 2026-07-31;
+    #### keep the top-left clear of curves/legend/text
+    hep.cms.label("Preliminary", data=data, loc=2, rlabel=rlabel, ax=ax)
+    ax.tick_params(labelsize=PUB_TICK_FS)
     return fig, ax
+
+
+def finish(ax, xlab, ylab):
+    ax.set_xlabel(xlab, fontsize=PUB_LABEL_FS)
+    ax.set_ylabel(ylab, fontsize=PUB_LABEL_FS)
 
 
 def main(argv=None):
@@ -108,13 +118,13 @@ def main(argv=None):
                               (tri, "trijet (jet 3)", P6[1])):
         edges, frac = flav_vs_pt(out)
         ax.stairs(frac["Gluon"], edges, label=label, color=color, lw=2.5)
-    ax.text(0.03, 0.965, "QCD MG+Pythia8", transform=ax.transAxes,
-            ha="left", va="top", fontsize=20)
-    ax.set_xlabel(r"measured-jet $p_\mathrm{T}^\mathrm{reco}$ (GeV)  [last bin: > 820]")
-    ax.set_ylabel("Gluon fraction")
+    ax.text(0.03, 0.80, "QCD MG+Pythia8", transform=ax.transAxes,
+            ha="left", va="top", fontsize=PUB_ANNOT_FS)
+    finish(ax, r"measured-jet $p_\mathrm{T}^\mathrm{reco}$ (GeV)  [last bin: > 820]",
+           "Gluon fraction")
     ax.set_ylim(0, 1.0)
     ax.set_xlim(185, PT_CAP)
-    ax.legend(loc="upper right")
+    ax.legend(loc="upper right", fontsize=PUB_LEGEND_FS)
     stamp(fig, INPUT_TAG, do_stamp)
     fig.savefig(args.outdir / "hadronic_qg_gluon_fraction_fullstat.png", dpi=150)
     plt.close(fig)
@@ -125,13 +135,13 @@ def main(argv=None):
         edges, frac = flav_vs_pt(out)
         for fl, color in zip(FLAVS, P6):
             ax.stairs(frac[fl], edges, label=fl, color=color, lw=2.5)
-        ax.text(0.03, 0.965, f"QCD MG+Pythia8\n{ch} ({meas})", transform=ax.transAxes,
-                ha="left", va="top", fontsize=20)
-        ax.set_xlabel(r"measured-jet $p_\mathrm{T}^\mathrm{reco}$ (GeV)  [last bin: > 820]")
-        ax.set_ylabel("Flavour fraction")
+        ax.text(0.03, 0.80, f"QCD MG+Pythia8\n{ch} ({meas})", transform=ax.transAxes,
+                ha="left", va="top", fontsize=PUB_ANNOT_FS)
+        finish(ax, r"measured-jet $p_\mathrm{T}^\mathrm{reco}$ (GeV)  [last bin: > 820]",
+               "Flavour fraction")
         ax.set_ylim(0, 1.0)
         ax.set_xlim(185, PT_CAP)
-        ax.legend(loc="upper right")
+        ax.legend(loc="upper right", fontsize=PUB_LEGEND_FS)
         stamp(fig, INPUT_TAG, do_stamp)
         fig.savefig(args.outdir / f"hadronic_qg_flavour_composition_{ch}.png", dpi=150)
         plt.close(fig)
@@ -142,20 +152,18 @@ def main(argv=None):
                               (tri, "trijet (jet 3)", P6[1])):
         redges, gfrac = gluon_vs_rho(out, 200., 290.)
         ax.stairs(gfrac, redges, label=label, color=color, lw=2.5)
-    ax.text(0.03, 0.965, "QCD MG+Pythia8\n" + r"$200 < p_\mathrm{T}^\mathrm{reco} < 290$ GeV",
-            transform=ax.transAxes, ha="left", va="top", fontsize=20)
-    ax.set_xlabel(r"$\log_{10}(\rho^2)$ (groomed, detector)")
-    ax.set_ylabel("Gluon fraction")
+    ax.text(0.03, 0.80, "QCD MG+Pythia8\n" + r"$200 < p_\mathrm{T}^\mathrm{reco} < 290$ GeV",
+            transform=ax.transAxes, ha="left", va="top", fontsize=PUB_ANNOT_FS)
+    finish(ax, r"$\log_{10}(\rho^2)$ (groomed, detector)", "Gluon fraction")
     ax.set_ylim(0, 1.0)
     ax.set_xlim(-6, 0)
-    ax.legend(loc="lower center")
+    ax.legend(loc="lower center", fontsize=PUB_LEGEND_FS)
     stamp(fig, INPUT_TAG, do_stamp)
     fig.savefig(args.outdir / "hadronic_qg_gluon_fraction_vs_rho_pt200290.png", dpi=150)
     plt.close(fig)
 
     #### 4. veto effect: veto'd / pre-veto reco yield vs pt (MC + data)
-    fig, ax = plt.subplots(layout="constrained")
-    hep.cms.label("Preliminary", data=True, loc=0, rlabel="2018 (13 TeV)", ax=ax)
+    fig, ax = new_panel("2018 (13 TeV)", data=True)
     for new_pkl, old_pkl, ch, label, color in (
             (args.dijet_mc, args.preveto_mc, "dijet", "QCD MG+Pythia8", P6[2]),
             (args.dijet_data, args.preveto_data, "dijet", "JetHT (prescale-weighted)", "black")):
@@ -168,11 +176,12 @@ def main(argv=None):
         en = en.copy(); en[-1] = min(en[-1], PT_CAP)
         ax.stairs(r, en, label=label, color=color, lw=2.5)
     ax.axhline(1.0, color="0.6", lw=1, ls="--")
-    ax.set_xlabel(r"jet $p_\mathrm{T}^\mathrm{reco}$ (GeV)  [last bin: > 820]")
-    ax.set_ylabel("dijet reco yield ratio (veto / no veto)")
+    finish(ax, r"jet $p_\mathrm{T}^\mathrm{reco}$ (GeV)  [last bin: > 820]",
+           "dijet reco yield ratio (veto / no veto)")
     ax.set_ylim(0.8, 1.1)
     ax.set_xlim(185, PT_CAP)
-    ax.legend(loc="lower left", title="trijet-priority veto")
+    ax.legend(loc="lower left", title="trijet-priority veto",
+              fontsize=PUB_LEGEND_FS, title_fontsize=PUB_LEGEND_FS)
     stamp(fig, INPUT_TAG, do_stamp)
     fig.savefig(args.outdir / "dijet_trijet_veto_effect_vs_pt.png", dpi=150)
     plt.close(fig)
