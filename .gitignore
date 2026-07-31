@@ -127,3 +127,7 @@ rivet/py.py
 # ARC diagnostic scripts are a local working area coupled to the unfold repo;
 # untracked pending reorganization.
 tools/arc_diagnostics/
+
+# Local agent instruction files (not part of the public repo)
+CLAUDE.md
+AGENTS.md
