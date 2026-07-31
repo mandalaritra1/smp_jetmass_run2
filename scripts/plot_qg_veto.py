@@ -88,6 +88,15 @@ def new_panel(rlabel, data=False):
     return fig, ax
 
 
+def cms_x(ax):
+    """Left x (axes coords) of the inside CMS block, so in-panel text
+    left-aligns with it exactly (mplhep pads loc=2 by ~0.045, not 0)."""
+    for t in ax.texts:
+        if t.get_text() == "CMS":
+            return t.get_position()[0]
+    return 0.03
+
+
 def finish(ax, xlab, ylab):
     ax.set_xlabel(xlab, fontsize=PUB_LABEL_FS)
     ax.set_ylabel(ylab, fontsize=PUB_LABEL_FS)
@@ -118,7 +127,7 @@ def main(argv=None):
                               (tri, "trijet (jet 3)", P6[1])):
         edges, frac = flav_vs_pt(out)
         ax.stairs(frac["Gluon"], edges, label=label, color=color, lw=2.5)
-    ax.text(0.03, 0.80, "QCD MG+Pythia8", transform=ax.transAxes,
+    ax.text(cms_x(ax), 0.80, "QCD MG+Pythia8", transform=ax.transAxes,
             ha="left", va="top", fontsize=PUB_ANNOT_FS)
     finish(ax, r"measured-jet $p_\mathrm{T}^\mathrm{reco}$ (GeV)  [last bin: > 820]",
            "Gluon fraction")
@@ -135,7 +144,7 @@ def main(argv=None):
         edges, frac = flav_vs_pt(out)
         for fl, color in zip(FLAVS, P6):
             ax.stairs(frac[fl], edges, label=fl, color=color, lw=2.5)
-        ax.text(0.03, 0.80, f"QCD MG+Pythia8\n{ch} ({meas})", transform=ax.transAxes,
+        ax.text(cms_x(ax), 0.80, f"QCD MG+Pythia8\n{ch} ({meas})", transform=ax.transAxes,
                 ha="left", va="top", fontsize=PUB_ANNOT_FS)
         finish(ax, r"measured-jet $p_\mathrm{T}^\mathrm{reco}$ (GeV)  [last bin: > 820]",
                "Flavour fraction")
@@ -152,7 +161,7 @@ def main(argv=None):
                               (tri, "trijet (jet 3)", P6[1])):
         redges, gfrac = gluon_vs_rho(out, 200., 290.)
         ax.stairs(gfrac, redges, label=label, color=color, lw=2.5)
-    ax.text(0.03, 0.80, "QCD MG+Pythia8\n" + r"$200 < p_\mathrm{T}^\mathrm{reco} < 290$ GeV",
+    ax.text(cms_x(ax), 0.80, "QCD MG+Pythia8\n" + r"$200 < p_\mathrm{T}^\mathrm{reco} < 290$ GeV",
             transform=ax.transAxes, ha="left", va="top", fontsize=PUB_ANNOT_FS)
     finish(ax, r"$\log_{10}(\rho^2)$ (groomed, detector)", "Gluon fraction")
     ax.set_ylim(0, 1.0)
