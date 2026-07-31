@@ -1,0 +1,16 @@
+{
+  "channel": "trijet",
+  "dataset": "data",
+  "era": "2018",
+  "mode": "rho_skim",
+  "systematic_profile": "no_syst",
+  "executor_mode": "futures",
+  "casa": true,
+  "test": true,
+  "useDefault": false,
+  "chunksize": 100000,
+  "chunksize_test": 50000,
+  "group_mode": "all_in_one",
+  "redirector": "casa",
+  "prependstr": "root://xcache/"
+}

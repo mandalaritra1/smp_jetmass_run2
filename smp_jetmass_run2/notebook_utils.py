@@ -1,6 +1,7 @@
 import os
 import json
 import pickle
+import re
 import shutil
 import time
 import logging
@@ -66,6 +67,7 @@ RHO_MODE_OPTIONS = [
     "rho_jk",
     "reweight_pythia_rho",
     "reweight_data_prior_rho",
+    "rho_skim",
 ]
 MASS_MODE_OPTIONS = [
     "minimal",
@@ -77,6 +79,11 @@ MASS_MODE_OPTIONS = [
     "mass_diagnostic_ntuple",
 ]
 MODE_OPTIONS = ["validation", "full"] + RHO_MODE_OPTIONS + MASS_MODE_OPTIONS
+
+
+def is_skim_mode(mode) -> bool:
+    """`rho_skim` keeps every event, `rho_skimN` keeps 1 in N (see DijetProcessor)."""
+    return bool(isinstance(mode, str) and re.fullmatch(r"rho_skim[1-9][0-9]*", mode))
 SYSTEMATIC_PROFILE_OPTIONS = ["all_syst", "minimal_syst", "no_syst"]
 EXECUTOR_MODE_OPTIONS = [
     "futures",
@@ -191,7 +198,7 @@ def validate_analysis_config(cfg: dict) -> dict:
         merged["dataset"] = ANALYSIS_CONFIG_DEFAULTS["dataset"]
     if merged["era"] not in ERA_OPTIONS:
         merged["era"] = ANALYSIS_CONFIG_DEFAULTS["era"]
-    if merged["mode"] not in MODE_OPTIONS:
+    if merged["mode"] not in MODE_OPTIONS and not is_skim_mode(merged["mode"]):
         merged["mode"] = ANALYSIS_CONFIG_DEFAULTS["mode"]
     if merged.get("channel") not in CHANNEL_OPTIONS:
         merged["channel"] = ANALYSIS_CONFIG_DEFAULTS["channel"]
@@ -466,9 +473,11 @@ HADRONIC_MODE_ALIASES = {
     "mass_jk_mc": "mass_jk",
     "mass_jk_data": "mass_jk",
 }
-HADRONIC_MODES = {"minimal", "minimal_rho", "validation", "full", "mass_jk", "rho_jk", "reweight_pythia_rho"}
+HADRONIC_MODES = {"minimal", "minimal_rho", "validation", "full", "mass_jk", "rho_jk",
+                  "reweight_pythia_rho", "rho_skim"}
 # Modes only available for some hadronic channels. reweight_pythia_rho needs a
 # Herwig sample to build the h/p splines; that exists for dijet but not trijet.
+# rho_skim is implemented in dijet and trijet (2026-07-25) but not zjet.
 HADRONIC_CHANNEL_EXCLUDED_MODES = {"trijet": {"reweight_pythia_rho"}}
 
 
@@ -477,6 +486,9 @@ def normalize_mode_for_channel(mode: str, channel: str) -> str:
         return mode
     resolved = HADRONIC_MODE_ALIASES.get(mode, mode)
     excluded = HADRONIC_CHANNEL_EXCLUDED_MODES.get(channel, set())
+    # rho_skim takes an optional integer prescale suffix: rho_skim20 = 1 event in 20
+    if is_skim_mode(resolved) and "rho_skim" not in excluded:
+        return resolved
     if resolved not in HADRONIC_MODES or resolved in excluded:
         allowed = sorted(HADRONIC_MODES - excluded)
         raise ValueError(
@@ -536,7 +548,17 @@ def build_hadronic_fileset(
             urls = []
             for path in files:
                 if path.startswith("root://"):
-                    urls.append(path)
+                    # Some legacy filesets (currently Herwig) contain fully
+                    # qualified global-redirector URLs and have no separate
+                    # Casa JSON. Route their /store paths through the Casa
+                    # xcache instead of preserving the remote redirector.
+                    store_marker = path.find("/store/")
+                    if redirector == "casa" and store_marker >= 0:
+                        urls.append(
+                            prepend.rstrip("/") + "/" + path[store_marker:]
+                        )
+                    else:
+                        urls.append(path)
                 elif path.startswith("/store/"):
                     urls.append(prepend.rstrip("/") + "/" + path)
                 else:

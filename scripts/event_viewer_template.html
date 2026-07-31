@@ -1,0 +1,448 @@
+<meta charset="utf-8">
+<title>Dijet skim event viewer</title>
+<style>
+  :root {
+    --bg: #0b0e14; --panel: #11151f; --line: #222836; --fg: #d7dce6;
+    --dim: #7b8598; --accent: #4ea3ff; --reco: #ff8a3d; --reco2: #ffd166;
+    --gen: #38d6b0; --extra: #5a6376; --fail: #ff5c6c; --pass: #4ec97e;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+         font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  #wrap { display: grid; grid-template-columns: 232px 1fr 348px;
+          grid-template-rows: auto 1fr; height: 100vh; gap: 1px; background: var(--line); }
+  header { grid-column: 1 / -1; background: var(--panel); padding: 8px 14px;
+           display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  header h1 { font-size: 14px; margin: 0; letter-spacing: .04em; }
+  header .meta { color: var(--dim); font-size: 11px; }
+  aside, section { background: var(--panel); overflow: auto; }
+  aside { padding: 10px; }
+  main { background: var(--bg); position: relative; overflow: hidden; }
+  canvas { display: block; width: 100%; height: 100%; cursor: grab; }
+  canvas.drag { cursor: grabbing; }
+  h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .1em;
+       color: var(--dim); margin: 14px 0 6px; font-weight: 600; }
+  h2:first-child { margin-top: 0; }
+  select, button { background: #1a2030; color: var(--fg); border: 1px solid var(--line);
+                   border-radius: 4px; padding: 4px 6px; font: inherit; width: 100%; }
+  button { cursor: pointer; width: auto; }
+  button:hover { border-color: var(--accent); }
+  #evlist { list-style: none; margin: 8px 0 0; padding: 0; }
+  #evlist li { padding: 4px 6px; border-radius: 4px; cursor: pointer;
+               display: flex; justify-content: space-between; gap: 6px; font-size: 11px; }
+  #evlist li:hover { background: #1a2030; }
+  #evlist li.sel { background: #1d3350; color: #fff; }
+  #evlist li .k { color: var(--dim); }
+  #evlist li.sel .k { color: #9fc6f0; }
+  table { width: 100%; border-collapse: collapse; font-size: 10px;
+          font-variant-numeric: tabular-nums; }
+  th, td { text-align: right; padding: 2px 3px; }
+  th { color: var(--dim); font-weight: 500; border-bottom: 1px solid var(--line); }
+  td:first-child, th:first-child { text-align: left; }
+  .ladder div { display: flex; justify-content: space-between; gap: 8px;
+                padding: 2px 5px; border-radius: 3px; font-size: 11px; }
+  .ladder .p { color: var(--pass); }
+  .ladder .f { background: rgba(255,92,108,.14); color: var(--fail); font-weight: 600; }
+  .ladder .n { color: #4a5364; }
+  .ladder .val { color: var(--fg); opacity: .85; font-variant-numeric: tabular-nums; }
+  .ladder .f .val { color: var(--fail); }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 1px 10px; font-size: 11px; }
+  .kv span:nth-child(odd) { color: var(--dim); }
+  .kv span:nth-child(even) { text-align: right; font-variant-numeric: tabular-nums; }
+  .swatch { display: inline-block; width: 9px; height: 9px; border-radius: 2px;
+            margin-right: 5px; vertical-align: -1px; }
+  #legend { position: absolute; left: 12px; bottom: 12px; font-size: 11px;
+            color: var(--dim); background: rgba(11,14,20,.78); padding: 8px 10px;
+            border: 1px solid var(--line); border-radius: 5px; line-height: 1.7; }
+  #hint { position: absolute; right: 12px; bottom: 12px; font-size: 10px;
+          color: #4a5364; text-align: right; line-height: 1.6; }
+  #banner { position: absolute; left: 50%; top: 12px; transform: translateX(-50%);
+            font-size: 12px; padding: 5px 12px; border-radius: 4px;
+            background: rgba(255,92,108,.16); color: var(--fail); border: 1px solid rgba(255,92,108,.35); }
+  #banner.ok { background: rgba(78,201,126,.14); color: var(--pass); border-color: rgba(78,201,126,.35); }
+  .note { color: var(--dim); font-size: 10px; margin-top: 6px; line-height: 1.5; }
+  @media (max-width: 1000px) {
+    #wrap { grid-template-columns: 1fr; grid-template-rows: auto 40vh auto auto; height: auto; }
+    main { height: 40vh; }
+  }
+</style>
+
+<div id="wrap">
+  <header>
+    <h1>DIJET SKIM &mdash; EVENT VIEWER</h1>
+    <button id="viewbtn"></button>
+    <span class="meta" id="hdrmeta"></span>
+  </header>
+
+  <aside>
+    <h2>Died at</h2>
+    <select id="filter"></select>
+    <div class="note" id="catnote"></div>
+    <div class="note" style="color:#6b5a3a">Percentages are of the sampled skim,
+      <b>not efficiencies</b> — a chunk with no surviving event contributes no
+      rows at all. Quote the cutflow.</div>
+    <h2>Events</h2>
+    <ul id="evlist"></ul>
+  </aside>
+
+  <main>
+    <canvas id="c"></canvas>
+    <div id="banner"></div>
+    <div id="legend"></div>
+    <div id="hint">drag &middot; rotate &nbsp;|&nbsp; wheel &middot; zoom<br>
+      &larr; &rarr; &middot; prev/next event &nbsp;|&nbsp; R &middot; reset<br>
+      E &middot; toggle &eta;&ndash;&phi; map</div>
+  </main>
+
+  <section style="padding:10px">
+    <h2>Event</h2>
+    <div class="kv" id="evkv"></div>
+    <h2>Selection ladder</h2>
+    <div class="ladder" id="ladder"></div>
+    <h2>Reco jets (AK8)</h2>
+    <table id="trec"></table>
+    <h2>Gen jets (AK8)</h2>
+    <table id="tgen"></table>
+  </section>
+</div>
+
+<script>
+const DATA = /*__EVENT_DATA__*/null;
+
+//// ---------------------------------------------------------------- state
+const S = { yaw: 0.6, pitch: 0.32, zoom: 0.82, i: 0, filt: "ALL", lego: false,
+            list: [], drag: null };
+
+//// the number each cut actually cuts on, so a red ladder row sits next to the
+//// value that made it red
+const CUTVAL = {
+  twoRecoJet:  e => ["n=" + e.nr, e.nr > 1],
+  recoRap2p5:  e => [fmt(e.d.ymax_reco, "|y|max="), e.d.ymax_reco < 2.5],
+  recodphi2:   e => [fmt(e.d.dphi_reco, "Δφ="), e.d.dphi_reco > 2],
+  recoAsym0p3: e => [fmt(e.d.asym_reco, "A="), e.d.asym_reco < 0.3],
+  twoGenJet:   e => ["n=" + e.ng, e.ng > 1],
+  genRap2p5:   e => [fmt(e.d.ymax_gen, "|y|max="), e.d.ymax_gen < 2.5],
+  dphiGen2:    e => [fmt(e.d.dphi_gen, "Δφ="), e.d.dphi_gen > 2],
+  genAsym0p3:  e => [fmt(e.d.asym_gen, "A="), e.d.asym_gen < 0.3],
+  matched_gen: e => [fmt(e.d.dr_match_max, "ΔR max="), e.d.dr_match_max < 0.4],
+};
+function fmt(v, pre) { return v === undefined || v === null ? "" : pre + v.toFixed(2); }
+
+//// ---------------------------------------------------------------- geometry
+const RB = 1.0, ZB = 1.5;                 // barrel radius / half-length (schematic)
+//// AK8 is R = 0.8 in dR, which at ~23 deg of opening turns two back-to-back
+//// jets into one blob on screen. Drawn narrower purely for legibility -- the
+//// eta-phi map (press E) is the one that shows the true R = 0.8 extent.
+const CONE_HALF = 0.26;
+function dir(eta, phi) {                  // (eta,phi) -> unit vector, z along beam
+  const th = 2 * Math.atan(Math.exp(-eta));
+  return [Math.sin(th) * Math.cos(phi), Math.sin(th) * Math.sin(phi), Math.cos(th)];
+}
+function basis(d) {                       // any two vectors orthogonal to d
+  const a = Math.abs(d[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0];
+  let u = [d[1]*a[2]-d[2]*a[1], d[2]*a[0]-d[0]*a[2], d[0]*a[1]-d[1]*a[0]];
+  const nu = Math.hypot(...u); u = u.map(x => x / nu);
+  const v = [d[1]*u[2]-d[2]*u[1], d[2]*u[0]-d[0]*u[2], d[0]*u[1]-d[1]*u[0]];
+  return [u, v];
+}
+
+//// ---------------------------------------------------------------- projection
+let cv, ctx, W, H;
+function project(p) {
+  const cy = Math.cos(S.yaw), sy = Math.sin(S.yaw);
+  const x1 = p[0] * cy - p[2] * sy, z1 = p[0] * sy + p[2] * cy;
+  const cp = Math.cos(S.pitch), sp = Math.sin(S.pitch);
+  const y2 = p[1] * cp - z1 * sp, z2 = p[1] * sp + z1 * cp;
+  const f = 6, k = f / (f + z2) * Math.min(W, H) * 0.30 * S.zoom;
+  return [W / 2 + x1 * k, H / 2 - y2 * k, z2];
+}
+function poly(pts, fill, stroke, width, dash) {
+  ctx.beginPath();
+  pts.forEach((p, i) => { const s = project(p); i ? ctx.lineTo(s[0], s[1]) : ctx.moveTo(s[0], s[1]); });
+  if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+  if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = width || 1;
+                ctx.setLineDash(dash || []); ctx.stroke(); ctx.setLineDash([]); }
+}
+function depth(pts) {                     // painter's algorithm key
+  return pts.reduce((a, p) => a + project(p)[2], 0) / pts.length;
+}
+
+//// ---------------------------------------------------------------- draw
+function detector(prims) {
+  //// beam line
+  prims.push({ z: 1e3, f: () => poly([[0,0,-ZB*1.9],[0,0,ZB*1.9]], null, "#2a3244", 1, [4,4]) });
+  //// barrel: end circles + longitudinal rails
+  for (const zs of [-ZB, ZB]) {
+    const c = []; for (let i = 0; i <= 64; i++) { const a = i/64*2*Math.PI;
+      c.push([RB*Math.cos(a), RB*Math.sin(a), zs]); }
+    prims.push({ z: depth(c), f: () => poly(c, null, "#31405c", 1) });
+    //// |eta| = 2.5 acceptance ring on each endcap -- a jet aimed inside this
+    //// ring is outside the |y| < 2.5 cut
+    const th = 2*Math.atan(Math.exp(-2.5)), r = Math.abs(zs)*Math.tan(th), e = [];
+    for (let i = 0; i <= 48; i++) { const a = i/48*2*Math.PI;
+      e.push([r*Math.cos(a), r*Math.sin(a), zs]); }
+    prims.push({ z: depth(e), f: () => poly(e, null, "#3a2c3c", 1, [3,3]) });
+  }
+  for (let i = 0; i < 8; i++) { const a = i/8*2*Math.PI;
+    const r = [[RB*Math.cos(a), RB*Math.sin(a), -ZB], [RB*Math.cos(a), RB*Math.sin(a), ZB]];
+    prims.push({ z: depth(r), f: () => poly(r, null, "#242f45", 1) }); }
+}
+
+function cone(prims, j, len, col, solid) {
+  const d = dir(j.eta, j.phi), [u, v] = basis(d);
+  const R = len * Math.tan(CONE_HALF), N = 22;
+  const rim = [];
+  for (let i = 0; i <= N; i++) { const a = i/N*2*Math.PI;
+    rim.push([d[0]*len + (u[0]*Math.cos(a) + v[0]*Math.sin(a))*R,
+              d[1]*len + (u[1]*Math.cos(a) + v[1]*Math.sin(a))*R,
+              d[2]*len + (u[2]*Math.cos(a) + v[2]*Math.sin(a))*R]); }
+  if (solid) {
+    for (let i = 0; i < N; i++) {
+      const tri = [[0,0,0], rim[i], rim[i+1]];
+      prims.push({ z: depth(tri), f: () => poly(tri, col.fill, null) });
+    }
+    prims.push({ z: depth(rim), f: () => poly(rim, col.cap, col.edge, 1.2) });
+  } else {
+    for (let i = 0; i < N; i += 3)
+      prims.push({ z: depth([[0,0,0], rim[i]]),
+                   f: () => poly([[0,0,0], rim[i]], null, col.edge, 1, [3,3]) });
+    prims.push({ z: depth(rim), f: () => poly(rim, null, col.edge, 1.2, [3,3]) });
+  }
+  //// axis line + pT label at the tip
+  prims.push({ z: depth([[0,0,0], d.map(x=>x*len)]),
+               f: () => poly([[0,0,0], d.map(x=>x*len)], null, col.edge, 1.4) });
+  prims.push({ z: -1e3, f: () => {
+    const s = project(d.map(x => x*len*1.06));
+    ctx.fillStyle = col.edge; ctx.font = "11px ui-monospace, monospace";
+    ctx.fillText(col.tag + " " + j.pt.toFixed(0), s[0] + 4, s[1]);
+  }});
+}
+
+function draw3d(e) {
+  const prims = [];
+  detector(prims);
+  const ptmax = Math.max(1, ...e.reco.map(j => j.pt), ...e.gen.map(j => j.pt));
+  const L = pt => 0.55 + 1.55 * (pt / ptmax);
+
+  //// gen first (wireframe, behind), then reco
+  e.gen.forEach(j => cone(prims, j, L(j.pt), {
+    edge: j.i < 2 ? "#38d6b0" : "#2a6b5d", fill: null, cap: null,
+    tag: "g" + j.i }, false));
+  e.reco.forEach(j => cone(prims, j, L(j.pt), j.i < 2
+    ? { fill: "rgba(255,138,61,.16)", edge: "#ff8a3d", cap: "rgba(255,138,61,.07)", tag: "j" + j.i }
+    //// extra jets muted but present -- these are the ones that break the
+    //// dijet topology and never appear in the physics tables
+    : { fill: "rgba(120,132,160,.13)", edge: "#8892ab", cap: "rgba(120,132,160,.05)", tag: "j" + j.i },
+    true));
+
+  //// MET arrow in the transverse plane
+  if (e.met > 5) {
+    const a = 0, m = Math.min(1.4, e.met / ptmax * 1.6);
+    prims.push({ z: -900, f: () => {
+      const o = project([0,0,0]), t = project([m, 0, 0]);
+      ctx.strokeStyle = "#c06bff"; ctx.lineWidth = 1.5; ctx.setLineDash([5,3]);
+      ctx.beginPath(); ctx.moveTo(o[0], o[1]); ctx.lineTo(t[0], t[1]); ctx.stroke();
+      ctx.setLineDash([]); ctx.fillStyle = "#c06bff"; ctx.font = "10px ui-monospace, monospace";
+      ctx.fillText("MET " + e.met.toFixed(0), t[0] + 4, t[1] + 10);
+    }});
+  }
+  prims.sort((a, b) => b.z - a.z).forEach(p => p.f());
+}
+
+//// ---------------------------------------------------------------- eta-phi map
+function drawLego(e) {
+  const L = 62, R = 20, T = 26, B = 46;
+  const w = W - L - R, h = H - T - B;
+  const X = eta => L + (eta + 5) / 10 * w, Y = phi => T + (Math.PI - phi) / (2*Math.PI) * h;
+  //// dR = 0.8 is a circle in (eta, phi), but the two axes have different
+  //// scales here, so it must be drawn as an ellipse or it lies about the size
+  const RX = Math.abs(X(0.8) - X(0)), RY = Math.abs(Y(0.8) - Y(0));
+
+  ctx.fillStyle = "#0d1119"; ctx.fillRect(L, T, w, h);
+  //// |y| < 2.5 acceptance band (the rapidity cut, drawn)
+  ctx.fillStyle = "rgba(78,163,255,.05)"; ctx.fillRect(X(-2.5), T, X(2.5)-X(-2.5), h);
+  for (const v of [-2.5, 2.5]) { ctx.strokeStyle = "#4ea3ff66"; ctx.setLineDash([4,4]);
+    ctx.beginPath(); ctx.moveTo(X(v), T); ctx.lineTo(X(v), T+h); ctx.stroke(); ctx.setLineDash([]); }
+  ctx.strokeStyle = "#2a3244"; ctx.lineWidth = 1; ctx.strokeRect(L, T, w, h);
+
+  ctx.fillStyle = "#7b8598"; ctx.font = "11px ui-monospace, monospace";
+  ctx.textAlign = "center";
+  for (let et = -5; et <= 5; et += 1.25) {
+    ctx.strokeStyle = "#181e2b"; ctx.beginPath();
+    ctx.moveTo(X(et), T); ctx.lineTo(X(et), T+h); ctx.stroke();
+    ctx.fillText(et.toFixed(2).replace(/\.?0+$/, ""), X(et), T+h+16);
+  }
+  ctx.fillText("η", L + w/2, T + h + 34);
+  ctx.fillStyle = "#4ea3ff"; ctx.fillText("|y| < 2.5", X(0), T + h - 8);
+  ctx.textAlign = "right"; ctx.fillStyle = "#7b8598";
+  for (const ph of [-Math.PI, -Math.PI/2, 0, Math.PI/2, Math.PI]) {
+    ctx.strokeStyle = "#181e2b"; ctx.beginPath();
+    ctx.moveTo(L, Y(ph)); ctx.lineTo(L+w, Y(ph)); ctx.stroke();
+    ctx.fillText(ph.toFixed(2), L - 8, Y(ph) + 4);
+  }
+  ctx.fillText("φ", L - 8, T - 8);
+  ctx.textAlign = "left";
+
+  //// gen->reco match links: this IS the matched_gen cut (dR < 0.4), drawn
+  e.links.forEach(l => {
+    const g = e.gen[l.g], r = e.reco[l.r]; if (!g || !r) return;
+    const ok = l.dr < 0.4, col = ok ? "#4ec97e" : "#ff5c6c";
+    ctx.strokeStyle = col; ctx.lineWidth = 1.4; ctx.setLineDash(ok ? [] : [3,3]);
+    ctx.beginPath(); ctx.moveTo(X(g.eta), Y(g.phi)); ctx.lineTo(X(r.eta), Y(r.phi)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = col; ctx.font = "10px ui-monospace, monospace";
+    ctx.fillText("ΔR " + l.dr.toFixed(2) + (ok ? "" : "  MISS"),
+                 (X(g.eta)+X(r.eta))/2 + 5, (Y(g.phi)+Y(r.phi))/2 - 4);
+  });
+
+  const blob = (j, col, dash, tag) => {
+    ctx.save(); ctx.translate(X(j.eta), Y(j.phi)); ctx.scale(1, RY / RX);
+    ctx.strokeStyle = col; ctx.lineWidth = 1.3 * RX / RY; ctx.setLineDash(dash);
+    ctx.beginPath(); ctx.arc(0, 0, RX, 0, 2*Math.PI);
+    ctx.fillStyle = col + "22"; ctx.fill(); ctx.stroke(); ctx.restore();
+    ctx.setLineDash([]);
+    ctx.fillStyle = col; ctx.font = "10px ui-monospace, monospace";
+    ctx.fillText(tag + " " + j.pt.toFixed(0), X(j.eta) + RX + 4, Y(j.phi) + 3);
+  };
+  e.gen.forEach(j => blob(j, j.i < 2 ? "#38d6b0" : "#2a6b5d", [4,3], "g" + j.i));
+  e.reco.forEach(j => blob(j, j.i < 2 ? "#ff8a3d" : "#8892ab", [], "j" + j.i));
+
+  //// dphi_12 readout -- the cut this view exists to explain
+  if (e.d.dphi_reco !== undefined) {
+    ctx.fillStyle = e.d.dphi_reco > 2 ? "#4ec97e" : "#ff5c6c";
+    ctx.font = "12px ui-monospace, monospace";
+    ctx.fillText("Δφ(j0,j1) = " + e.d.dphi_reco.toFixed(2) +
+                 "   A = " + (e.d.asym_reco ?? 0).toFixed(2), L + 8, T - 8);
+  }
+  ctx.fillStyle = "#4a5364"; ctx.font = "10px ui-monospace, monospace";
+  ctx.fillText("circles: AK8 ΔR = 0.8 to scale", L + w - 200, T - 8);
+}
+
+function render() {
+  const e = S.list[S.i]; if (!e) return;
+  const dpr = window.devicePixelRatio || 1;
+  W = cv.clientWidth; H = cv.clientHeight;
+  cv.width = W * dpr; cv.height = H * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  //// the legend/rotate hints belong to the 3D view; in the eta-phi map they
+  //// only sit on top of the plot area
+  document.getElementById("legend").style.display = S.lego ? "none" : "";
+  document.getElementById("hint").style.display = S.lego ? "none" : "";
+  S.lego ? drawLego(e) : draw3d(e);
+}
+
+//// ---------------------------------------------------------------- panels
+function panels() {
+  const e = S.list[S.i]; if (!e) return;
+  const pass = i => (e.bits >> i) & 1;
+
+  document.getElementById("banner").className = e.died === "PASS" ? "ok" : "";
+  document.getElementById("banner").textContent = e.died === "PASS"
+    ? "passes the full selection" : "died at:  " + e.died;
+
+  document.getElementById("evkv").innerHTML = [
+    ["run:lumi:event", e.run + ":" + e.lumi + ":" + e.evt],
+    ["weight", e.w.toExponential(3)],
+    ["n jet reco / gen", e.nr + " / " + e.ng],
+    ["HT reco / gen", (e.htr||0).toFixed(0) + " / " + (e.htg||0).toFixed(0) + " GeV"],
+    ["MET", (e.met||0).toFixed(1) + " GeV"],
+    ["N_PV / rho", e.npv + " / " + (e.rho||0).toFixed(1)],
+  ].map(([k, v]) => "<span>" + k + "</span><span>" + v + "</span>").join("");
+
+  document.getElementById("ladder").innerHTML = DATA.ladder.map((c, i) => {
+    const ok = pass(i);
+    //// a cut downstream of the failure was never really reached -- greyed, not
+    //// reported as a failure, so the ladder reads as a cause not a symptom
+    const reached = DATA.ladder.findIndex(x => x.name === e.died);
+    const cls = e.died === "PASS" || i <= reached ? (ok ? "p" : "f") : "n";
+    const cv = CUTVAL[c.name] ? CUTVAL[c.name](e)[0] : "";
+    return `<div class="${cls}" title="${c.desc}"><span>${ok ? "✓" : "✗"} ${c.name}</span>` +
+           `<span class="val">${cv}</span></div>`;
+  }).join("");
+
+  const tbl = (jets, extra) =>
+    "<tr><th>jet</th><th>pT</th><th>&eta;</th><th>&phi;</th><th>y</th><th>m</th>" +
+    (extra ? "<th>m<sub>SD</sub></th><th>id</th>" : "") + "</tr>" +
+    jets.map(j => `<tr style="color:${j.i < 2 ? "inherit" : "var(--dim)"}">` +
+      `<td>${extra ? "j" : "g"}${j.i}</td><td>${j.pt.toFixed(1)}</td>` +
+      `<td>${j.eta.toFixed(2)}</td><td>${j.phi.toFixed(2)}</td>` +
+      `<td>${j.y === null ? "-" : j.y.toFixed(2)}</td><td>${j.m.toFixed(1)}</td>` +
+      (extra ? `<td>${j.msoftdrop === null ? "-" : j.msoftdrop.toFixed(1)}</td><td>${j.jetId}</td>` : "") +
+      "</tr>").join("");
+  document.getElementById("trec").innerHTML = tbl(e.reco, true);
+  document.getElementById("tgen").innerHTML = tbl(e.gen, false);
+
+  document.querySelectorAll("#evlist li").forEach((li, k) =>
+    li.classList.toggle("sel", k === S.i));
+}
+
+function rebuild() {
+  S.list = S.filt === "ALL" ? DATA.events : DATA.events.filter(e => e.died === S.filt);
+  S.i = 0;
+  document.getElementById("evlist").innerHTML = S.list.map((e, k) =>
+    `<li data-k="${k}"><span>${e.evt}</span><span class="k">${e.nr}j ` +
+    `${e.reco.length ? e.reco[0].pt.toFixed(0) : "-"}</span></li>`).join("");
+  document.querySelectorAll("#evlist li").forEach(li =>
+    li.onclick = () => { S.i = +li.dataset.k; panels(); render(); });
+  const n = DATA.categoryCounts[S.filt];
+  document.getElementById("catnote").textContent = S.filt === "ALL"
+    ? DATA.events.length + " events sampled"
+    : `${S.list.length} shown of ${n} in this category (${(n / DATA.nTotal * 100).toFixed(2)}% of skim)`;
+  panels(); render();
+}
+
+//// ---------------------------------------------------------------- init
+window.addEventListener("DOMContentLoaded", () => {
+  cv = document.getElementById("c"); ctx = cv.getContext("2d");
+
+  const vb = document.getElementById("viewbtn");
+  const setView = v => { S.lego = v; vb.textContent = S.lego ? "η–φ map" : "3D"; render(); };
+  vb.onclick = () => setView(!S.lego);
+  setView(false);
+
+  const hm = document.getElementById("hdrmeta");
+  //// one line: the full source list is 8 filenames and pushes the canvas down
+  hm.textContent =
+    Object.keys(DATA.datasets).length + " dataset" +
+    (Object.keys(DATA.datasets).length > 1 ? "s" : "") + "   —   " +
+    DATA.nTotal.toLocaleString() + " skimmed events, " +
+    DATA.events.length + " exported   —   " + DATA.source.length + " file(s)";
+  hm.title = Object.values(DATA.datasets).join("\n") + "\n\n" + DATA.source.join("\n");
+
+  document.getElementById("legend").innerHTML = [
+    ['<span class="swatch" style="background:#ff8a3d"></span>', "leading two reco AK8"],
+    ['<span class="swatch" style="background:#8892ab"></span>', "extra reco jets (j2, j3, …)"],
+    ['<span class="swatch" style="background:#38d6b0"></span>', "gen AK8 (wireframe)"],
+    ['<span class="swatch" style="background:#c06bff"></span>', "MET"],
+    ['<span class="swatch" style="background:#3a2c3c"></span>', "|η| = 2.5 acceptance ring"],
+  ].map(([s, t]) => s + t).join("<br>") +
+    '<br><span style="opacity:.6">cone length ∝ pT; half-angle drawn at ' + CONE_HALF +
+    ' rad for legibility<br>(AK8 is R = 0.8 — press E for the true extent)</span>';
+
+  const cats = ["ALL", ...Object.keys(DATA.categoryCounts).sort((a, b) =>
+    DATA.categoryCounts[b] - DATA.categoryCounts[a])];
+  document.getElementById("filter").innerHTML = cats.map(c =>
+    `<option value="${c}">${c}${c === "ALL" ? "" : "  (" + DATA.categoryCounts[c] + ")"}</option>`).join("");
+  document.getElementById("filter").onchange = ev => { S.filt = ev.target.value; rebuild(); };
+
+  cv.onmousedown = ev => { S.drag = [ev.clientX, ev.clientY]; cv.classList.add("drag"); };
+  window.onmouseup = () => { S.drag = null; cv.classList.remove("drag"); };
+  window.onmousemove = ev => {
+    if (!S.drag) return;
+    S.yaw += (ev.clientX - S.drag[0]) * 0.008;
+    S.pitch = Math.max(-1.5, Math.min(1.5, S.pitch + (ev.clientY - S.drag[1]) * 0.008));
+    S.drag = [ev.clientX, ev.clientY]; render();
+  };
+  cv.onwheel = ev => { ev.preventDefault();
+    S.zoom = Math.max(0.3, Math.min(5, S.zoom * (ev.deltaY > 0 ? 0.92 : 1.08))); render(); };
+  window.onkeydown = ev => {
+    if (ev.key === "ArrowRight") { S.i = Math.min(S.list.length - 1, S.i + 1); panels(); render(); }
+    else if (ev.key === "ArrowLeft") { S.i = Math.max(0, S.i - 1); panels(); render(); }
+    else if (ev.key === "r" || ev.key === "R") { S.yaw = 0.6; S.pitch = 0.32; S.zoom = 0.82; render(); }
+    else if (ev.key === "e" || ev.key === "E") { vb.click(); }
+  };
+  window.onresize = render;
+  rebuild();
+});
+</script>

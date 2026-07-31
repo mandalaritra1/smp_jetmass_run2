@@ -1,0 +1,20 @@
+{
+  "channel": "trijet",
+  "dataset": "data",
+  "era": "2018",
+  "mode": "rho_skim",
+  "systematic_profile": "no_syst",
+  "executor_mode": "dask-casa",
+  "casa": true,
+  "test": false,
+  "useDefault": false,
+  "chunksize": 100000,
+  "chunksize_test": 50000,
+  "group_mode": "all_in_one",
+  "redirector": "casa",
+  "prependstr": "root://xcache/",
+  "worker_memory": "6 GiB",
+  "worker_merge": 4,
+  "treereduce": true,
+  "_comment": "2018 JetHT counterpart of trijet_mg_pythia8_2018_rho_skim.json (2026-07-25). Data fills only the `reco` table plus events/alljets; `matched`/`gen` are booked but stay empty, and for data final_seq == recoTot_seq so `reco` means the same thing as in MC. No prescale (unlike dijet's rho_skim10) because the three-AK8-jet requirement plus one measured jet per event already thins the sample ~30x; the MC config uses the same unprescaled mode so data/MC compare bin-for-bin. Run via scripts/run_dijet_skim_split.py --bins Run2018A Run2018B Run2018C Run2018D."
+}
