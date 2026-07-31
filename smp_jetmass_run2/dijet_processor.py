@@ -66,10 +66,17 @@ class DijetProcessor(processor.ProcessorABC):
 
     def __init__(self, do_gen=True, mode="minimal", debug=False,
                  jet_systematics=None, systematics=None,
-                 ptcut=200., ycut=2.5, jk=False, jk_range=None):
+                 ptcut=200., ycut=2.5, jk=False, jk_range=None,
+                 trijet_veto=True):
         # should have separate **lower** ptcut for gen
         self.do_gen = do_gen
         self._mode = mode
+        #### Trijet-priority orthogonality veto (2026-07-31): dijet drops any
+        #### event inside the trijet measurement phase space, so the two
+        #### hadronic channels never share an event. trijet_veto=False restores
+        #### the GluonJetMass-inherited selection (used by the cutflow
+        #### regression). Study: scripts/channel_orthogonality.py.
+        self.trijet_veto = trijet_veto
         # diagnostics filled only in validation/full (mirrors zjet's mode gating)
         self.do_minimal = self._mode not in ("validation", "full")
         self.ptcut = ptcut
@@ -333,6 +340,10 @@ class DijetProcessor(processor.ProcessorABC):
         "muonIso0p4", "jetId", "hemveto", "recoTot_seq",
         "twoGenJet", "genRap2p5", "dphiGen2", "genAsym0p3", "genTot_seq",
         "matched_gen", "matched_reco", "final_seq",
+        #### appended 2026-07-31 (trijet-priority orthogonality veto; True =
+        #### event NOT in the trijet phase space). Skims written before then
+        #### leave these bits 0.
+        "vetoTrijetReco", "vetoTrijetGen",
     )
     #### The event tables are for LOOKING at events, not for statistics, so they
     #### are prescaled this much harder than the physics tables on top of the
@@ -900,7 +911,28 @@ class DijetProcessor(processor.ProcessorABC):
                     self.logging.debug("Length of groomed gen jets", len(groomed_gen_dijet), " len of events ", len(events_corr))
                     sel.add("genAsym0p3", asymm_gen_sel)
                     sel.add("genDphi_seq", sel.all("dphiGen2", "genRap_seq"))
-                    sel.add("genTot_seq", sel.all("genRap_seq", "dphiGen2", "genAsym0p3")& ~ak.is_none(events_corr.GenJet[:,:2].mass) & ~ak.is_none(groomed_gen_dijet[:,:2].mass))
+                    #### Trijet-priority veto, gen side: mirrors the reco veto
+                    #### below (>=3 jets, |y(jet3)| < ycut, min pairwise dphi of
+                    #### the three leading > 1.0) with the SAME pt3 > 185 floor
+                    #### -- GenJetAK8 is stored to lower pt than FatJet, so an
+                    #### unfloored gen veto would be far looser than reco and
+                    #### turn ~11% of the response into fakes (floored: ~1.5%
+                    #### one-sided migration). Floor = the trijet pt axis low
+                    #### edge, 185-200 sink included.
+                    if self.trijet_veto:
+                        genjet3 = ak.firsts(GenJetAK8[:, 2:])
+                        gdphimin3 = ak.min([dphi12_gen,
+                                            np.abs(genjet1.delta_phi(genjet3)),
+                                            np.abs(genjet2.delta_phi(genjet3))], axis=0)
+                        in_trijet_gen = ak.fill_none(ak.where(
+                            ak.num(events_corr.GenJetAK8) > 2,
+                            (np.abs(self._rapidity(genjet3.p4)) < self.ycut)
+                            & (gdphimin3 > 1.0) & (genjet3.pt > 185.),
+                            False), False)
+                        sel.add("vetoTrijetGen", ~in_trijet_gen)
+                    else:
+                        sel.add("vetoTrijetGen", ak.ones_like(weights, dtype=bool))
+                    sel.add("genTot_seq", sel.all("genRap_seq", "dphiGen2", "genAsym0p3", "vetoTrijetGen")& ~ak.is_none(events_corr.GenJet[:,:2].mass) & ~ak.is_none(groomed_gen_dijet[:,:2].mass))
                     #### N-1 plots
                     # if not self.jk and jetsyst=="nominal":
                     #     fill_hist(out, "asymm_gen", dataset=dataset, systematic=jetsyst,ptgen=events_corr[sel.all("twoGenJet")].GenJetAK8[:,0].pt, frac=asymm_gen[sel.all("twoGenJet")], weight=weights[sel.all("twoGenJet")])  
@@ -955,6 +987,30 @@ class DijetProcessor(processor.ProcessorABC):
                 ##### apply jetid selection
                 jetid_sel = ak.where(sel.all("twoRecoJet_seq"), ak.all(events_corr.FatJet[:,:2].jetId > 2, axis=-1), False)
                 sel.add("jetId", jetid_sel)
+                #### Trijet-priority orthogonality veto: drop events the trijet
+                #### channel measures. Kinematic form (>=3 AK8 jets, |y(jet3)| <
+                #### ycut, min pairwise dphi of the three leading > 1.0) shown
+                #### equivalent to the full trijet reco selection on the skim
+                #### join -- jet-3 jetId/muIso add nothing; pt3 > 185 restricts
+                #### the veto to the trijet measurement phase space (its pt
+                #### axis floor, 185-200 sink included). Study:
+                #### scripts/channel_orthogonality.py.
+                if self.trijet_veto:
+                    jet3 = ak.firsts(FatJet[:, 2:])
+                    dphimin3 = ak.min([np.abs(jet1.delta_phi(jet2)),
+                                       np.abs(jet1.delta_phi(jet3)),
+                                       np.abs(jet2.delta_phi(jet3))], axis=0)
+                    in_trijet = ak.fill_none(ak.where(
+                        ak.num(events_corr.FatJet) > 2,
+                        (np.abs(self._rapidity(jet3.p4)) < self.ycut)
+                        & (dphimin3 > 1.0) & (jet3.pt > 185.),
+                        False), False)
+                    sel.add("vetoTrijetReco", ~in_trijet)
+                else:
+                    sel.add("vetoTrijetReco", ak.ones_like(weights, dtype=bool))
+                if jetsyst == "nominal":
+                    out['cutflow'][datastr]['nEvents vetoed as trijet (reco)'] += int(
+                        ak.sum(sel.all("recoAsym_seq", "jetId", "muonIso0p4") & ~sel.all("vetoTrijetReco")))
                 #### Fill eta phi map with pre cut reco values to check 
                 if not self.do_minimal and jetsyst=='nominal': 
                         fill_hist(out, "jet_eta_phi_precuts", dataset=dataset, systematic=jetsyst, phi=ak.flatten(events_corr[sel.all("twoRecoJet")].FatJet[:,:2].phi, axis=-1), eta=ak.flatten(events_corr[sel.all("twoRecoJet")].FatJet[:,:2].eta, axis=-1), weight=np.repeat(weights[sel.all("twoRecoJet")], 2))  
@@ -974,7 +1030,7 @@ class DijetProcessor(processor.ProcessorABC):
                 else:
                     sel.add('hemveto', ak.ones_like(weights, dtype=bool))
                 ####  Get Final RECO selection
-                sel.add("recoTot_seq", sel.all("recoAsym_seq", "jetId", "muonIso0p4", "hemveto") & ~ak.is_none(events_corr.FatJet[:,:2].mass) & ~ak.is_none(events_corr.FatJet[:,:2].msoftdrop))
+                sel.add("recoTot_seq", sel.all("recoAsym_seq", "jetId", "muonIso0p4", "hemveto", "vetoTrijetReco") & ~ak.is_none(events_corr.FatJet[:,:2].mass) & ~ak.is_none(events_corr.FatJet[:,:2].msoftdrop))
                 if (len(events_corr[sel.all("recoTot_seq")]) < 1): 
                     self.logging.debug("no events passing reco sel")
                     return out

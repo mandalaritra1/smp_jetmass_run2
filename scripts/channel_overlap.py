@@ -49,6 +49,8 @@ DIJET_CUTS = (
     "muonIso0p4", "jetId", "hemveto", "recoTot_seq",
     "twoGenJet", "genRap2p5", "dphiGen2", "genAsym0p3", "genTot_seq",
     "matched_gen", "matched_reco", "final_seq",
+    #### appended 2026-07-31 with the trijet-priority veto; 0 in older skims
+    "vetoTrijetReco", "vetoTrijetGen",
 )
 TRIJET_CUTS = (
     "trigsel", "npv", "METfilters",
