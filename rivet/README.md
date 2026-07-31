@@ -6,6 +6,7 @@ Two routines live here:
 | --- | --- | --- |
 | [`CMS_2026_PAS_SMP_25_010`](CMS_2026_PAS_SMP_25_010.cc) | Z+jet | `log10(rho^2)` in the published pT slices, groomed + ungroomed |
 | [`CMS_ZJET_JETMASS`](CMS_ZJET_JETMASS.cc) | Z+jet | mass [GeV] + rho, finer binning, `CH3_NTUPLE` per-event dump |
+| [`CMS_HADRONIC_JETMASS`](CMS_HADRONIC_JETMASS.cc) | dijet + trijet | mass + rho per hadronic pT bin, `HAD_NTUPLE` per-event dump |
 
 `CMS_2026_PAS_SMP_25_010` is the one to publish/share: it carries the PAS name,
 the HepData reference binning (pT `[200, 290, 400, inf]`, `log10(rho^2)`
@@ -20,6 +21,19 @@ A three-channel version (adding dijet and trijet, each matching its own
 processor) exists on the `smp-25-010-match-analysis-selection` branch of
 `gitlab.cern.ch/srappocc/Rivet` at commit `6e91362`, if those channels are
 wanted once they have a measurement behind them.
+
+`CMS_HADRONIC_JETMASS` (2026-07-31) is the local working routine for the
+hadronic channels, written for the dijet/trijet model-uncertainty production.
+It mirrors the CURRENT processor gen selections (`genTot_seq`), including the
+trijet-priority orthogonality veto in dijet (>=3 jets, |y(j3)|<2.5, min
+pairwise dphi > 1.0, pt3 > 185) that postdates the gitlab branch — earlier
+three-channel sketches (dphi>2 + pT-ratio dijet cuts on |eta|, no veto) do
+NOT match the processors and must not be used for reweight derivation. Dijet
+fills both leading jets, trijet fills jet 3 only; `HAD_NTUPLE=<prefix>` dumps
+`<prefix>_dijet.txt` / `<prefix>_trijet.txt` (one row per filled jet:
+`jet_pt m_u m_g rho_u rho_g weight`, xsec/sumw footer). Validated: builds
+under LCG_106 on lxplus (Rivet 4.0.0); 3k-event HardQCD smoke gives ~77%
+dijet selection, orthogonal trijet fills, median groomed rho ~ -2.1.
 
 Build it the same way as below, swapping the file name:
 
