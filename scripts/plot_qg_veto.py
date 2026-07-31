@@ -88,6 +88,30 @@ def new_panel(rlabel, data=False):
     return fig, ax
 
 
+def overflow_break(ax, x, gap=0.006, half=0.014, top=False):
+    """Broken-axis crack marking the compressed overflow last bin (820-13000
+    drawn to PT_CAP); pairs with the true-edge last tick label."""
+    xlim = ax.get_xlim()
+    xa = (x - xlim[0]) / (xlim[1] - xlim[0])
+    lw = plt.rcParams["axes.linewidth"]
+    #### bottom spine only by default: a top crack slices through the rlabel
+    #### ("2018 (13 TeV)") sitting just above the frame
+    for y in ((0, 1) if top else (0,)):
+        ax.plot([xa - gap, xa + gap], [y, y], transform=ax.transAxes,
+                color="white", lw=lw * 1.8, clip_on=False, zorder=4)
+        for o in (-gap, gap):
+            ax.plot([xa + o - 0.006, xa + o + 0.006], [y - half, y + half],
+                    transform=ax.transAxes, color="k", lw=lw, clip_on=False,
+                    zorder=5)
+
+
+def pt_overflow_axis(ax):
+    """Shared pt-axis dressing: crack after the 820 edge, true 13000 edge tick."""
+    overflow_break(ax, 860.0)
+    ax.set_xticks([200, 400, 600, 800, PT_CAP],
+                  ["200", "400", "600", "800", r"$\infty$"])
+
+
 def cms_x(ax):
     """Left x (axes coords) of the inside CMS block, so in-panel text
     left-aligns with it exactly (mplhep pads loc=2 by ~0.045, not 0)."""
@@ -129,10 +153,10 @@ def main(argv=None):
         ax.stairs(frac["Gluon"], edges, label=label, color=color, lw=2.5)
     ax.text(cms_x(ax), 0.80, "QCD MG+Pythia8", transform=ax.transAxes,
             ha="left", va="top", fontsize=PUB_ANNOT_FS)
-    finish(ax, r"measured-jet $p_\mathrm{T}^\mathrm{reco}$ (GeV)  [last bin: > 820]",
-           "Gluon fraction")
+    finish(ax, r"measured-jet $p_\mathrm{T}^\mathrm{reco}$ (GeV)", "Gluon fraction")
     ax.set_ylim(0, 1.0)
     ax.set_xlim(185, PT_CAP)
+    pt_overflow_axis(ax)
     ax.legend(loc="upper right", fontsize=PUB_LEGEND_FS)
     stamp(fig, INPUT_TAG, do_stamp)
     fig.savefig(args.outdir / "hadronic_qg_gluon_fraction_fullstat.png", dpi=150)
@@ -146,10 +170,10 @@ def main(argv=None):
             ax.stairs(frac[fl], edges, label=fl, color=color, lw=2.5)
         ax.text(cms_x(ax), 0.80, f"QCD MG+Pythia8\n{ch} ({meas})", transform=ax.transAxes,
                 ha="left", va="top", fontsize=PUB_ANNOT_FS)
-        finish(ax, r"measured-jet $p_\mathrm{T}^\mathrm{reco}$ (GeV)  [last bin: > 820]",
-               "Flavour fraction")
+        finish(ax, r"measured-jet $p_\mathrm{T}^\mathrm{reco}$ (GeV)", "Flavour fraction")
         ax.set_ylim(0, 1.0)
         ax.set_xlim(185, PT_CAP)
+        pt_overflow_axis(ax)
         ax.legend(loc="upper right", fontsize=PUB_LEGEND_FS)
         stamp(fig, INPUT_TAG, do_stamp)
         fig.savefig(args.outdir / f"hadronic_qg_flavour_composition_{ch}.png", dpi=150)
@@ -185,10 +209,11 @@ def main(argv=None):
         en = en.copy(); en[-1] = min(en[-1], PT_CAP)
         ax.stairs(r, en, label=label, color=color, lw=2.5)
     ax.axhline(1.0, color="0.6", lw=1, ls="--")
-    finish(ax, r"jet $p_\mathrm{T}^\mathrm{reco}$ (GeV)  [last bin: > 820]",
+    finish(ax, r"jet $p_\mathrm{T}^\mathrm{reco}$ (GeV)",
            "dijet reco yield ratio (veto / no veto)")
     ax.set_ylim(0.8, 1.1)
     ax.set_xlim(185, PT_CAP)
+    pt_overflow_axis(ax)
     ax.legend(loc="lower left", title="trijet-priority veto",
               fontsize=PUB_LEGEND_FS, title_fontsize=PUB_LEGEND_FS)
     stamp(fig, INPUT_TAG, do_stamp)
