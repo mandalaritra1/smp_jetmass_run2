@@ -18,12 +18,15 @@ import sys
 import numpy as np
 
 CHANNEL = "dijet"
+DUMP = None
 argv = sys.argv[1:]
 positional = []
 i = 0
 while i < len(argv):
     if argv[i] == "--channel":
         CHANNEL = argv[i + 1]; i += 2
+    elif argv[i] == "--dump":
+        DUMP = argv[i + 1]; i += 2
     else:
         positional.append(argv[i]); i += 1
 EOSBASE = positional[0] if positional else "/eos/user/a/amandal/hadronic_model_prod"
@@ -62,6 +65,23 @@ def load(cfg):
 data = {c: load(c) for c in CONFIGS}
 print("channel: %s   (jets loaded: %s)"
       % (CHANNEL, ", ".join("%s=%d" % (c, len(data[c][0])) for c in CONFIGS)))
+
+if DUMP:
+    out = {"rho_edges": RHO, "pt_edges": np.array([p[0] for p in PT] + [PT[-1][1]]),
+           "configs": np.array(CONFIGS)}
+    for lo, hi in PT:
+        for c in CONFIGS:
+            pt, rho, w = data[c]
+            m = (pt >= lo) & (pt < hi) & (rho > -99)
+            h, _ = np.histogram(rho[m], bins=RHO, weights=w[m])
+            h2, _ = np.histogram(rho[m], bins=RHO, weights=w[m] ** 2)
+            n, _ = np.histogram(rho[m], bins=RHO)
+            key = "%s_pt%d" % (c, lo)
+            out[key + "_h"] = h
+            out[key + "_e"] = np.sqrt(h2)
+            out[key + "_n"] = n
+    np.savez(DUMP, **out)
+    print("wrote %s" % DUMP)
 
 for lo, hi in PT:
     print("\n=== pT [%d, %s) ===" % (lo, "inf" if hi > 9999 else hi))
