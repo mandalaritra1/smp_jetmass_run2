@@ -23,9 +23,15 @@ hep.style.use(hep.style.CMS)
 
 PUB_LABEL_FS, PUB_TICK_FS, PUB_LEGEND_FS, PUB_ANNOT_FS = 30, 26, 20, 22
 # Petroff 6-colour (CVD-safe); cp5 reference is black like data.
-COLORS = {"cr1": "#5790fc", "cr2": "#f89c20",
+COLORS = {"vincia": "#009e9e", "cr1": "#5790fc", "cr2": "#f89c20",
           "fraghard": "#e42536", "fragsoft": "#964a8b"}
-NICE = {"cp5": "CP5 (reference)", "cr1": "CR: QCD-inspired", "cr2": "CR: gluon-move",
+#### vincia is the SHOWER leg, not hadronisation. It gets a teal hue, a
+#### dashed line AND a diamond marker: in the ratio panel every series is
+#### drawn as plain dots, so linestyle alone does not separate it, and a
+#### violet would twin with fragsoft's purple.
+STYLE = {"vincia": (0, (5, 2))}
+MARKER = {"vincia": "D"}
+NICE = {"cp5": "CP5 (reference)", "vincia": "Shower: Vincia", "cr1": "CR: QCD-inspired", "cr2": "CR: gluon-move",
         "fraghard": "Hadronisation (hard)", "fragsoft": "Hadronisation (soft)"}
 
 npz = np.load(sys.argv[1])
@@ -74,7 +80,8 @@ for ipt, (lo, hi) in enumerate(PT):
         h = npz[key(c, "_h")].astype(float)
         n = h / h.sum()
         ax.step(rho[first:], np.append(n[sl] / w[sl], (n / w)[-1]),
-                where="post", color=COLORS[c], lw=2.2, label=NICE[c], alpha=0.9)
+                where="post", color=COLORS[c], lw=2.2, label=NICE[c], alpha=0.9,
+                linestyle=STYLE.get(c, "-"))
 
     ax.set_ylabel(r"$(1/N)\,dN/d\log_{10}(\rho^2_g)$")
     ax.set_ylim(bottom=0)
@@ -121,7 +128,8 @@ for ipt, (lo, hi) in enumerate(PT):
         n, ne = h / h.sum(), e / h.sum()
         r = n[sl] / refn[sl]
         re = r * np.hypot(ne[sl] / n[sl], refne[sl] / refn[sl])
-        rax.errorbar(centers[sl][keep], r[keep], yerr=re[keep], fmt="o", ms=6,
+        rax.errorbar(centers[sl][keep], r[keep], yerr=re[keep], ms=6,
+                     fmt=MARKER.get(c, "o"),
                      color=COLORS[c], elinewidth=1.6, capsize=0)
         r, re = r[keep], re[keep]
         good = np.isfinite(r) & np.isfinite(re)

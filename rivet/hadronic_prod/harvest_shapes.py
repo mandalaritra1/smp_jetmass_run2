@@ -31,7 +31,12 @@ while i < len(argv):
         positional.append(argv[i]); i += 1
 EOSBASE = positional[0] if positional else "/eos/user/a/amandal/hadronic_model_prod"
 
-CONFIGS = ["cp5", "cr1", "cr2", "fraghard", "fragsoft"]
+#### vincia = the parton-shower leg (matching-free HardQCD path);
+#### the rest are the hadronisation leg.
+CONFIGS = ["cp5", "vincia", "cr1", "cr2", "fraghard", "fragsoft"]
+CONFIGS = [c for c in CONFIGS
+           if glob.glob(os.path.join(EOSBASE, c, "*", "*_dijet.txt"))
+           or glob.glob(os.path.join(EOSBASE, c, "*", "*_trijet.txt"))]
 # Generation bins are whatever subdirectories exist: QCD_HT* for the gridpack
 # path, pthat* for the HardQCD path. Both are stitched the same way (each file
 # carries its own xsec/sumw), so one harvest serves both productions.
