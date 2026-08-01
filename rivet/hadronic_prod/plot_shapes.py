@@ -80,7 +80,10 @@ for ipt, (lo, hi) in enumerate(PT):
     ax.set_ylim(bottom=0)
     ymax = max((npz[key(c, "_h")].astype(float) / npz[key(c, "_h")].sum() / w)[sl].max()
                for c in configs)
-    ax.set_ylim(0, ymax * 1.55)
+    #### Headroom: the groomed-rho distribution RISES toward the right, i.e.
+    #### straight into the upper-right legend, and the CMS block owns the
+    #### upper left. 1.55x was not enough -- the legend sat on the curves.
+    ax.set_ylim(0, ymax * 2.05)
     # data=False already prepends "Simulation" -- passing it again double-prints
     hep.cms.label("Preliminary", data=False, loc=2, ax=ax, rlabel=r"13 TeV")
     ax.grid(alpha=0.25)
@@ -91,8 +94,10 @@ for ipt, (lo, hi) in enumerate(PT):
             transform=ax.transAxes, ha="left", va="top", fontsize=PUB_ANNOT_FS)
     # opaque + above the data: a tall error bar in the peak bin otherwise runs
     # straight through the legend text (seen in the trijet panels)
-    leg = ax.legend(loc="upper right", fontsize=PUB_LEGEND_FS, frameon=True,
-                    facecolor="white", edgecolor="none", framealpha=0.92)
+    leg = ax.legend(loc="upper right", fontsize=PUB_LEGEND_FS - 2, frameon=True,
+                    facecolor="white", edgecolor="none", framealpha=1.0,
+                    borderpad=0.4, labelspacing=0.35, handlelength=1.6,
+                    borderaxespad=0.6)
     leg.set_zorder(10)
 
     # --- ratio panel: variation / cp5 with the cp5 stat band
@@ -124,14 +129,16 @@ for ipt, (lo, hi) in enumerate(PT):
         devs.append(np.abs(r - 1)[good]); errs.append(re[good])
     # never clip the error bars -- the statistical size IS the message here
     rlo, rhi = min(lo_seen), max(hi_seen)
-    pad = 0.08 * (rhi - rlo)
+    pad = 0.13 * (rhi - rlo)
     rax.set_ylim(rlo - pad, rhi + pad)
     devs = np.concatenate(devs); errs = np.concatenate(errs)
-    rax.text(0.985, 0.05,
-             "bins with $N\\geq50$:  median |ratio$-$1| = %.0f%%,  median stat. unc. = %.0f%%"
-             % (100 * np.median(devs), 100 * np.median(errs)),
-             transform=rax.transAxes, ha="right", va="bottom",
-             fontsize=PUB_LEGEND_FS - 3, color="0.25")
+    #### In the MAIN panel, left-aligned under the pT text: inside the ratio
+    #### panel this line collided with the low-rho points.
+    ax.text(ax0, 0.60,
+            "bins with $N\\geq50$:\nmedian |ratio$-$1| = %.1f%%\nmedian stat. unc. = %.1f%%"
+            % (100 * np.median(devs), 100 * np.median(errs)),
+            transform=ax.transAxes, ha="left", va="top",
+            fontsize=PUB_LEGEND_FS - 2, color="0.30", linespacing=1.4)
     rax.set_ylabel("Ratio to CP5")
     rax.set_xlabel(r"$\log_{10}(\rho^2_g)$")
     rax.grid(alpha=0.25)
