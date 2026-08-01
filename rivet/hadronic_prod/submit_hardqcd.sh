@@ -45,6 +45,6 @@ done
 n=$(wc -l < joblist_hardqcd.txt)
 echo "### $MODE: $n jobs (1 config each; ${SEEDS_PER} seeds/slice x $(echo $CONFIGS | wc -w) configs x ${#SLICES[@]} slices, NEVT=$NEVT)"
 echo "### configs: $CONFIGS"
-[ -x pythia_rivet ] && [ -f RivetCMS_HADRONIC_JETMASS.so ] || { echo "FATAL: run build_rivet.sh first"; exit 1; }
+[ -x py313/pythia_rivet ] && [ -f py313/RivetCMS_HADRONIC_JETMASS.so ] || { echo "FATAL: build the 8.313 binaries first (build_rivet_313.sh)"; exit 1; }
 condor_submit -append "REQMEM = ${REQMEM:-2000}" submit_hardqcd.jdl
 echo "### submitted; watch:  condor_watch_q"

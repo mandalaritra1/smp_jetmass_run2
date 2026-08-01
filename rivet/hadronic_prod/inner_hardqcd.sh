@@ -31,7 +31,7 @@ CONFIGS=("$@"); [ ${#CONFIGS[@]} -eq 0 ] && CONFIGS=(cp5 cr1 cr2 fraghard fragso
 SUBMITDIR=$(pwd)
 AFS=/afs/cern.ch/user/a/amandal/hadronic_model_prod
 find_helper() { [ -f "$SUBMITDIR/$1" ] && echo "$SUBMITDIR/$1" || echo "$AFS/$1"; }
-PYRIVET=$(find_helper pythia_rivet); RIVETSO=$(find_helper RivetCMS_HADRONIC_JETMASS.so)
+PYRIVET=$(find_helper py313/pythia_rivet); RIVETSO=$(find_helper py313/RivetCMS_HADRONIC_JETMASS.so)
 CP5=$(find_helper cp5.cmnd); RIVETDIR=$(dirname "$RIVETSO")
 EOSBASE=/eos/user/a/amandal/hadronic_model_prod_hardqcd
 SLICE="pthat${PTLO}_${PTHI}"
@@ -39,7 +39,13 @@ export TMPDIR=${TMPDIR:-/tmp/$USER.$$}; mkdir -p "$TMPDIR"
 WORK=$(mktemp -d "$TMPDIR/hq.XXXXXX"); cd "$WORK"
 echo "### $(date) job SLICE=$SLICE SEED=$SEED NEVT=$NEVT CONFIGS=${CONFIGS[*]} host=$(hostname)"
 
-set +u; source /cvmfs/sft.cern.ch/lcg/views/LCG_106/x86_64-el9-gcc13-opt/setup.sh; set -u
+#### LCG_107 (Pythia 8.313 + Rivet 4.0.2), NOT LCG_106 (8.312).
+#### 8.312 SEGFAULTS in cr1 (ColourReconnection:mode=1 + BeamRemnants:
+#### remnantMode=1) roughly once per ~2000 HardQCD events, which killed every
+#### cr1 job of cluster 11947394 across four different slices and nodes. The
+#### identical job (seed 60000, 4000 events) completes cleanly under 8.313, so
+#### the proper QCD-CR definition is kept rather than dropping remnantMode.
+set +u; source /cvmfs/sft.cern.ch/lcg/views/LCG_107/x86_64-el9-gcc13-opt/setup.sh; set -u
 export RIVET_ANALYSIS_PATH="$RIVETDIR:${RIVET_ANALYSIS_PATH:-}"
 
 RC=0
