@@ -1,0 +1,18 @@
+universe                = vanilla
+executable              = inner_hardqcd.sh
+# HADCONFIGS is appended by submit_hardqcd.sh; expanded at queue time.
+arguments               = $(ptlo) $(pthi) $(seed) $(nevt) $(HADCONFIGS)
+should_transfer_files   = YES
+when_to_transfer_output = ON_EXIT
+transfer_input_files    = pythia_rivet, RivetCMS_HADRONIC_JETMASS.so, cp5.cmnd
+output                  = /dev/null
+error                   = /dev/null
+log                     = /dev/null
+MY.SendCredential       = True
++JobFlavour             = "workday"
+request_cpus            = 1
+request_memory          = 2000
+requirements            = (OpSysAndVer =?= "AlmaLinux9")
+periodic_release        = (NumJobStarts < 4) && (HoldReasonCode =!= 1)
+max_retries             = 4
+queue ptlo,pthi,seed,nevt from joblist_hardqcd.txt

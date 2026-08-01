@@ -32,16 +32,28 @@ while i < len(argv):
 EOSBASE = positional[0] if positional else "/eos/user/a/amandal/hadronic_model_prod"
 
 CONFIGS = ["cp5", "cr1", "cr2", "fraghard", "fragsoft"]
-BINS = ["QCD_HT300to500", "QCD_HT500to700", "QCD_HT700to1000",
-        "QCD_HT1000to1500", "QCD_HT1500to2000", "QCD_HT2000toInf"]
+# Generation bins are whatever subdirectories exist: QCD_HT* for the gridpack
+# path, pthat* for the HardQCD path. Both are stitched the same way (each file
+# carries its own xsec/sumw), so one harvest serves both productions.
+BINS = sorted(os.path.basename(d.rstrip("/"))
+              for d in glob.glob(os.path.join(EOSBASE, "cp5", "*"))
+              if os.path.isdir(d))
 RHO = np.array([-10, -5, -4, -3.4, -2.85, -2.25, -1.8, -1.5,
                 -1.3, -1.1, -0.9, -0.75, -0.65, -0.55, 0.])
 PT = [(200, 290), (290, 400), (400, 13000)]
 
 
 def load(cfg):
-    """-> (pt, rho_g, weight) with weight = xsec/sumw per file."""
-    pts, rhos, ws = [], [], []
+    """Histogram incrementally, one file at a time.
+
+    Returns {(ptlo): (h, sumw2, nraw)} keyed by pT-bin low edge.  Accumulating
+    per file instead of concatenating keeps this linear in memory and avoids
+    holding tens of millions of rows: the HardQCD wave produces ~4M jets per
+    config, where a concatenate-then-histogram pass is both slow (np.loadtxt)
+    and memory-hostile.
+    """
+    acc = {lo: [np.zeros(len(RHO) - 1) for _ in range(3)] for lo, _ in PT}
+    ntot = 0
     for b in BINS:
         pat = os.path.join(EOSBASE, cfg, b, "ntuple_*_%s.txt" % CHANNEL)
         for f in glob.glob(pat):
@@ -54,28 +66,36 @@ def load(cfg):
                         sumw = float(line.split()[2])
             if not xs or not sumw:
                 continue
-            a = np.loadtxt(f, ndmin=2)
+            try:
+                a = np.loadtxt(f, ndmin=2, comments="#")
+            except ValueError:
+                continue
             if a.size == 0:
                 continue
-            pts.append(a[:, 0]); rhos.append(a[:, 4])
-            ws.append(a[:, 5] * xs / sumw)
-    return (np.concatenate(pts), np.concatenate(rhos), np.concatenate(ws))
+            pt, rho, w = a[:, 0], a[:, 4], a[:, 5] * xs / sumw
+            ntot += len(pt)
+            for lo, hi in PT:
+                m = (pt >= lo) & (pt < hi) & (rho > -99)
+                if not m.any():
+                    continue
+                h, _ = np.histogram(rho[m], bins=RHO, weights=w[m])
+                h2, _ = np.histogram(rho[m], bins=RHO, weights=w[m] ** 2)
+                n, _ = np.histogram(rho[m], bins=RHO)
+                acc[lo][0] += h; acc[lo][1] += h2; acc[lo][2] += n
+    return acc, ntot
 
 
-data = {c: load(c) for c in CONFIGS}
+loaded = {c: load(c) for c in CONFIGS}
+data = {c: loaded[c][0] for c in CONFIGS}
 print("channel: %s   (jets loaded: %s)"
-      % (CHANNEL, ", ".join("%s=%d" % (c, len(data[c][0])) for c in CONFIGS)))
+      % (CHANNEL, ", ".join("%s=%d" % (c, loaded[c][1]) for c in CONFIGS)))
 
 if DUMP:
     out = {"rho_edges": RHO, "pt_edges": np.array([p[0] for p in PT] + [PT[-1][1]]),
            "configs": np.array(CONFIGS)}
     for lo, hi in PT:
         for c in CONFIGS:
-            pt, rho, w = data[c]
-            m = (pt >= lo) & (pt < hi) & (rho > -99)
-            h, _ = np.histogram(rho[m], bins=RHO, weights=w[m])
-            h2, _ = np.histogram(rho[m], bins=RHO, weights=w[m] ** 2)
-            n, _ = np.histogram(rho[m], bins=RHO)
+            h, h2, n = data[c][lo]
             key = "%s_pt%d" % (c, lo)
             out[key + "_h"] = h
             out[key + "_e"] = np.sqrt(h2)
@@ -88,11 +108,7 @@ for lo, hi in PT:
     ref = None
     rows = {}
     for c in CONFIGS:
-        pt, rho, w = data[c]
-        m = (pt >= lo) & (pt < hi) & (rho > -99)
-        h, _ = np.histogram(rho[m], bins=RHO, weights=w[m])
-        h2, _ = np.histogram(rho[m], bins=RHO, weights=w[m] ** 2)
-        n, _ = np.histogram(rho[m], bins=RHO)
+        h, h2, n = data[c][lo]
         tot = h.sum()
         rows[c] = (h / tot, np.sqrt(h2) / tot, n)
         if c == "cp5":
