@@ -1,50 +1,65 @@
 #!/usr/bin/env bash
-# Submit the high-statistics HardQCD production for the HAD leg.
+# Submit the high-statistics HardQCD production for the model variations.
 #
-#   ./submit_hardqcd.sh test                 # 1 seed/slice x all configs
-#   ./submit_hardqcd.sh full 40 10000        # 40 seeds/slice, N=10000 per job
-#   CONFIGS="cp5 cr1" ./submit_hardqcd.sh full 10 10000
+#   ./submit_hardqcd.sh test                 # 1 seed/slice, small N
+#   ./submit_hardqcd.sh full                 # the tuned per-slice allocation below
+#   ./submit_hardqcd.sh flat 40 10000        # uniform: 40 seeds/slice, N=10000
+#   CONFIGS="cp5 vincia" ./submit_hardqcd.sh full
 #
-# ONE CONFIG PER JOB (changed 2026-08-01). Running all five configs inside a
-# single job produced multi-GB Condor MemoryUsage and mass holds even though
-# the process itself peaks at ~83 MB (measured over 73 samples of a full
-# 10k-event run) -- the reported usage tracked ~2x whatever request_memory
-# was set to, i.e. reclaimable page cache counted against the cgroup, not
-# real allocation. Splitting per config keeps each job short and its I/O
-# small, and a failure now costs one config instead of the whole set.
+# ONE CONFIG PER JOB. Running all configs in one job produced multi-GB Condor
+# MemoryUsage and mass holds; the real cause was the 8.312 cr1 segfault (see
+# inner_hardqcd.sh header), but one-config-per-job also keeps jobs short and
+# limits the blast radius of any single failure. The variation/nominal PAIRING
+# survives: the same (slice, seed) is submitted for every config and drives
+# Random:seed, so each config showers identical hard events.
 #
-# The variation/nominal PAIRING IS PRESERVED: the same (slice, seed) is
-# submitted for every config, and inner_hardqcd.sh sets Random:seed from it,
-# so each config showers the SAME hard events and the LHE-level noise still
-# cancels in the ratio.
+# VINCIA IS INCLUDED HERE. The MLM-matching defect that blocks it in the
+# gridpack path does not exist in this one -- HardQCD is a plain 2->2 process
+# with no matching veto at all, so the antenna shower runs unencumbered.
 #
-# pThat slices follow the official QCD_Pt binning over the measured range;
-# each is normalized by its own sigma/sumw at harvest time. The open top
-# slice uses pthi=0 (no upper bound).
+# PER-SLICE ALLOCATION (tuned 2026-08-01 from diag_slice_weights.py).
+# Uniform allocation is badly wrong for TRIJET: the measured third jet is soft
+# relative to pThat, so each pT bin is fed by rare, very-high-weight entries
+# from the lowest contributing slice. Measured for trijet pT 200-290: slice
+# pthat170_300 supplied 51% of the yield but 95% of the VARIANCE from just 851
+# entries, while pthat1400_0 supplied 16k entries and ~0% of the variance.
+# Statistical power therefore comes almost entirely from the low slices, and
+# generating more at high pThat is wasted effort. Columns: ptlo pthi seeds nevt
+SLICES=(
+  "170  300  100 50000"
+  "300  470   80 40000"
+  "470  600   40 20000"
+  "600  800   20 10000"
+  "800  1000  10 10000"
+  "1000 1400  10 10000"
+  "1400 0     10 10000"
+)
+CONFIGS=${CONFIGS:-"cp5 vincia cr1 cr2 fraghard fragsoft"}
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd); cd "$HERE"
-# ptlo pthi
-SLICES=("170 300" "300 470" "470 600" "600 800" "800 1000" "1000 1400" "1400 0")
-CONFIGS=${CONFIGS:-"cp5 cr1 cr2 fraghard fragsoft"}
 MODE=${1:-full}
-if [ "$MODE" = test ]; then
-  SEEDS_PER=1; NEVT=4000; BASE=60000
-else
-  SEEDS_PER=${2:-40}; NEVT=${3:-10000}; BASE=20000
-fi
 : > joblist_hardqcd.txt
-for s in "${SLICES[@]}"; do
-  set -- $s
-  for j in $(seq 0 $((SEEDS_PER-1))); do
-    seed=$(( BASE + j*137 ))          # deterministic: same seed for every config
-    for cf in $CONFIGS; do
-      echo "$1, $2, $seed, $NEVT, $cf" >> joblist_hardqcd.txt
+if [ "$MODE" = flat ] || [ "$MODE" = test ]; then
+  if [ "$MODE" = test ]; then SEEDS_PER=1; NEVT=4000; else SEEDS_PER=${2:-40}; NEVT=${3:-10000}; fi
+  for s in "${SLICES[@]}"; do
+    set -- $s
+    for j in $(seq 0 $((SEEDS_PER-1))); do
+      seed=$(( 60000 + j*137 ))
+      for cf in $CONFIGS; do echo "$1, $2, $seed, $NEVT, $cf" >> joblist_hardqcd.txt; done
     done
   done
-done
+else
+  for s in "${SLICES[@]}"; do
+    set -- $s          # ptlo pthi seeds nevt
+    for j in $(seq 0 $(($3-1))); do
+      seed=$(( 20000 + j*137 ))
+      for cf in $CONFIGS; do echo "$1, $2, $seed, $4, $cf" >> joblist_hardqcd.txt; done
+    done
+  done
+fi
 n=$(wc -l < joblist_hardqcd.txt)
-echo "### $MODE: $n jobs (1 config each; ${SEEDS_PER} seeds/slice x $(echo $CONFIGS | wc -w) configs x ${#SLICES[@]} slices, NEVT=$NEVT)"
-echo "### configs: $CONFIGS"
+echo "### $MODE: $n jobs (1 config each), configs: $CONFIGS"
+awk -F', ' '{print $1"_"$2": "$4" ev"}' joblist_hardqcd.txt | sort | uniq -c | sort -k2 -n
 [ -x py313/pythia_rivet ] && [ -f py313/RivetCMS_HADRONIC_JETMASS.so ] || { echo "FATAL: build the 8.313 binaries first (build_rivet_313.sh)"; exit 1; }
 condor_submit -append "REQMEM = ${REQMEM:-2000}" submit_hardqcd.jdl
 echo "### submitted; watch:  condor_watch_q"
