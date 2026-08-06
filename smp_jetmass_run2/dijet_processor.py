@@ -56,21 +56,49 @@ class DijetProcessor(HadronicProcessorBase):
 
     def __init__(self, do_gen=True, mode="minimal", debug=False,
                  jet_systematics=None, systematics=None,
-                 ptcut=200., ycut=2.5, jk=False, jk_range=None,
-                 trijet_veto=True):
+                 ptcut=200., ycut=None, jk=False, jk_range=None,
+                 trijet_veto=True, selection_mode="pair_split"):
         # should have separate **lower** ptcut for gen
         self.do_gen = do_gen
         self._mode = mode
+        #### Selection variant (group decision 2026-08-06).
+        ####   "pair_split" (default): the adopted balanced-pair fiducial --
+        ####      >=2 AK8 jets with pt > ptcut and |y| < ycut (2.4), and
+        ####      dphi12 > pi - (200 GeV)/ptavg with ptavg = (pt1+pt2)/2.
+        ####      That dphi form is the balanced-pair version of the
+        ####      azimuthal-decorrelation cut |vec pt1 + vec pt2| < 200 GeV, a
+        ####      resummable observable that needs no jet veto, so the
+        ####      measurement stays theory-computable. ptavg rather than pt1
+        ####      because pt1 is soft-sensitive: near pt1 ~ pt2 the leading
+        ####      label swaps under a soft emission (Sal). The pt-asymmetry
+        ####      cut (A < 0.3) and the trijet-priority veto are DROPPED --
+        ####      the trijet channel now takes the exact complement of the
+        ####      dphi cut, so the two channels are orthogonal by construction.
+        ####   "legacy": the GluonJetMass-inherited selection (dphi12 > 2.0,
+        ####      A < 0.3, |y| < 2.5, optional trijet veto). Reproduces the
+        ####      pre-2026-08-06 behavior bit-for-bit; the cutflow regression
+        ####      runs in this mode.
+        if selection_mode not in ("pair_split", "legacy"):
+            raise ValueError(f"Bad selection_mode '{selection_mode}': expected "
+                             "'pair_split' or 'legacy'")
+        self.selection_mode = selection_mode
+        self._pair_split = selection_mode == "pair_split"
         #### Trijet-priority orthogonality veto (2026-07-31): dijet drops any
         #### event inside the trijet measurement phase space, so the two
         #### hadronic channels never share an event. trijet_veto=False restores
         #### the GluonJetMass-inherited selection (used by the cutflow
-        #### regression). Study: scripts/channel_orthogonality.py.
-        self.trijet_veto = trijet_veto
+        #### regression). Study: scripts/channel_orthogonality.py. Never
+        #### applied in pair_split mode (the dphi complement replaces it).
+        self.trijet_veto = trijet_veto and not self._pair_split
         # diagnostics filled only in validation/full (mirrors zjet's mode gating)
         self.do_minimal = self._mode not in ("validation", "full")
         self.ptcut = ptcut
-        self.ycut = ycut  # rapidity
+        #### |y| < 2.4 in pair_split: it matches the de-facto acceptance the
+        #### subjet-link filter (subJetIdx1 > -1) already imposes -- NanoAOD
+        #### AK8 -> subjet linking dies at |eta| ~ 2.4-2.5 -- and it closes the
+        #### gen(2.5)/reco(2.4) miss band by using the SAME value at both
+        #### levels. legacy keeps the inherited 2.5.
+        self.ycut = (2.4 if self._pair_split else 2.5) if ycut is None else ycut
         self.jk = jk
         self.jk_range = jk_range
         # jackknife active either via the jk flag or the *_jk modes (mirrors zjet)
@@ -104,7 +132,8 @@ class DijetProcessor(HadronicProcessorBase):
         self.jet_systematics = jet_systematics
         self.systematics = systematics
         self.logging = Log(mode="debug" if debug else "info")
-        self.logging.info(f"Dijet do_gen={self.do_gen} mode={self._mode} do_jk={self._do_jk}")
+        self.logging.info(f"Dijet do_gen={self.do_gen} mode={self._mode} do_jk={self._do_jk} "
+                          f"selection={self.selection_mode} ptcut={self.ptcut} ycut={self.ycut}")
 
         #### Binning: single source of truth (channel-aware). jet radius for rho.
         b = util_binning(channel="dijet")
@@ -120,6 +149,12 @@ class DijetProcessor(HadronicProcessorBase):
         rho_gen_bin   = b.mgen_over_pt_axis
         rho_g_bin     = b.mreco_over_pt_g_axis
         rho_gen_g_bin = b.mgen_over_pt_g_axis
+        #### per-jet kinematic axes for the always-on validation hists
+        #### (shared with zjet's pt_jet0/eta_jet0/phi_jet0/mass_jet0)
+        kin_pt_axis   = b.pt_axis
+        kin_eta_axis  = b.eta_axis
+        kin_phi_axis  = b.phi_axis
+        kin_mass_axis = b.mass_axis
         #### diagnostic-only axes (validation/full)
         jet_cat   = hist.axis.StrCategory([], growth=True, name="jetNumb", label="Jet")
         parton_cat= hist.axis.StrCategory([], growth=True, name="partonFlav", label="Parton Flavour")
@@ -192,6 +227,20 @@ class DijetProcessor(HadronicProcessorBase):
                      for c, d in cols}
                 )
             self.hists['skim'] = processor.dict_accumulator(tables)
+
+        #### Per-jet reco kinematics of the two measured jets, ALWAYS registered
+        #### (every mode, rho_skim/minimal_rho included): cheap 1D hists that
+        #### the production must carry so the adopted pair_split fiducial can be
+        #### validated jet-by-jet against data. Naming follows zjet's
+        #### pt_jet0/eta_jet0/phi_jet0/mass_jet0; jet1/jet2 are the leading and
+        #### subleading AK8 jets (the same 1-based labels the jetNumb axis uses).
+        #### Filled nominal jet-systematic only, over the full reco selection.
+        for _j in ("jet1", "jet2"):
+            register_hist(self.hists, f'pt_{_j}',        [dataset_axis, syst_cat, kin_pt_axis])
+            register_hist(self.hists, f'eta_{_j}',       [dataset_axis, syst_cat, kin_eta_axis])
+            register_hist(self.hists, f'phi_{_j}',       [dataset_axis, syst_cat, kin_phi_axis])
+            register_hist(self.hists, f'mass_{_j}',      [dataset_axis, syst_cat, kin_mass_axis])
+            register_hist(self.hists, f'msoftdrop_{_j}', [dataset_axis, syst_cat, kin_mass_axis])
 
         mass_modes = ("minimal", "mass_jk", "validation", "full")
         #### rho_skim also books the standard rho hists: they are cheap and give
@@ -334,6 +383,10 @@ class DijetProcessor(HadronicProcessorBase):
         #### event NOT in the trijet phase space). Skims written before then
         #### leave these bits 0.
         "vetoTrijetReco", "vetoTrijetGen",
+        #### appended 2026-08-06 (pair_split fiducial: pt floors on the two
+        #### leading jets and the balanced-pair dphi cut, reco and gen).
+        #### Skims written before then leave these bits 0.
+        "recoPtFloor", "recodphiPair", "genPtFloor", "dphiGenPair",
     )
     #### The event tables are for LOOKING at events, not for statistics, so they
     #### are prescaled this much harder than the physics tables on top of the
@@ -697,6 +750,21 @@ class DijetProcessor(HadronicProcessorBase):
                     self.logging.debug("Length of groomed gen jets", len(groomed_gen_dijet), " len of events ", len(events_corr))
                     sel.add("genAsym0p3", asymm_gen_sel)
                     sel.add("genDphi_seq", sel.all("dphiGen2", "genRap_seq"))
+                    #### pair_split gen fiducial: the SAME cuts as reco, on the
+                    #### two leading GenJetAK8 jets. The gen pt floor also
+                    #### supersedes the old 185-GeV gen-floor concern (GenJetAK8
+                    #### is stored well below the reco threshold, so an unfloored
+                    #### gen selection was much looser than reco).
+                    ptavg_gen = 0.5 * (genjet1.pt + genjet2.pt)
+                    sel.add("genPtFloor", ak.where(
+                        sel.all("twoGenJet"),
+                        ak.all(events_corr.GenJetAK8[:,:2].pt > self.ptcut, axis=-1), False))
+                    #### dphi12 > pi - (200 GeV)/ptavg == |vec pt1 + vec pt2| < 200 GeV
+                    #### for a balanced pair (resummable, no jet veto). ptavg, not
+                    #### pt1: pt1 is soft-sensitive through the leading-label swap.
+                    sel.add("dphiGenPair", ak.where(
+                        sel.all("twoGenJet"),
+                        dphi12_gen > np.pi - 200. / ptavg_gen, False))
                     #### Trijet-priority veto, gen side: mirrors the reco veto
                     #### below (>=3 jets, |y(jet3)| < ycut, min pairwise dphi of
                     #### the three leading > 1.0) with the SAME pt3 > 185 floor
@@ -709,7 +777,11 @@ class DijetProcessor(HadronicProcessorBase):
                         sel.add("vetoTrijetGen", ~self._in_trijet_phase_space(GenJetAK8))
                     else:
                         sel.add("vetoTrijetGen", ak.ones_like(weights, dtype=bool))
-                    sel.add("genTot_seq", sel.all("genRap_seq", "dphiGen2", "genAsym0p3", "vetoTrijetGen")& ~ak.is_none(events_corr.GenJet[:,:2].mass) & ~ak.is_none(groomed_gen_dijet[:,:2].mass))
+                    if self._pair_split:
+                        gen_kin_seq = sel.all("genRap_seq", "genPtFloor", "dphiGenPair")
+                    else:
+                        gen_kin_seq = sel.all("genRap_seq", "dphiGen2", "genAsym0p3", "vetoTrijetGen")
+                    sel.add("genTot_seq", gen_kin_seq & ~ak.is_none(events_corr.GenJet[:,:2].mass) & ~ak.is_none(groomed_gen_dijet[:,:2].mass))
                     #### N-1 plots
                     # if not self.jk and jetsyst=="nominal":
                     #     fill_hist(out, "asymm_gen", dataset=dataset, systematic=jetsyst,ptgen=events_corr[sel.all("twoGenJet")].GenJetAK8[:,0].pt, frac=asymm_gen[sel.all("twoGenJet")], weight=weights[sel.all("twoGenJet")])  
@@ -757,6 +829,19 @@ class DijetProcessor(HadronicProcessorBase):
                 asymm_reco_sel = ak.where(sel.all("twoRecoJet_seq"), asymm < 0.3, False)
                 sel.add("recoAsym0p3", asymm_reco_sel)
                 sel.add("recoAsym_seq", sel.all("recoAsym0p3", "recodphi_seq"))
+                #### pair_split reco fiducial (mirrored exactly at gen above):
+                #### pt floor on BOTH leading jets, and the balanced-pair
+                #### azimuthal-decorrelation cut dphi12 > pi - (200 GeV)/ptavg,
+                #### which is |vec pt1 + vec pt2| < 200 GeV for a balanced pair
+                #### -- resummable, no jet veto. ptavg (not pt1) because pt1 is
+                #### soft-sensitive: the leading label swaps near pt1 ~ pt2.
+                ptavg = 0.5 * (jet1.pt + jet2.pt)
+                sel.add("recoPtFloor", ak.where(
+                    sel.all("twoRecoJet_seq"),
+                    ak.all(events_corr.FatJet[:,:2].pt > self.ptcut, axis=-1), False))
+                sel.add("recodphiPair", ak.where(
+                    sel.all("twoRecoJet_seq"),
+                    np.abs(jet1.delta_phi(jet2)) > np.pi - 200. / ptavg, False))
                 #### Check that nearest pfmuon and is at least dR > 0.4 away
                 muonIso = ak.all((events_corr.FatJet[:,:2].delta_r(events_corr.FatJet[:,:2].nearest(events_corr.Muon)) > 0.4), axis = -1)
                 muon_sel = ak.where(sel.all("twoRecoJet_seq"), muonIso, False)
@@ -798,8 +883,28 @@ class DijetProcessor(HadronicProcessorBase):
                 else:
                     sel.add('hemveto', ak.ones_like(weights, dtype=bool))
                 ####  Get Final RECO selection
-                sel.add("recoTot_seq", sel.all("recoAsym_seq", "jetId", "muonIso0p4", "hemveto", "vetoTrijetReco") & ~ak.is_none(events_corr.FatJet[:,:2].mass) & ~ak.is_none(events_corr.FatJet[:,:2].msoftdrop))
-                if (len(events_corr[sel.all("recoTot_seq")]) < 1): 
+                #### Detector-level quality cuts (jetId, muon isolation, HEM) are
+                #### identical in both modes; only the kinematic fiducial changes.
+                if self._pair_split:
+                    reco_kin_seq = sel.all("recoRap_seq", "recoPtFloor", "recodphiPair",
+                                           "jetId", "muonIso0p4", "hemveto")
+                else:
+                    reco_kin_seq = sel.all("recoAsym_seq", "jetId", "muonIso0p4", "hemveto",
+                                           "vetoTrijetReco")
+                sel.add("recoTot_seq", reco_kin_seq & ~ak.is_none(events_corr.FatJet[:,:2].mass) & ~ak.is_none(events_corr.FatJet[:,:2].msoftdrop))
+                #### Per-jet reco kinematics of the two measured jets, filled
+                #### over the FULL reco selection (fakes included, exactly the
+                #### set the reco spectra use, so data and MC are comparable).
+                #### Placed here rather than after the fakes/misses guards so a
+                #### chunk with no matched event still contributes. Nominal jet
+                #### systematic only.
+                if jetsyst == "nominal":
+                    _kin = events_corr[sel.all("recoTot_seq")]
+                    self._fill_jet_kinematics(
+                        out, dataset, jetsyst,
+                        {"jet1": _kin.FatJet[:, 0], "jet2": _kin.FatJet[:, 1]},
+                        weights_obj.weight()[sel.all("recoTot_seq")])
+                if (len(events_corr[sel.all("recoTot_seq")]) < 1):
                     self.logging.debug("no events passing reco sel")
                     return out
                 

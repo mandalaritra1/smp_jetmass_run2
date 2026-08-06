@@ -28,6 +28,7 @@ import hist
 from coffea import processor
 
 from .corrections import getXSweight
+from .hist_utils import fill_hist
 
 
 class Log:
@@ -85,6 +86,33 @@ class HadronicProcessorBase(processor.ProcessorABC):
             (np.abs(self._rapidity(j3.p4)) < self.ycut)
             & (dphimin3 > 1.0) & (j3.pt > pt3_floor),
             False), False)
+
+    def _fill_jet_kinematics(self, out, dataset, systematic, jets, weight):
+        """Per-jet RECO kinematics for the always-on validation hists.
+
+        `jets` maps the hist suffix ("jet1"/"jet2" for dijet, "jet3" for the
+        trijet measured jet) to the already-selected jet record; `weight` is the
+        per-EVENT weight (one row per event, NOT the two-rows-per-event dijet
+        fan-out). Naming/axes follow zjet's pt_jet0/eta_jet0/phi_jet0/mass_jet0.
+
+        Weights are the raw generator weights -- the xs*lumi/sumw scale is
+        applied in postprocess like every other hist, never here. Masses can be
+        None for dR-unmatched jets under JMR smearing, so the mass fills are
+        masked with ~ak.is_none exactly as the spectra are.
+        """
+        w = np.asarray(ak.to_numpy(weight), dtype=np.float64)
+        for name, jet in jets.items():
+            fill_hist(out, f"pt_{name}", dataset=dataset, systematic=systematic,
+                      pt=ak.to_numpy(jet.pt), weight=w)
+            fill_hist(out, f"eta_{name}", dataset=dataset, systematic=systematic,
+                      eta=ak.to_numpy(jet.eta), weight=w)
+            fill_hist(out, f"phi_{name}", dataset=dataset, systematic=systematic,
+                      phi=ak.to_numpy(jet.phi), weight=w)
+            for hname, vals in (("mass", jet.mass), ("msoftdrop", jet.msoftdrop)):
+                ok = np.asarray(ak.to_numpy(ak.fill_none(~ak.is_none(vals), False)))
+                m = np.asarray(ak.to_numpy(ak.fill_none(vals, np.nan)))
+                fill_hist(out, f"{hname}_{name}", dataset=dataset, systematic=systematic,
+                          mass=m[ok], weight=w[ok])
 
     #############################################################
     #### rho_skim machinery (tables shared by both channels)
