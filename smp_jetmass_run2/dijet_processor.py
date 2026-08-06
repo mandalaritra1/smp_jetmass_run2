@@ -234,7 +234,9 @@ class DijetProcessor(HadronicProcessorBase):
         #### validated jet-by-jet against data. Naming follows zjet's
         #### pt_jet0/eta_jet0/phi_jet0/mass_jet0; jet1/jet2 are the leading and
         #### subleading AK8 jets (the same 1-based labels the jetNumb axis uses).
-        #### Filled nominal jet-systematic only, over the full reco selection.
+        #### Filled over the full reco selection for every jet systematic and,
+        #### under nominal jets, every weight variation -- the systematic axis
+        #### is what carries the bands on the kinematic data/MC ratios.
         for _j in ("jet1", "jet2"):
             register_hist(self.hists, f'pt_{_j}',        [dataset_axis, syst_cat, kin_pt_axis])
             register_hist(self.hists, f'eta_{_j}',       [dataset_axis, syst_cat, kin_eta_axis])
@@ -896,14 +898,15 @@ class DijetProcessor(HadronicProcessorBase):
                 #### over the FULL reco selection (fakes included, exactly the
                 #### set the reco spectra use, so data and MC are comparable).
                 #### Placed here rather than after the fakes/misses guards so a
-                #### chunk with no matched event still contributes. Nominal jet
-                #### systematic only.
-                if jetsyst == "nominal":
-                    _kin = events_corr[sel.all("recoTot_seq")]
-                    self._fill_jet_kinematics(
-                        out, dataset, jetsyst,
-                        {"jet1": _kin.FatJet[:, 0], "jet2": _kin.FatJet[:, 1]},
-                        weights_obj.weight()[sel.all("recoTot_seq")])
+                #### chunk with no matched event still contributes. Filled for
+                #### every jet systematic, plus every weight variation under
+                #### nominal jets -- see _fill_jet_kinematics.
+                _kin_sel = sel.all("recoTot_seq")
+                _kin = events_corr[_kin_sel]
+                self._fill_jet_kinematics(
+                    out, dataset, jetsyst,
+                    {"jet1": _kin.FatJet[:, 0], "jet2": _kin.FatJet[:, 1]},
+                    weights_obj, _kin_sel)
                 if (len(events_corr[sel.all("recoTot_seq")]) < 1):
                     self.logging.debug("no events passing reco sel")
                     return out

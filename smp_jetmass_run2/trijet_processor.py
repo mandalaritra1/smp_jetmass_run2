@@ -206,7 +206,10 @@ class TrijetProcessor(HadronicProcessorBase):
         #### hists the production must carry so the adopted pair_split fiducial
         #### can be validated against data. Naming follows zjet's
         #### pt_jet0/eta_jet0/phi_jet0/mass_jet0; "jet3" is the third-leading
-        #### AK8 jet, the same 1-based label the jetNumb axis uses.
+        #### AK8 jet, the same 1-based label the jetNumb axis uses. Filled over
+        #### the full reco selection for every jet systematic and, under
+        #### nominal jets, every weight variation -- the systematic axis is
+        #### what carries the bands on the kinematic data/MC ratios.
         for _j in ("jet3",):
             register_hist(self.hists, f'pt_{_j}',        [dataset_axis, syst_cat, kin_pt_axis])
             register_hist(self.hists, f'eta_{_j}',       [dataset_axis, syst_cat, kin_eta_axis])
@@ -765,12 +768,14 @@ class TrijetProcessor(HadronicProcessorBase):
                 #### FULL reco selection (fakes included, the same set the reco
                 #### spectra use, so data and MC are comparable). Placed here
                 #### rather than after the fakes/misses guards so a chunk with no
-                #### matched event still contributes. Nominal jet systematic only.
-                if jetsyst == "nominal":
-                    self._fill_jet_kinematics(
-                        out, dataset, jetsyst,
-                        {"jet3": events_corr[sel.all("recoTot_seq")].FatJet[:, 2]},
-                        weights_obj.weight()[sel.all("recoTot_seq")])
+                #### matched event still contributes. Filled for every jet
+                #### systematic, plus every weight variation under nominal jets
+                #### -- see _fill_jet_kinematics.
+                _kin_sel = sel.all("recoTot_seq")
+                self._fill_jet_kinematics(
+                    out, dataset, jetsyst,
+                    {"jet3": events_corr[_kin_sel].FatJet[:, 2]},
+                    weights_obj, _kin_sel)
                 #### Check eta phi map pre cuts
                 if not self.do_minimal and jetsyst=='nominal': 
                         fill_hist(out, 'jet_eta_phi_precuts', dataset=dataset, systematic=jetsyst, phi=events_corr[sel.all("triRecoJet")].FatJet[:,2].phi, eta=events_corr[sel.all("triRecoJet")].FatJet[:,2].eta, weight=weights[sel.all("triRecoJet")])                

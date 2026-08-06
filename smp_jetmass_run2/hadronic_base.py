@@ -87,32 +87,58 @@ class HadronicProcessorBase(processor.ProcessorABC):
             & (dphimin3 > 1.0) & (j3.pt > pt3_floor),
             False), False)
 
-    def _fill_jet_kinematics(self, out, dataset, systematic, jets, weight):
+    def _fill_jet_kinematics(self, out, dataset, jetsyst, jets, weights_obj, mask):
         """Per-jet RECO kinematics for the always-on validation hists.
 
         `jets` maps the hist suffix ("jet1"/"jet2" for dijet, "jet3" for the
-        trijet measured jet) to the already-selected jet record; `weight` is the
-        per-EVENT weight (one row per event, NOT the two-rows-per-event dijet
-        fan-out). Naming/axes follow zjet's pt_jet0/eta_jet0/phi_jet0/mass_jet0.
+        trijet measured jet) to the already-selected jet record; `mask` is the
+        per-EVENT reco selection those jets were sliced with, and the per-event
+        weights are read out of `weights_obj` under it (one row per event, NOT
+        the two-rows-per-event dijet fan-out). Naming/axes follow zjet's
+        pt_jet0/eta_jet0/phi_jet0/mass_jet0.
+
+        Filled for EVERY jet systematic -- the caller loops over
+        self.jet_systematics and the varied jets arrive here already smeared,
+        so `jetsyst` just labels them -- and, under nominal jets, additionally
+        once per weight variation, exactly the pattern ptjet_mjet_u_reco uses.
+        These are cheap 1D hists and carrying the full systematic set is what
+        puts uncertainty bands on the kinematic data/MC ratios.
 
         Weights are the raw generator weights -- the xs*lumi/sumw scale is
         applied in postprocess like every other hist, never here. Masses can be
         None for dR-unmatched jets under JMR smearing, so the mass fills are
         masked with ~ak.is_none exactly as the spectra are.
         """
-        w = np.asarray(ak.to_numpy(weight), dtype=np.float64)
+        #### The kinematics do not depend on the weight variation: convert to
+        #### numpy once and reuse across the systematic loop below.
+        kin = {}
         for name, jet in jets.items():
-            fill_hist(out, f"pt_{name}", dataset=dataset, systematic=systematic,
-                      pt=ak.to_numpy(jet.pt), weight=w)
-            fill_hist(out, f"eta_{name}", dataset=dataset, systematic=systematic,
-                      eta=ak.to_numpy(jet.eta), weight=w)
-            fill_hist(out, f"phi_{name}", dataset=dataset, systematic=systematic,
-                      phi=ak.to_numpy(jet.phi), weight=w)
+            masses = []
             for hname, vals in (("mass", jet.mass), ("msoftdrop", jet.msoftdrop)):
                 ok = np.asarray(ak.to_numpy(ak.fill_none(~ak.is_none(vals), False)))
                 m = np.asarray(ak.to_numpy(ak.fill_none(vals, np.nan)))
-                fill_hist(out, f"{hname}_{name}", dataset=dataset, systematic=systematic,
-                          mass=m[ok], weight=w[ok])
+                masses.append((hname, ok, m))
+            kin[name] = (ak.to_numpy(jet.pt), ak.to_numpy(jet.eta),
+                         ak.to_numpy(jet.phi), masses)
+        #### nominal jets additionally carry every weight variation; a varied
+        #### jet systematic is filled with the nominal weights only.
+        systs = [jetsyst]
+        if jetsyst == "nominal":
+            systs += self._weight_variations(weights_obj)
+        for syst in systs:
+            w = np.asarray(ak.to_numpy(
+                weights_obj.weight(None if syst == jetsyst else syst)[mask]),
+                dtype=np.float64)
+            for name, (pt, eta, phi, masses) in kin.items():
+                fill_hist(out, f"pt_{name}", dataset=dataset, systematic=syst,
+                          pt=pt, weight=w)
+                fill_hist(out, f"eta_{name}", dataset=dataset, systematic=syst,
+                          eta=eta, weight=w)
+                fill_hist(out, f"phi_{name}", dataset=dataset, systematic=syst,
+                          phi=phi, weight=w)
+                for hname, ok, m in masses:
+                    fill_hist(out, f"{hname}_{name}", dataset=dataset, systematic=syst,
+                              mass=m[ok], weight=w[ok])
 
     #############################################################
     #### rho_skim machinery (tables shared by both channels)
