@@ -31,6 +31,32 @@ from .corrections import getXSweight
 from .hist_utils import fill_hist
 
 
+#### The 27 split JES sources GetJetCorrections builds into the corrected jets
+#### (corrections.py _get_jet_factory, uncertainties_key=None). Kept in the same
+#### order and under the same 'JES_<source>{Up,Down}' names zjet_processor uses,
+#### because the dijet/trijet JES branch recovers the field with jetsyst[:-2] /
+#### jetsyst[:-4] -- rename these and the lookup silently misses.
+JES_SOURCES = ["AbsoluteMPFBias", "AbsoluteScale", "AbsoluteStat", "FlavorQCD",
+               "Fragmentation", "PileUpDataMC", "PileUpPtBB", "PileUpPtEC1",
+               "PileUpPtEC2", "PileUpPtHF", "PileUpPtRef", "RelativeFSR",
+               "RelativeJEREC1", "RelativeJEREC2", "RelativeJERHF",
+               "RelativePtBB", "RelativePtEC1", "RelativePtEC2", "RelativePtHF",
+               "RelativeBal", "RelativeSample", "RelativeStatEC",
+               "RelativeStatFSR", "RelativeStatHF", "SinglePionECAL",
+               "SinglePionHCAL", "TimePtEta"]
+
+#### nominal + JER/JMS/JMR up/down: the cheap set, and what the minimal_syst
+#### profile pins explicitly.
+BASE_JET_SYSTEMATICS = ['nominal', 'JERUp', 'JERDown', 'JMSUp', 'JMSDown',
+                        'JMRUp', 'JMRDown']
+
+#### the full hadronic jet-systematic set: the base set plus both directions of
+#### every split JES source (61 entries), matching what zjet_processor assembles
+#### when jet_systematics is None.
+FULL_JET_SYSTEMATICS = BASE_JET_SYSTEMATICS + [
+    f"JES_{src}{direction}" for src in JES_SOURCES for direction in ("Up", "Down")]
+
+
 class Log:
     def __init__(self, mode="info"):
         self.mode = mode

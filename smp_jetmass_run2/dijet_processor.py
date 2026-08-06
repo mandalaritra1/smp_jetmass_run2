@@ -16,7 +16,7 @@ from coffea.analysis_tools import Weights, PackedSelection
 from collections import defaultdict
 from .corrections import *
 from .hist_utils import util_binning, register_hist, fill_hist
-from .hadronic_base import HadronicProcessorBase, Log
+from .hadronic_base import HadronicProcessorBase, Log, FULL_JET_SYSTEMATICS
 from copy import deepcopy
 import hist
 import time
@@ -123,9 +123,15 @@ class DijetProcessor(HadronicProcessorBase):
                                  "'rho_skim' or 'rho_skim<N>', e.g. rho_skim20")
             if self._skim_prescale < 1:
                 raise ValueError(f"Skim prescale must be >= 1, got {self._skim_prescale}")
+        #### None == "all_syst": nominal + JER/JMS/JMR up/down AND both
+        #### directions of every split JES source, the same set zjet_processor
+        #### builds. GetJetCorrections already bakes all 27 sources into the
+        #### corrected jets, and the JES branch of the jetsyst loop below reads
+        #### them; only this default used to leave them unused, so a hadronic
+        #### all_syst run was silently JES-free. minimal_syst/no_syst pass an
+        #### explicit list and are unaffected.
         if jet_systematics is None:
-            jet_systematics = ['nominal', 'JERUp', 'JERDown', 'JMSUp', 'JMSDown',
-                               'JMRUp', 'JMRDown']
+            jet_systematics = list(FULL_JET_SYSTEMATICS)
         if self._do_jk:
             # protect against doing unc for jk --> only need nominal and memory intensive
             jet_systematics = ["nominal"]
