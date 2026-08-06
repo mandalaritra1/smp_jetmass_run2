@@ -1,5 +1,7 @@
 import gzip
+import importlib
 import json
+import sys
 from contextlib import ExitStack
 from functools import lru_cache
 from importlib.resources import files, as_file
@@ -16,6 +18,27 @@ from coffea.lookup_tools import extractor
 
 from coffea.jetmet_tools import JECStack, CorrectedJetsFactory
 from .roccor import RoccoR
+
+
+def _resource_root(package: str = "smp_jetmass_run2"):
+    """Traversable root for packaged correction payloads.
+
+    importlib.resources handles every install layout (including zipimport),
+    but on coffea-casa Dask workers that receive the package as a zip upload
+    the module spec occasionally resolves with ``spec.loader = None``, and
+    ``files()`` then dies with ``AttributeError: 'NoneType' object has no
+    attribute 'name'``, killing chunks at random. By the time any correction
+    loader runs the package itself is imported, so its on-disk location in
+    ``__file__`` is an equivalent anchor — fall back to that.
+    """
+    try:
+        return files(package)
+    except Exception:
+        mod = sys.modules.get(package) or importlib.import_module(package)
+        pkg_file = getattr(mod, "__file__", None)
+        if not pkg_file:
+            raise
+        return Path(pkg_file).resolve().parent
 
 # Map your IOV to the key used inside the JSON
 _HNAME = {
@@ -226,14 +249,14 @@ def _get_data_prior_rho_weight_resource(is_groomed: bool) -> tuple[str, str]:
 @lru_cache(maxsize=None)
 def get_herwig_weight_g(mode: str = "rho", channel: str = "zjet") -> PtVarWeighter:
     filename, grid_key = _get_herwig_weight_resource(is_groomed=True, mode=mode, channel=channel)
-    resource = files("smp_jetmass_run2") / "corrections" / filename
+    resource = _resource_root() / "corrections" / filename
     with as_file(resource) as p:          # p is a real pathlib.Path on disk
         return PtVarWeighter(p, grid_key)
 
 @lru_cache(maxsize=None)
 def get_herwig_weight_u(mode: str = "rho", channel: str = "zjet") -> PtVarWeighter:
     filename, grid_key = _get_herwig_weight_resource(is_groomed=False, mode=mode, channel=channel)
-    resource = files("smp_jetmass_run2") / "corrections" / filename
+    resource = _resource_root() / "corrections" / filename
     with as_file(resource) as p:
         return PtVarWeighter(p, grid_key)
 
@@ -254,14 +277,14 @@ def _get_model_reweight_resource(source: str, is_groomed: bool, mode: str, chann
 @lru_cache(maxsize=None)
 def get_model_reweight_g(source: str, mode: str = "rho", channel: str = "zjet") -> PtVarWeighter:
     filename, grid_key = _get_model_reweight_resource(source, is_groomed=True, mode=mode, channel=channel)
-    with as_file(files("smp_jetmass_run2") / "corrections" / filename) as p:
+    with as_file(_resource_root() / "corrections" / filename) as p:
         return PtVarWeighter(p, grid_key)
 
 
 @lru_cache(maxsize=None)
 def get_model_reweight_u(source: str, mode: str = "rho", channel: str = "zjet") -> PtVarWeighter:
     filename, grid_key = _get_model_reweight_resource(source, is_groomed=False, mode=mode, channel=channel)
-    with as_file(files("smp_jetmass_run2") / "corrections" / filename) as p:
+    with as_file(_resource_root() / "corrections" / filename) as p:
         return PtVarWeighter(p, grid_key)
 
 
@@ -277,7 +300,7 @@ def get_vincia_weight_u(mode: str = "rho", channel: str = "zjet") -> PtVarWeight
 @lru_cache(maxsize=None)
 def get_data_prior_rho_weight_g() -> PtBinnedVarWeighter:
     filename, _ = _get_data_prior_rho_weight_resource(is_groomed=True)
-    resource = files("smp_jetmass_run2") / "corrections" / filename
+    resource = _resource_root() / "corrections" / filename
     with as_file(resource) as p:
         return PtBinnedVarWeighter(p)
 
@@ -285,7 +308,7 @@ def get_data_prior_rho_weight_g() -> PtBinnedVarWeighter:
 @lru_cache(maxsize=None)
 def get_data_prior_rho_weight_u() -> PtBinnedVarWeighter:
     filename, _ = _get_data_prior_rho_weight_resource(is_groomed=False)
-    resource = files("smp_jetmass_run2") / "corrections" / filename
+    resource = _resource_root() / "corrections" / filename
     with as_file(resource) as p:
         return PtBinnedVarWeighter(p)
 
@@ -293,7 +316,7 @@ def get_data_prior_rho_weight_u() -> PtBinnedVarWeighter:
 def get_rocc_corrections(iov=None) -> RoccoR:
     # you can map iov -> filename later if you want
     resource = (
-        files("smp_jetmass_run2")
+        _resource_root()
         / "corrections" / "muonSF" / "UL2016" / "RoccoR2016aUL.txt"
     )
     with as_file(resource) as p:
@@ -308,7 +331,7 @@ def _load_jme_corrections(iov: str, mode: str):
     if iov not in _CORRLIB_NAME_MAP:
         raise ValueError(f"Unsupported IOV '{iov}'. Expected one of {tuple(_CORRLIB_NAME_MAP)}.")
 
-    data_dir = files("smp_jetmass_run2") / "corrections" / "JME" / _CORRLIB_NAME_MAP[iov]
+    data_dir = _resource_root() / "corrections" / "JME" / _CORRLIB_NAME_MAP[iov]
     data_path = data_dir / _JME_MODE_FILE[mode_key]
     if not data_path.is_file():
         raise FileNotFoundError(f"Missing JME correction file at {data_path}")
@@ -319,7 +342,7 @@ def _load_jme_corrections(iov: str, mode: str):
 @lru_cache(maxsize=None)
 def _load_cset(iov: str) -> correctionlib.CorrectionSet:
     """Load and cache the CorrectionSet from packaged resources."""
-    data_path = files("smp_jetmass_run2") / "corrections" / "pu" / f"{iov}_UL" / "puWeights.json.gz"
+    data_path = _resource_root() / "corrections" / "pu" / f"{iov}_UL" / "puWeights.json.gz"
     with data_path.open("rb") as fh:
         raw = fh.read()
     data = gzip.decompress(raw).decode("utf-8")
@@ -345,7 +368,7 @@ def get_pu_weights(events, iov: str):
 @lru_cache(maxsize=None)
 def _load_ele_trig_corrections() -> correctionlib.CorrectionSet:
     """Load electron trigger efficiency corrections from packaged resources."""
-    data_path = files("smp_jetmass_run2") / "corrections" / "eleSF" / "egammaEffi_EGM2D.json"
+    data_path = _resource_root() / "corrections" / "eleSF" / "egammaEffi_EGM2D.json"
     with data_path.open("r", encoding="utf-8") as fh:
         return correctionlib.CorrectionSet.from_string(fh.read())
 
@@ -354,7 +377,7 @@ def _load_ele_trig_corrections() -> correctionlib.CorrectionSet:
 def _load_ele_sf_corrections(iov: str) -> correctionlib.CorrectionSet:
     """Load electron identification scale factors from packaged resources."""
     period = _CORRLIB_NAME_MAP[iov]
-    data_path = files("smp_jetmass_run2") / "corrections" / "EGM" / period / "electron.json.gz"
+    data_path = _resource_root() / "corrections" / "EGM" / period / "electron.json.gz"
     with data_path.open("rb") as fh:
         raw = fh.read()
     return correctionlib.CorrectionSet.from_string(gzip.decompress(raw).decode("utf-8"))
@@ -363,7 +386,7 @@ def _load_ele_sf_corrections(iov: str) -> correctionlib.CorrectionSet:
 @lru_cache(maxsize=None)
 def _load_muon_sf_corrections(iov: str) -> correctionlib.CorrectionSet:
     """Load muon scale factor corrections from packaged resources."""
-    data_path = files("smp_jetmass_run2") / "corrections" / "muonSF" / f"UL{iov}" / "muon_Z.json.gz"
+    data_path = _resource_root() / "corrections" / "muonSF" / f"UL{iov}" / "muon_Z.json.gz"
     with data_path.open("rb") as fh:
         raw = fh.read()
     return correctionlib.CorrectionSet.from_string(gzip.decompress(raw).decode("utf-8"))
@@ -585,14 +608,14 @@ def resource_path(package: str, *parts: str) -> str:
     Works even when the package is a .zip (zipimport).
     The underlying temp file is kept alive by the process-global ExitStack.
     """
-    ref = files(package).joinpath(*parts)
+    ref = _resource_root(package).joinpath(*parts)
     path = _resource_stack.enter_context(as_file(ref))
     return str(path)
 
 # def getLumiMaskRun2():
 
 
-#     golden_json_dir = files("smp_jetmass_run2") / "corrections" / "goldenJsons"
+#     golden_json_dir = _resource_root() / "corrections" / "goldenJsons"
 #     golden_json_path_2016 = golden_json_dir / "Cert_271036-284044_13TeV_Legacy2016_Collisions16_JSON.txt"
 #     golden_json_path_2017 = golden_json_dir / "Cert_294927-306462_13TeV_UL2017_Collisions17_GoldenJSON.txt"
 #     golden_json_path_2018 = golden_json_dir / "Cert_314472-325175_13TeV_Legacy2018_Collisions18_JSON.txt"
@@ -634,7 +657,7 @@ def debug_jec_weightset(iov: str = "2018", mode: str = "AK8", is_data: bool = Fa
     ak_label = _JME_AK_LABEL[mode_key]
     jec_tag, jec_tag_data, _ = _resolve_jec_tags(iov)
 
-    corrections_root = files("smp_jetmass_run2").joinpath("corrections")
+    corrections_root = _resource_root().joinpath("corrections")
     if is_data:
         if run is None:
             raise ValueError("Parameter 'run' must be provided when is_data=True.")
@@ -785,7 +808,7 @@ def _get_jet_factory(IOV, isData, mode, era, uncertainties_key):
 
     #print("extracting corrections from files for " + jec_tag)
     ext = extractor()
-    pkg_root = files("smp_jetmass_run2")
+    pkg_root = _resource_root()
     corrections_root = pkg_root.joinpath("corrections")
     jec_dir = corrections_root.joinpath("JEC", jec_tag)
     data_file = jec_dir.joinpath(f"{jec_tag}_L1FastJet_{AK_str}.jec.txt")
