@@ -1,4 +1,11 @@
 import os
+
+#### replicate() has to connect to EVERY worker, and on a few-hundred-worker
+#### pool a handful of dead/recycled addresses is near-certain; the 30 s default
+#### then kills the stage with "OSError: Timed out trying to connect". Must be
+#### set before distributed reads its config, i.e. before the coffea import.
+os.environ.setdefault("DASK_DISTRIBUTED__COMM__TIMEOUTS__CONNECT", "60s")
+
 import json
 import pickle
 import re
@@ -615,6 +622,64 @@ def resolve_systematics(profile: str):
     raise ValueError(f"Unknown systematic profile: {profile}")
 
 
+class _BroadcastHeavyClient:
+    """Client wrapper that replicates every ``submit``-ed future to all workers.
+
+    coffea's Runner always hands DaskExecutor the lz4/cloudpickled processor as
+    ``heavy_input``, and the executor materializes it as ONE future on ONE
+    worker (``client.submit(lambda x: x, heavy_input)``) that every chunk task
+    then depends on. Dependency locality parks all the chunks on whichever
+    worker holds it, and work stealing refuses to move a dependency that large
+    -- with systematics the pickled processor carries every correction payload
+    -- so a 400-worker pool executes as a 1-worker pool. Signature on the
+    scheduler: ``saturated: 1`` with everything else ``idle``, and every queued
+    task on the hoarder sharing one ``lambda-<hash>`` dependency key.
+
+    Replicating the future to every worker removes the locality pull and
+    decide_worker goes back to spreading by occupancy. Chunks go through
+    ``.map``; bare ``.submit`` is used only for heavy_input, so broadcasting
+    every submitted future is safe.
+
+    This hits HOT pools on consecutive launches, never cold ones, so per-bin
+    adapt() (which deliberately keeps the cluster warm between bins) is exactly
+    the trigger. Pool sizing does not and cannot fix it -- orthogonal problem.
+
+    Failures are swallowed: a broadcast that does not happen degrades to the old
+    hoarding behavior, which is slow, not wrong. Do NOT try to repair hoarding
+    after the fact instead of using this -- retire_workers just migrates the
+    heavy future to a new hoarder, and a live replicate of the hot key hangs
+    because the source worker is busy. Both are recorded as failing in
+    ai-wiki/wiki/bugs/coffea_daskexecutor_heavy_input_hoarding.md.
+
+    Known race (low probability, upstream): the submit -> wait -> replicate
+    sequence can leave the lambda task with no priority and wedge the
+    scheduler, which dies on ``assert ts.priority`` while the visible log fills
+    with a MISLEADING ``TypeError: cannot pickle 'weakref.ReferenceType'`` from
+    the scheduler failing to serialize the TaskState as it logs the assertion.
+    Do not chase the pickle error. Nothing times out -- the driver just stops
+    making progress -- so detection is the monitor's stalled-log check, and the
+    cure is a plain retry of the failed bin.
+    """
+
+    def __init__(self, inner):
+        self._inner = inner
+
+    def __getattr__(self, name):
+        return getattr(self._inner, name)
+
+    def submit(self, func, *args, **kwargs):
+        future = self._inner.submit(func, *args, **kwargs)
+        try:
+            from distributed import wait as _dask_wait
+
+            _dask_wait(future, timeout=300)
+            self._inner.replicate(future)
+        except Exception as exc:
+            print(f"[broadcast] heavy_input replicate failed ({type(exc).__name__}: {exc}); "
+                  "continuing without it -- expect single-worker hoarding.")
+        return future
+
+
 def make_runner(
     use_dask: bool = False,
     client=None,
@@ -628,6 +693,9 @@ def make_runner(
     if use_dask:
         if client is None:
             raise ValueError("use_dask=True but no Dask client provided.")
+        #### Wrap ONLY the client the executor sees -- the caller keeps the real
+        #### one, so cluster/adapt/scheduler_info handling is untouched.
+        client = _BroadcastHeavyClient(client)
         if treereduce:
             # coffea DaskExecutor merges chunk outputs on the workers (tree
             # reduction) -- the partial sums of many-axis histograms can OOM
