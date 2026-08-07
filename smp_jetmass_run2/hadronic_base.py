@@ -27,7 +27,7 @@ import hist
 
 from coffea import processor
 
-from .corrections import getXSweight
+from .corrections import getXSlumi, getXSweight
 from .hist_utils import fill_hist
 
 
@@ -76,6 +76,46 @@ class HadronicProcessorBase(processor.ProcessorABC):
     @property
     def accumulator(self):
         return self.hists
+
+    #############################################################
+    #### generator weight + on-the-fly sumw (zjet-style)
+    #############################################################
+
+    @staticmethod
+    def _gen_weights(events):
+        """The per-event generator weight the MC hists are filled with.
+
+        genWeight, exactly like zjet_processor -- NOT LHEWeight.originalXWGTUP
+        (what these processors used before 2026-08-07). One branch for the
+        numerator (fills) and the denominator (`_accumulate_sumw` below) is the
+        whole point: the normalization xs*lumi*1000/sumw is only meaningful if
+        both sides are sums of the SAME quantity.
+
+        Measured on UL NanoAODv9 (2026-08-07): genWeight is identically 1.0 in
+        every hadronic MC we run -- madgraphMLM+pythia8, madgraphMLM+herwig7
+        (1.0 to 1e-7) and flat-pT pythia8 (no LHE branches at all) -- so for
+        these samples the scheme reduces to event counting, sumw = N. It stays
+        correct for any future sample with genuinely weighted (or negative)
+        events, which a bare event count would not.
+        """
+        if "genWeight" in events.fields:
+            return events.genWeight
+        #### no genWeight at all (data-like / GEN-less files): unit weights
+        return np.ones(len(events))
+
+    def _accumulate_sumw(self, out, dataset, events):
+        """Add this chunk's sum of generator weights to out['sumw'][dataset].
+
+        MUST be called exactly ONCE per chunk, on the PRE-SELECTION events and
+        OUTSIDE both the jackknife slice loop and the jet-systematic loop --
+        each of those re-iterates the same chunk, so accumulating inside either
+        multiplies sumw by the number of iterations. The jackknife slices are
+        90% subsamples of the same events and are deliberately normalized by
+        the FULL sumw, matching what the tabulated (full-dataset) sumw did.
+        """
+        if not self.do_gen:
+            return
+        out['sumw'][dataset] += float(ak.sum(self._gen_weights(events)))
 
     def _rho(self, mass, pt):
         #### rho = 2*log10(m/(pt*R)) -- matches the zjet QJetMassProcessor definition
@@ -199,7 +239,7 @@ class HadronicProcessorBase(processor.ProcessorABC):
             self.logging.debug(f"rho_skim: subjet columns unavailable ({exc})")
         return nsub, zg, rg
 
-    def _scale_skim_weights(self, accumulator, iov_of):
+    def _scale_skim_weights(self, accumulator, scale_of):
         #### Same xs*lumi*1000/sumw scale the hists get, applied per dataset to
         #### the flat `weight` column (postprocess only walks hist.Hist objects).
         skim = accumulator.get('skim')
@@ -216,7 +256,7 @@ class HadronicProcessorBase(processor.ProcessorABC):
                 continue
             ids = np.asarray(acc['dataset_id'].value, dtype=np.uint32)
             for d in names:
-                scale = getXSweight(d, iov_of(d))
+                scale = scale_of(d)
                 if scale is None or scale == 1.0:
                     self.logging.info(f"rho_skim[{table}]: no scale for {d}")
                     continue
@@ -392,9 +432,47 @@ class HadronicProcessorBase(processor.ProcessorABC):
                 return '2017'
             return '2016'
 
+        #### sumw accumulated on the fly by process() (genWeight basis, summed
+        #### over exactly the events this job read). Using it instead of the
+        #### tabulated full-dataset sums is what makes a partial production --
+        #### any number of files -- come out at the true integrated luminosity.
+        sumw_acc = accumulator.get('sumw') or {}
+        scale_cache = {}
+
+        def _scale_of(ds):
+            if ds in scale_cache:
+                return scale_cache[ds]
+            iov = _iov(ds)
+            sw = float(sumw_acc.get(ds, 0.0))
+            xs, lumi_fb = getXSlumi(ds, iov)
+            if sw > 0.0 and xs is not None:
+                scale = xs * lumi_fb * 1000.0 / sw
+                self.logging.info(
+                    f"[postprocess] {ds}: scale={scale:.6g} = {xs} * {lumi_fb*1000.0} "
+                    f"/ sumw={sw:.6g} (accumulated genWeight, {iov})")
+            else:
+                #### FALLBACK for outputs made before the on-the-fly sumw (and
+                #### for any dataset missing from the accumulator): the
+                #### tabulated sums in corrections.py. Those are LHE-weight
+                #### sums and therefore on a DIFFERENT basis than a genWeight
+                #### numerator -- correct for old pickles (whose fills were LHE
+                #### too), wrong if it ever fires on a fresh output, hence the
+                #### noise.
+                scale = getXSweight(ds, iov)
+                why = "sumw==0/absent" if sw <= 0.0 else "no xs entry"
+                print(f"[postprocess] WARNING: {ds}: {why} in the accumulated "
+                      f"sumw -- falling back to the tabulated LHE-weight sumw "
+                      f"(corrections.py), scale={scale}. Numerator (genWeight) "
+                      f"and denominator (LHE) are on different bases unless "
+                      f"this output predates 2026-08-07.")
+            if scale is None:
+                scale = 1.0
+            scale_cache[ds] = scale
+            return scale
+
         #### the flat skim tables are not hist.Hist, so they need the same scale
         #### applied explicitly (XS-in-postprocess is a hard repo invariant)
-        self._scale_skim_weights(accumulator, _iov)
+        self._scale_skim_weights(accumulator, _scale_of)
 
         for key, h in accumulator.items():
             if not isinstance(h, hist.Hist):
@@ -405,9 +483,7 @@ class HadronicProcessorBase(processor.ProcessorABC):
             ds_axis = h.axes['dataset']
             view = h.view(flow=True)
             for ds in list(ds_axis):
-                scale = getXSweight(ds, _iov(ds))
-                if scale is None:
-                    scale = 1.0
+                scale = _scale_of(ds)
                 idx = ds_axis.index(ds)
                 if key.startswith('reco_cov_'):
                     #### covariance hists are second-moment quantities: the

@@ -1410,10 +1410,23 @@ xsdb = {
     'TTJets_TuneCP5_13TeV-madgraphMLM-pythia8': 471.7,
 }
 
+#### LEGACY (pre-2026-08-07) TABLE -- kept as the postprocess FALLBACK only.
 #### sumw = sum over EVERY event of EVERY file in the dataset of
-#### Events/LHEWeight_originalXWGTUP -- the same branch the hadronic processors
-#### fill with (`weights = events.LHEWeight.originalXWGTUP`, genWeight only as a
-#### fallback). NOT Runs/genEventSumw: genWeight is identically 1.0 in these UL
+#### Events/LHEWeight_originalXWGTUP, which is the branch the hadronic
+#### processors USED to fill with. They now fill with genWeight and accumulate
+#### their own sumw on the fly (HadronicProcessorBase), so a fresh output is
+#### normalized from the accumulated genWeight sum and never reads this table.
+####
+#### BASIS WARNING: these numbers are LHE-weight sums, NOT genWeight sums. In
+#### every UL hadronic MC sample measured (madgraphMLM+pythia8, madgraphMLM+
+#### herwig7, flat-pT pythia8) genWeight is identically 1.0 while
+#### LHEWeight_originalXWGTUP is O(12) for QCD_HT700to1000 and O(4e4) for the
+#### herwig HT100to200 bin -- so mixing an accumulated genWeight sumw with these
+#### values (or vice versa) mis-scales by the mean LHE weight. The two bases are
+#### each self-consistent with the fills of their own era; postprocess logs
+#### loudly whenever it has to fall back here.
+####
+#### NOT Runs/genEventSumw: genWeight is identically 1.0 in these UL
 #### madgraphMLM NanoAODv9 samples, so genEventSumw is just the event count and
 #### is wrong by 4-5 orders of magnitude per HT bin. Recompute with
 #### tools/compute_sumw_qcd_mg.py, which reproduces the pre-existing
@@ -1550,6 +1563,25 @@ sumw_bg = {
         'TTJets_TuneCP5_13TeV-madgraphMLM-pythia8': 9437788.830200195,
         'WJetsToLNu_TuneCP5_13TeV-madgraphMLM-pythia8': 9537355436664.0},
 }
+
+
+def getXSlumi(dataset, IOV):
+    """(xs [pb], lumi [fb-1]) for `dataset`, or (None, None) if unknown.
+
+    Same dataset->process resolution getXSweight uses (first substring match in
+    `xsdb`, first `lumi` key contained in IOV -- the key ORDER of `lumi` is what
+    keeps '2016APV' from matching '2016'), but WITHOUT dividing by a tabulated
+    sumw. The hadronic processors accumulate sumw on the fly and build the
+    xs*lumi*1000/sumw scale themselves; getXSweight stays as-is for external
+    callers and as the legacy fallback.
+    """
+    for year in np.array(list(lumi.keys())):
+        if year in IOV:
+            for process in np.array(list(xsdb.keys())):
+                if process in dataset:
+                    return xsdb[process], lumi[year]
+            return None, None
+    return None, None
 
 
 def getXSweight(dataset, IOV):

@@ -156,6 +156,11 @@ class TrijetProcessor(HadronicProcessorBase):
         self.hists = {}
         self.hists['cutflow'] = {}
         self.hists['jkflow'] = processor.defaultdict_accumulator(int)
+        #### sum of generator weights over every event READ (pre-selection),
+        #### accumulated per dataset and merged across chunks/workers by
+        #### defaultdict_accumulator, exactly like zjet_processor. postprocess
+        #### divides by it, so a partial production normalizes to the true lumi.
+        self.hists['sumw'] = processor.defaultdict_accumulator(float)
         #### DATA only: log (run, lumi, event) of finally selected events so the
         #### three channels (zjet/dijet/trijet) can be checked for orthogonality.
         if not self.do_gen:
@@ -400,14 +405,19 @@ class TrijetProcessor(HadronicProcessorBase):
             fname_toks = fname2.split("/")
             # year = fname_toks[ fname_toks.index("mc") + 1]
             ht_bin = fname_toks[ fname_toks.index("mc") + 2]
+            #### GluonJetMass-parity cutflow diagnostic ONLY, and on the LHE
+            #### basis it has always been on -- NOT the normalization
+            #### denominator. That is out['sumw'] below (genWeight basis).
             if "LHEWeight" in events.fields:
-                weights = events["LHEWeight"].originalXWGTUP
+                lhe_weights = events["LHEWeight"].originalXWGTUP
             else:
-                weights = events.genWeight
-            out['cutflow'][datastr]['sumw for '+ht_bin] += np.sum(weights)
+                lhe_weights = events.genWeight
+            out['cutflow'][datastr]['sumw for '+ht_bin] += np.sum(lhe_weights)
             ## Flag used for number of events
 
-        
+        #### ONCE per chunk, pre-selection, outside the jackknife and
+        #### jet-systematic loops below (both re-iterate these same events).
+        self._accumulate_sumw(out, dataset, events)
         index_list = np.arange(len(events))
         ###### Choose number of slices to break data into for jackknife method
         if self._do_jk:
@@ -529,10 +539,11 @@ class TrijetProcessor(HadronicProcessorBase):
                 if (jetsyst == "nominal"): out['cutflow'][datastr]['nEvents initial'] += (len(events.FatJet))
                 self.logging.debug("mctype ", mctype, " gen? ", self.do_gen)
                 if self.do_gen:
-                    if "LHEWeight" in events_corr.fields: 
-                        weights = events_corr.LHEWeight.originalXWGTUP
-                    else:
-                        weights = events_corr.genWeight
+                    #### raw generator weight; the xs*lumi*1000/sumw scale is
+                    #### applied in postprocess. Same branch (genWeight) the
+                    #### sumw accumulation above sums, so numerator and
+                    #### denominator are the same quantity.
+                    weights = self._gen_weights(events_corr)
                 else:
                     ############
                     ### Doing data -- apply lumimask and require at least one jet to apply jet trigger prescales

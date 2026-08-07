@@ -181,6 +181,11 @@ class DijetProcessor(HadronicProcessorBase):
         self.hists = {}
         self.hists['cutflow'] = {}
         self.hists['jkflow'] = processor.defaultdict_accumulator(int)
+        #### sum of generator weights over every event READ (pre-selection),
+        #### accumulated per dataset and merged across chunks/workers by
+        #### defaultdict_accumulator, exactly like zjet_processor. postprocess
+        #### divides by it, so a partial production normalizes to the true lumi.
+        self.hists['sumw'] = processor.defaultdict_accumulator(float)
         #### DATA only: log (run, lumi, event) of finally selected events so the
         #### three channels (zjet/dijet/trijet) can be checked for orthogonality.
         if not self.do_gen:
@@ -479,11 +484,17 @@ class DijetProcessor(HadronicProcessorBase):
             fname2 = filename[firstidx:]
             fname_toks = fname2.split("/")
             ht_bin = fname_toks[ fname_toks.index("mc") + 2]
+            #### GluonJetMass-parity cutflow diagnostic ONLY, and on the LHE
+            #### basis it has always been on -- NOT the normalization
+            #### denominator. That is out['sumw'] below (genWeight basis).
             if "LHEWeight" in events.fields:
-                weights = events["LHEWeight"].originalXWGTUP
+                lhe_weights = events["LHEWeight"].originalXWGTUP
             else:
-                weights = events.genWeight
-            out['cutflow'][datastr]['sumw for '+ht_bin] += np.sum(weights)
+                lhe_weights = events.genWeight
+            out['cutflow'][datastr]['sumw for '+ht_bin] += np.sum(lhe_weights)
+        #### ONCE per chunk, pre-selection, outside the jackknife and
+        #### jet-systematic loops below (both re-iterate these same events).
+        self._accumulate_sumw(out, dataset, events)
         index_list = np.arange(len(events))
         ###### Choose number of slices to break data into for jackknife method
         if self._do_jk:
@@ -635,12 +646,11 @@ class DijetProcessor(HadronicProcessorBase):
                 ##############
                 if self.do_gen:
                     #### XS*lumi/sumw normalization is applied in postprocess (zjet-style),
-                    #### so fill with the raw generator weight here.
-                    if "LHEWeight" in events_corr.fields:
-                        weights = events_corr.LHEWeight.originalXWGTUP
-                    else:
-                        weights = events_corr.genWeight
-                    
+                    #### so fill with the raw generator weight here. Same branch
+                    #### (genWeight) the sumw accumulation above sums, so
+                    #### numerator and denominator are the same quantity.
+                    weights = self._gen_weights(events_corr)
+
                 ###############
                 #### For data: apply lumimask to events and weights, get trigger prescaled weights, and save selection
                 ##############
