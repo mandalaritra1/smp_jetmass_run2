@@ -657,7 +657,9 @@ class DijetProcessor(HadronicProcessorBase):
                 else:
                     lumi_mask = getLumiMask(IOV)(events_corr.run, events_corr.luminosityBlock)
                     events_corr = events_corr[lumi_mask]
-                    if "ver2" in dataset:
+                    #### Run2016B (ver1 AND ver2) is triggered on HLT_PFJet*:
+                    #### the AK8 paths are absent from that early-2016 menu.
+                    if usePFJetTriggers(dataset):
                         trigsel, psweights, HLT_cutflow_initial, HLT_cutflow_final = applyPrescales(events_corr, trigger= "PFJet", year = IOV)
                     else:
                         trigsel, psweights, HLT_cutflow_initial, HLT_cutflow_final = applyPrescales(events_corr, year = IOV)

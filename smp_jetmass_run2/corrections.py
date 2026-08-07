@@ -1607,6 +1607,32 @@ def getXSweight(dataset, IOV):
                     return weight
 
 
+def usePFJetTriggers(dataset):
+    """True for the JetHT eras that must be triggered on HLT_PFJet* instead of
+    HLT_AK8PFJet* (and therefore on ps_weight_JSON_PFJet2016.json).
+
+    Both Run2016B versions qualify. ver1 has NO HLT_AK8PFJet{40..500} branches
+    at all -- the paths are absent from that early-2016 menu, only
+    AK8PFJet360_TrimMass30 exists -- so with the AK8 path set applyPrescales
+    matched nothing and every event failed trigsel silently. ver2 does carry
+    the AK8 paths but has been run on the PFJet set since the GluonJetMass
+    port; this helper reproduces that decision unchanged and only extends it
+    to ver1.
+
+    NOTE (measured 2026-08-07): fixing the path set does NOT make ver1 yield
+    events. All 24 runs in the 11-file dataset (272760-273017) are below
+    273158, the first certified run in
+    Cert_271036-284044_13TeV_Legacy2016_Collisions16_JSON.txt -- zero of them
+    are in the golden JSON -- so the lumimask empties the era before the
+    trigger is ever consulted ('nEvents after good lumi sel' = 0). ver1 carries
+    no certified luminosity and its absence from the 2016APV yield is correct,
+    not a bug. This helper only removes the silent failure mode underneath it.
+
+    Hadronic (JetHT) only -- zjet triggers on SingleMuon and never calls this.
+    """
+    return 'ver1' in dataset or 'ver2' in dataset
+
+
 turnOnPts_JetHT = {
     '2016': {'AK8PFJet40': 0., 'AK8PFJet60': 140., 'AK8PFJet80': 210., 'AK8PFJet140': 290.,
              'AK8PFJet200': 380., 'AK8PFJet260': 450., 'AK8PFJet320': 550., 'AK8PFJet400': 640.,

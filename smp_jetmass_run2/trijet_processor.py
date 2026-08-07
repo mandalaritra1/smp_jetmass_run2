@@ -552,7 +552,9 @@ class TrijetProcessor(HadronicProcessorBase):
                     
                     events_corr = events_corr[lumi_mask]
                     weights = np.ones(len(events_corr))
-                    if "ver2" in dataset:
+                    #### Run2016B (ver1 AND ver2) is triggered on HLT_PFJet*:
+                    #### the AK8 paths are absent from that early-2016 menu.
+                    if usePFJetTriggers(dataset):
                         trigsel, psweights, HLTflow_init, HLTflow_final = applyPrescales(events_corr, trigger= "PFJet", year = IOV)
                     else:
                         trigsel, psweights, HLTflow_init, HLTflow_final = applyPrescales(events_corr, year = IOV)
