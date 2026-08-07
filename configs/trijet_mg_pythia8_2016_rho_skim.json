@@ -1,0 +1,21 @@
+{
+  "channel": "trijet",
+  "dataset": "mg_pythia8",
+  "era": "2016",
+  "mode": "rho_skim",
+  "systematic_profile": "no_syst",
+  "executor_mode": "dask-casa",
+  "casa": true,
+  "test": false,
+  "useDefault": false,
+  "chunksize": 50000,
+  "chunksize_test": 50000,
+  "group_mode": "all_in_one",
+  "redirector": "casa",
+  "prependstr": "root://xcache/",
+  "worker_memory": "6 GiB",
+  "n_workers": 400,
+  "worker_merge": 4,
+  "treereduce": true,
+  "_comment": "2016 counterpart of trijet_mg_pythia8_2018_rho_skim.json -- the flat binning-study ntuple over the QCD madgraphMLM HT bins (RunIISummer20UL16NanoAODv9, 8 HT bins (HT100to200..HT2000toInf), TuneCP5_PSWeights, 350 files). Mode is `rho_skim`, which is what the 2018 pair_split skim production actually ran for this channel (the committed 2018 trijet MC config still says plain `rho_skim` for dijet; the outputs in hadronic_skims_pairsplit/ are rho_skim10 for dijet and rho_skim for trijet) so that MC and data carry the same prescale and compare bin-for-bin. Run via `python scripts/run_dijet_skim_split.py --config <this>` -- one submit per HT bin, same 4-core/8-GiB casa client-reduce reason as 2018. Era plumbing for 2016: JEC Summer19UL16_V7_MC / Summer19UL16_RunFGH_V7_DATA, JER Summer20UL16_JRV3_MC, lumi 16.8 fb^-1, golden JSON Cert_271036-284044_13TeV_Legacy2016_Collisions16_JSON.txt, prescales/ps_weight_JSON_2016.json. The fileset qualifier that selects this era's datasets is set by notebook_utils.HADRONIC_ERAS_MC; the processor re-derives the same IOV from the DAS name, so nothing here needs an explicit IOV key."
+}

@@ -1,0 +1,21 @@
+{
+  "channel": "dijet",
+  "dataset": "mg_pythia8",
+  "era": "2018",
+  "mode": "minimal_rho",
+  "systematic_profile": "all_syst",
+  "executor_mode": "dask-casa",
+  "casa": true,
+  "test": false,
+  "useDefault": false,
+  "chunksize": 50000,
+  "chunksize_test": 50000,
+  "group_mode": "all_in_one",
+  "redirector": "casa",
+  "prependstr": "root://xcache/",
+  "worker_memory": "6 GiB",
+  "n_workers": 400,
+  "worker_merge": 4,
+  "treereduce": true,
+  "_comment": "Systematics-grade minimal_rho production on the 2026-08-06 pair_split fiducial (the processor default since 5f098fb: pT floors, |y| < 2.4, dphi12 > pi - 200/ptavg, no asymmetry cut, no trijet-priority veto). Same rho axis as dijet_mg_pythia8_2018_minimal_rho.json; the changes are the selection and all_syst instead of minimal_syst. all_syst passes systematics=None so every weights_obj variation is filled (pu, l1prefiring, Luminosity, and pdf/Q2muF/Q2muR/isr/fsr on the madgraphMLM samples) rather than nominal only. all_syst also runs the full 61-entry jet-systematic set (nominal + JER/JMS/JMR up/down + both directions of all 27 split JES sources), matching zjet_processor -- the hadronic None-default used to stop at JER/JMS/JMR, which left a hadronic all_syst run silently JES-free. Measured cost of the JES loop on a local chunk: 2.8x wall time. Also carries the per-jet kinematic validation hists (pt/eta/phi/mass/msoftdrop for jet1+jet2) across the full systematic axis. QCD madgraphMLM HT bins."
+}

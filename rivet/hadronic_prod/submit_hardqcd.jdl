@@ -1,0 +1,21 @@
+universe                = vanilla
+executable              = inner_hardqcd.sh
+# One config per job (see submit_hardqcd.sh header for why).
+arguments               = $(ptlo) $(pthi) $(seed) $(nevt) $(config)
+should_transfer_files   = YES
+when_to_transfer_output = ON_EXIT
+transfer_input_files    = py313/pythia_rivet, py313/RivetCMS_HADRONIC_JETMASS.so, cp5.cmnd
+output                  = /dev/null
+error                   = /dev/null
+log                     = /dev/null
+MY.SendCredential       = True
++JobFlavour             = "workday"
+request_cpus            = 1
+# Memory grows with events-per-process in the Pythia->HepMC->Rivet loop
+# (~145 kB/event: 40k-event jobs peaked at ~5.8 GB and were held against a
+# 3000 MB cgroup). Keep NEVT per config modest and request headroom.
+request_memory          = $(REQMEM)
+requirements            = (OpSysAndVer =?= "AlmaLinux9")
+periodic_release        = (NumJobStarts < 4) && (HoldReasonCode =!= 1)
+max_retries             = 4
+queue ptlo,pthi,seed,nevt,config from joblist_hardqcd.txt

@@ -45,6 +45,11 @@ COMPARISONS = [
 # Consulted only when a hist is missing from some compared channel: the
 # channels that DO have it must be a subset of the allowed set.
 CHANNEL_SPECIFIC = {
+    "ptjet_rhojet_g_reco_flav": (
+        {"dijet", "trijet"},
+        "hadronic q/g content per measurement bin (matched jets, partonFlavour "
+        "categories); zjet port undecided",
+    ),
     "ptjet_rhojet_g_reco_mfloor2": (
         {"dijet", "trijet"},
         "hadronic-only full-stat diagnostic for the historical m_g > 2 GeV floor",
@@ -113,6 +118,20 @@ CHANNEL_SPECIFIC = {
         {"dijet"},
         "two measured jets require event-clustered covariance; one-jet channels are diagonal",
     ),
+    #### 2026-08-06 pair_split validation hists: per-jet reco kinematics of the
+    #### MEASURED jets. The jet index is intrinsically channel-specific (dijet
+    #### measures jets 1+2, trijet jet 3, zjet jet 0 -- the latter already has
+    #### pt_jet0/eta_jet0/phi_jet0/mass_jet0), so the names cannot be shared.
+    **{
+        f"{q}_{j}": (
+            {ch},
+            f"{ch} per-jet reco kinematics of measured {j} (pair_split fiducial "
+            "validation); the measured-jet index differs per channel",
+        )
+        for ch, jets in (("dijet", ("jet1", "jet2")), ("trijet", ("jet3",)))
+        for j in jets
+        for q in ("pt", "eta", "phi", "mass", "msoftdrop")
+    },
 }
 
 # Axes that encode channel structure, not physics.

@@ -1,0 +1,21 @@
+{
+  "channel": "trijet",
+  "dataset": "data",
+  "era": "2017",
+  "mode": "rho_skim",
+  "systematic_profile": "no_syst",
+  "executor_mode": "dask-casa",
+  "casa": true,
+  "test": false,
+  "useDefault": false,
+  "chunksize": 100000,
+  "chunksize_test": 50000,
+  "group_mode": "all_in_one",
+  "redirector": "casa",
+  "prependstr": "root://xcache/",
+  "worker_memory": "6 GiB",
+  "n_workers": 400,
+  "worker_merge": 4,
+  "treereduce": true,
+  "_comment": "2017 JetHT counterpart of trijet_data_2018_rho_skim.json (JetHT Run2017B-F, 260 files). Data fills only the `reco` table plus events/alljets; `matched`/`gen` are booked but stay empty, and for data final_seq == recoTot_seq so `reco` means the same thing as in MC. Mode `rho_skim` matches the MC prescale for this channel so data/MC compare bin-for-bin. Run via `python scripts/run_dijet_skim_split.py --config <this> --bins Run2017B Run2017C Run2017D Run2017E Run2017F` -- one submit per run era for the same client-reduce reason as the MC HT split. Era plumbing for 2017: JEC Summer19UL17_V6_MC / Summer19UL17_Run{B..F}_V6_DATA, JER Summer19UL17_JRV3_MC, lumi 41.48 fb^-1, golden JSON Cert_294927-306462_13TeV_UL2017_Collisions17_GoldenJSON.txt, prescales/ps_weight_JSON_2017.json. The fileset qualifier that selects this era's datasets is set by notebook_utils.HADRONIC_ERAS_DATA; the processor re-derives the same IOV from the DAS name, so nothing here needs an explicit IOV key."
+}

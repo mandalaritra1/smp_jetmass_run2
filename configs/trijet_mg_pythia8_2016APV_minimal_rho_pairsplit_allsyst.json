@@ -1,0 +1,21 @@
+{
+  "channel": "trijet",
+  "dataset": "mg_pythia8",
+  "era": "2016APV",
+  "mode": "minimal_rho",
+  "systematic_profile": "all_syst",
+  "executor_mode": "dask-casa",
+  "casa": true,
+  "test": false,
+  "useDefault": false,
+  "chunksize": 50000,
+  "chunksize_test": 50000,
+  "group_mode": "all_in_one",
+  "redirector": "casa",
+  "prependstr": "root://xcache/",
+  "worker_memory": "6 GiB",
+  "n_workers": 400,
+  "worker_merge": 4,
+  "treereduce": true,
+  "_comment": "2016APV counterpart of trijet_mg_pythia8_2018_minimal_rho_pairsplit_allsyst.json. Systematics-grade minimal_rho production on the 2026-08-06 pair_split fiducial (the processor default since 5f098fb: pT floors, |y| < 2.4, dphi12 > pi - 200/ptavg, no asymmetry cut, no trijet-priority veto). all_syst passes systematics=None so every weights_obj variation is filled (pu, l1prefiring, Luminosity, and pdf/Q2muF/Q2muR/isr/fsr on the madgraphMLM samples) and the full 61-entry jet-systematic set runs (nominal + JER/JMS/JMR up/down + both directions of all 27 split JES sources). Measured cost of the JES loop on a local chunk: 2.8x wall time. Also carries the per-jet kinematic validation hists across the full systematic axis -- these are the per-year AN-25-039 validation plots. QCD madgraphMLM HT bins (RunIISummer20UL16NanoAODAPVv9, 8 HT bins (HT100to200..HT2000toInf), TuneCP5_PSWeights, 449 files). Era plumbing for 2016APV: JEC Summer19UL16APV_V7_MC / Summer19UL16APV_Run{BCD,EF}_V7_DATA, JER Summer20UL16APV_JRV3_MC, lumi 19.5 fb^-1, golden JSON Cert_271036-284044_13TeV_Legacy2016_Collisions16_JSON.txt, prescales/ps_weight_JSON_2016.json (2016APV shares the 2016 table); the Run2016B-ver2 dataset takes the PFJet path set instead of AK8PFJet (dijet_processor keys on 'ver2' in the dataset name -> ps_weight_JSON_PFJet2016.json). The fileset qualifier that selects this era's datasets is set by notebook_utils.HADRONIC_ERAS_MC; the processor re-derives the same IOV from the DAS name, so nothing here needs an explicit IOV key."
+}
