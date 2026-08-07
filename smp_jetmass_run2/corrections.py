@@ -1410,8 +1410,21 @@ xsdb = {
     'TTJets_TuneCP5_13TeV-madgraphMLM-pythia8': 471.7,
 }
 
+#### sumw = sum over EVERY event of EVERY file in the dataset of
+#### Events/LHEWeight_originalXWGTUP -- the same branch the hadronic processors
+#### fill with (`weights = events.LHEWeight.originalXWGTUP`, genWeight only as a
+#### fallback). NOT Runs/genEventSumw: genWeight is identically 1.0 in these UL
+#### madgraphMLM NanoAODv9 samples, so genEventSumw is just the event count and
+#### is wrong by 4-5 orders of magnitude per HT bin. Recompute with
+#### tools/compute_sumw_qcd_mg.py, which reproduces the pre-existing
+#### QCD_HT2000toInf entries to a relative 1e-9 (2026-08-07).
 sumw_qcd_mg = {
     '2016APV': {
+        #### HT100to200 exists in the casa fileset (fileset_MG_pythia8.json) for
+        #### every era but had no entry here, so getXSweight fell back to 1.0 and
+        #### that dataset's hists carried raw generator weights -- 2.7% of the
+        #### 2018 dijet MC total, unnormalized. Added 2026-08-07.
+        'QCD_HT100to200_TuneCP5_PSWeights_13TeV-madgraphMLM-pythia8': 1599781926577.627,
         'QCD_HT200to300_TuneCP5_PSWeights_13TeV-madgraphMLM-pythia8': 101566726040.5,
         'QCD_HT300to500_TuneCP5_PSWeights_13TeV-madgraphMLM-pythia8': 18372261702.0,
         'QCD_HT500to700_TuneCP5_PSWeights_13TeV-madgraphMLM-pythia8': 2253983329.5,
@@ -1421,6 +1434,7 @@ sumw_qcd_mg = {
         'QCD_HT2000toInf_TuneCP5_PSWeights_13TeV-madgraphMLM-pythia8': 196907.1982421875,
     },
     '2016': {
+        'QCD_HT100to200_TuneCP5_PSWeights_13TeV-madgraphMLM-pythia8': 536002273598.0947,
         'QCD_HT200to300_TuneCP5_PSWeights_13TeV-madgraphMLM-pythia8': 70210797200.0,
         'QCD_HT300to500_TuneCP5_PSWeights_13TeV-madgraphMLM-pythia8': 14630450930.0,
         'QCD_HT500to700_TuneCP5_PSWeights_13TeV-madgraphMLM-pythia8': 2254432227.65625,
@@ -1430,6 +1444,16 @@ sumw_qcd_mg = {
         'QCD_HT2000toInf_TuneCP5_PSWeights_13TeV-madgraphMLM-pythia8': 67843.4627532959,
     },
     '2017': {
+        #### TODO(2026-08-07): QCD_HT100to200 still missing here and in '2018'.
+        #### The grid proxy expired 73/123 (2017) and 0/104 (2018) files into the
+        #### scan and the number MUST be exact, so no partial value was written.
+        #### Finish with (~10 min on a fresh proxy):
+        ####   voms-proxy-init -voms cms -valid 24:00
+        ####   X509_CERT_DIR=$HOME/.globus/certificates \
+        ####       python tools/compute_sumw_qcd_mg.py HT100to200 --cache /tmp/sumw.jsonl
+        #### Until then getXSweight returns 1.0 for that dataset in 2017/2018 and
+        #### its hists stay unnormalized -- drop it downstream (scripts/
+        #### validate_pairsplit.py:mc_dataset_normalized already does).
         'QCD_HT200to300_TuneCP5_13TeV-madgraphMLM-pythia8': 181026146494.0,
         'QCD_HT300to500_TuneCP5_13TeV-madgraphMLM-pythia8': 36516294423.5,
         'QCD_HT500to700_TuneCP5_13TeV-madgraphMLM-pythia8': 3486166624.203125,
