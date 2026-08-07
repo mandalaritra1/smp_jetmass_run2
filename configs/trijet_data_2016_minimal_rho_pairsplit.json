@@ -1,0 +1,21 @@
+{
+  "channel": "trijet",
+  "dataset": "data",
+  "era": "2016",
+  "mode": "minimal_rho",
+  "systematic_profile": "minimal_syst",
+  "executor_mode": "dask-casa",
+  "casa": true,
+  "test": false,
+  "useDefault": false,
+  "chunksize": 100000,
+  "chunksize_test": 50000,
+  "group_mode": "all_in_one",
+  "redirector": "casa",
+  "prependstr": "root://xcache/",
+  "worker_memory": "6 GiB",
+  "n_workers": 400,
+  "worker_merge": 4,
+  "treereduce": true,
+  "_comment": "2016 counterpart of trijet_data_2018_minimal_rho_pairsplit.json. Systematics-grade minimal_rho trijet DATA production on the 2026-08-06 pair_split fiducial. The systematic profile is left at minimal_syst because it is a no-op on data: the jetsyst loop skips every non-nominal entry when do_gen is False, and the data weights object carries no variations, so data is nominal-only by construction whatever the profile says. Also carries the per-jet kinematic validation hists, which is the point of the run -- they are the data leg of the per-year pair_split kinematic data/MC ratios. JetHT Run2016F(-UL2016), G, H (postVFP), 147 files. Era plumbing for 2016: JEC Summer19UL16_V7_MC / Summer19UL16_RunFGH_V7_DATA, JER Summer20UL16_JRV3_MC, lumi 16.8 fb^-1, golden JSON Cert_271036-284044_13TeV_Legacy2016_Collisions16_JSON.txt, prescales/ps_weight_JSON_2016.json. The fileset qualifier that selects this era's datasets is set by notebook_utils.HADRONIC_ERAS_DATA; the processor re-derives the same IOV from the DAS name, so nothing here needs an explicit IOV key."
+}

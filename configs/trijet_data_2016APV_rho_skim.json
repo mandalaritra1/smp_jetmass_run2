@@ -1,0 +1,20 @@
+{
+  "channel": "trijet",
+  "dataset": "data",
+  "era": "2016APV",
+  "mode": "rho_skim",
+  "systematic_profile": "no_syst",
+  "executor_mode": "dask-casa",
+  "casa": true,
+  "test": false,
+  "useDefault": false,
+  "chunksize": 100000,
+  "chunksize_test": 50000,
+  "group_mode": "all_in_one",
+  "redirector": "casa",
+  "prependstr": "root://xcache/",
+  "worker_memory": "6 GiB",
+  "worker_merge": 4,
+  "treereduce": true,
+  "_comment": "2016APV JetHT counterpart of trijet_data_2018_rho_skim.json (JetHT Run2016B-ver1/ver2, C, D, E, F (HIPM_UL2016), 296 files). Data fills only the `reco` table plus events/alljets; `matched`/`gen` are booked but stay empty, and for data final_seq == recoTot_seq so `reco` means the same thing as in MC. Mode `rho_skim` matches the MC prescale for this channel so data/MC compare bin-for-bin. Run via `python scripts/run_dijet_skim_split.py --config <this> --bins Run2016B-ver1 Run2016B-ver2 Run2016C Run2016D Run2016E Run2016F-HIPM` -- one submit per run era for the same client-reduce reason as the MC HT split. Era plumbing for 2016APV: JEC Summer19UL16APV_V7_MC / Summer19UL16APV_Run{BCD,EF}_V7_DATA, JER Summer20UL16APV_JRV3_MC, lumi 19.5 fb^-1, golden JSON Cert_271036-284044_13TeV_Legacy2016_Collisions16_JSON.txt, prescales/ps_weight_JSON_2016.json (2016APV shares the 2016 table); the Run2016B-ver2 dataset takes the PFJet path set instead of AK8PFJet (dijet_processor keys on 'ver2' in the dataset name -> ps_weight_JSON_PFJet2016.json). The fileset qualifier that selects this era's datasets is set by notebook_utils.HADRONIC_ERAS_DATA; the processor re-derives the same IOV from the DAS name, so nothing here needs an explicit IOV key."
+}
