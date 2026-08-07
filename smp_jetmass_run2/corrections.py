@@ -1444,16 +1444,9 @@ sumw_qcd_mg = {
         'QCD_HT2000toInf_TuneCP5_PSWeights_13TeV-madgraphMLM-pythia8': 67843.4627532959,
     },
     '2017': {
-        #### TODO(2026-08-07): QCD_HT100to200 still missing here and in '2018'.
-        #### The grid proxy expired 73/123 (2017) and 0/104 (2018) files into the
-        #### scan and the number MUST be exact, so no partial value was written.
-        #### Finish with (~10 min on a fresh proxy):
-        ####   voms-proxy-init -voms cms -valid 24:00
-        ####   X509_CERT_DIR=$HOME/.globus/certificates \
-        ####       python tools/compute_sumw_qcd_mg.py HT100to200 --cache /tmp/sumw.jsonl
-        #### Until then getXSweight returns 1.0 for that dataset in 2017/2018 and
-        #### its hists stay unnormalized -- drop it downstream (scripts/
-        #### validate_pairsplit.py:mc_dataset_normalized already does).
+        #### HT100to200: exact sum over all 123 files, 80,534,025 events
+        #### (tools/compute_sumw_qcd_mg.py, 2026-08-07)
+        'QCD_HT100to200_TuneCP5_13TeV-madgraphMLM-pythia8': 3823812289963.901,
         'QCD_HT200to300_TuneCP5_13TeV-madgraphMLM-pythia8': 181026146494.0,
         'QCD_HT300to500_TuneCP5_13TeV-madgraphMLM-pythia8': 36516294423.5,
         'QCD_HT500to700_TuneCP5_13TeV-madgraphMLM-pythia8': 3486166624.203125,
@@ -1463,6 +1456,9 @@ sumw_qcd_mg = {
         'QCD_HT2000toInf_TuneCP5_13TeV-madgraphMLM-pythia8': 248156.31952667236,
     },
     '2018': {
+        #### HT100to200: exact sum over all 104 files, 79,857,456 events
+        #### (tools/compute_sumw_qcd_mg.py, 2026-08-07)
+        'QCD_HT100to200_TuneCP5_13TeV-madgraphMLM-pythia8': 3785070849198.3296,
         'QCD_HT200to300_TuneCP5_13TeV-madgraphMLM-pythia8': 181673668336.0,
         'QCD_HT300to500_TuneCP5_13TeV-madgraphMLM-pythia8': 35869948198.75,
         'QCD_HT500to700_TuneCP5_13TeV-madgraphMLM-pythia8': 3529868167.8984375,
