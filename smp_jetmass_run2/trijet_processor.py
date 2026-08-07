@@ -536,7 +536,14 @@ class TrijetProcessor(HadronicProcessorBase):
                 ######### INITIALIZE WEIGHTS AND SELECTION
                 ##################################
                 sel = PackedSelection()
-                if (jetsyst == "nominal"): out['cutflow'][datastr]['nEvents initial'] += (len(events.FatJet))
+                #### GluonJetMass-inherited double count: 'nEvents initial' is
+                #### already accumulated once per chunk at the top of process(),
+                #### and this line adds the full chunk AGAIN per nominal
+                #### iteration (2x in a plain run, (1+n_slices)x in jackknife).
+                #### Kept in legacy mode only, where the cutflow regression
+                #### requires byte-identical accumulation to GluonJetMass.
+                if jetsyst == "nominal" and not self._pair_split:
+                    out['cutflow'][datastr]['nEvents initial'] += (len(events.FatJet))
                 self.logging.debug("mctype ", mctype, " gen? ", self.do_gen)
                 if self.do_gen:
                     #### raw generator weight; the xs*lumi*1000/sumw scale is
