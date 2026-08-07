@@ -752,8 +752,19 @@ def ensure_client(
 
         cluster = CoffeaCasaCluster(memory=worker_memory or "6 GiB", cores=1)
         if n_workers:
-            cluster.scale(n_workers)
-            print(f"Requested fixed pool of {n_workers} workers.")
+            #### adapt(n, n), NOT scale(n). Same fixed footprint -- no burst, no
+            #### scale-to-zero -- but adaptive keeps a reconciliation loop that
+            #### RESUBMITS workers as they retire. casa's condor workers exit at
+            #### walltime, and a multi-hour run outlives one worker lifetime:
+            #### with scale() the 2026-08-07 2017 dijet skim drained to 0 running
+            #### / 915 completed and the driver blocked for ~6 h on tasks nothing
+            #### would ever claim (scheduler stuck retrying a departed worker,
+            #### "KeyError: tls://...:38105" out of handle_request_refresh_who_has).
+            #### The 2018 runs never hit it only because they finished inside a
+            #### single worker lifetime.
+            cluster.adapt(minimum=n_workers, maximum=n_workers)
+            print(f"Requested fixed pool of {n_workers} workers "
+                  f"(adapt {n_workers}/{n_workers}, self-healing at walltime).")
         else:
             # Keep a worker floor: with minimum=0 the cluster scales to zero during the
             # idle gap between preprocessing and processing (heavy/many-file datasets like
