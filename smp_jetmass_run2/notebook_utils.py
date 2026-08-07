@@ -700,6 +700,66 @@ def normalize_worker_memory(worker_memory):
         return s
 
 
+#### Pool sizing: one worker per 2 chunks, floored at 4, capped by the config's
+#### n_workers. A 400-worker pool against a ~130-chunk graph does not go 400x
+#### faster -- dask parks the whole graph on one or two workers and throughput
+#### collapses to serial (2026-08-07: trijet 2017 HT2000toInf, 136 chunks,
+#### 38m33s at 0.2 chunk/s on 400 workers).
+POOL_CHUNKS_PER_WORKER = 2
+POOL_MIN_WORKERS = 4
+
+
+def estimate_nchunks(fileset, chunksize, treename="Events", log=print):
+    """Coffea chunk count for a fileset: sum of ceil(nevents / chunksize).
+
+    Metadata-only -- uproot reads each file's header for num_entries, no
+    branches. Cheap enough to do on the driver before every submit. A file
+    that cannot be opened counts as one chunk rather than aborting the run;
+    the estimate only sets the pool size, so being a little off is harmless.
+    """
+    import math
+
+    import uproot
+
+    total, nfiles, bad = 0, 0, 0
+    for _ds, files in fileset.items():
+        if isinstance(files, dict):
+            files = list(files)
+        for f in files:
+            try:
+                with uproot.open(f) as handle:
+                    total += math.ceil(handle[treename].num_entries / chunksize)
+                nfiles += 1
+            except Exception:
+                total += 1
+                bad += 1
+    if bad:
+        log(f"[pool] {bad} file(s) unreadable for num_entries; counted as 1 chunk each")
+    return total, nfiles
+
+
+def size_pool_for_fileset(client, fileset, chunksize, cap=None, label="", log=print):
+    """Re-target the cluster's fixed pool to this fileset's chunk count.
+
+    adapt(n, n) is re-callable on a live cluster, so each bin gets its own
+    size without tearing the client down (the split driver keeps one hot
+    client across bins on purpose). Returns the requested worker count, or
+    None when there is nothing to size (futures runs, default cluster).
+    """
+    cluster = getattr(client, "cluster", None) if client is not None else None
+    if cluster is None or not hasattr(cluster, "adapt"):
+        return None
+    nchunks, nfiles = estimate_nchunks(fileset, chunksize, log=log)
+    n_req = max(POOL_MIN_WORKERS, nchunks // POOL_CHUNKS_PER_WORKER)
+    if cap:
+        n_req = min(cap, n_req)
+    before = len(getattr(cluster, "scheduler_info", {}).get("workers", {}) or {})
+    cluster.adapt(minimum=n_req, maximum=n_req)
+    log(f"[pool] {label}: {nfiles} files, ~{nchunks} chunks @ chunksize={chunksize} "
+        f"-> adapt({n_req}, {n_req})  [pool was {before}]")
+    return n_req
+
+
 def ensure_client(
     casa: bool,
     test: bool,
@@ -762,9 +822,13 @@ def ensure_client(
             #### "KeyError: tls://...:38105" out of handle_request_refresh_who_has).
             #### The 2018 runs never hit it only because they finished inside a
             #### single worker lifetime.
-            cluster.adapt(minimum=n_workers, maximum=n_workers)
-            print(f"Requested fixed pool of {n_workers} workers "
-                  f"(adapt {n_workers}/{n_workers}, self-healing at walltime).")
+            #### n_workers is the CEILING, not the request. The real size is set
+            #### per fileset by size_pool_for_fileset() from the chunk count, so
+            #### a small bin never claims the full pool. Start at the floor and
+            #### let the first sizing call raise it.
+            cluster.adapt(minimum=POOL_MIN_WORKERS, maximum=POOL_MIN_WORKERS)
+            print(f"CoffeaCasaCluster up; worker cap {n_workers}, pool starts at "
+                  f"{POOL_MIN_WORKERS} and is sized per fileset from its chunk count.")
         else:
             # Keep a worker floor: with minimum=0 the cluster scales to zero during the
             # idle gap between preprocessing and processing (heavy/many-file datasets like
@@ -1164,6 +1228,14 @@ def run_from_config(cfg, *, client=None, repo_root=None, log=print):
 
     def _run_and_save(fileset, index):
         nonlocal last_out
+        #### Size the worker pool to THIS fileset before submitting it. Called
+        #### per group/bin, so the HT bins (which differ by orders of magnitude
+        #### in chunk count) each get their own pool.
+        if not cfg["test"]:
+            size_pool_for_fileset(
+                client, fileset, chunksize=cfg["chunksize"],
+                cap=int(cfg.get("n_workers") or 0) or None,
+                label=str(cfg.get("dataset_filter") or f"group{index}"), log=log)
         out = run_once(
             fileset, client=client, test=cfg["test"], data=dataset == "data",
             mode=cfg["mode"], channel=cfg["channel"],
