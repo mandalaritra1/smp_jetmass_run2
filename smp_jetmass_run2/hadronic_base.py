@@ -117,6 +117,27 @@ class HadronicProcessorBase(processor.ProcessorABC):
             return
         out['sumw'][dataset] += float(ak.sum(self._gen_weights(events)))
 
+    def _flush_cutflow(self, out, datastr, sel, jetsyst):
+        """Accumulate the per-cut cutflow for every cut defined so far.
+
+        Called immediately before each early `return out` guard in the chunk
+        body. Without this, every cutflow step upstream of a guard is summed
+        only over chunks with a surviving event (chunk-survival fractions, not
+        efficiencies -- measured 2026-08-08: dijet twoRecoJet_seq/nEvents = 0
+        in HT200to300 because no chunk survived its guards).
+
+        pair_split mode only: legacy mode must keep its accumulation points
+        byte-identical to GluonJetMass (which has the same chunk-survival
+        bias) so the cutflow regression in verify-processors stays exact.
+        Sequential (_seq) steps at or upstream of the guard are unbiased after
+        this; cuts not yet defined at the guard simply stay unaccumulated for
+        the chunk, which is correct for sequential steps (the guard condition
+        forces them to zero) but still truncates later marginal counters.
+        """
+        if self._pair_split and jetsyst == "nominal":
+            for name in sel.names:
+                out["cutflow"][datastr][name] += sel.all(name).sum()
+
     def _rho(self, mass, pt):
         #### rho = 2*log10(m/(pt*R)) -- matches the zjet QJetMassProcessor definition
         #### (includes the jet radius R), not the bare 2*log10(m/pt).

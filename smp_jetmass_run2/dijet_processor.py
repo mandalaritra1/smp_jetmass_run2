@@ -814,6 +814,7 @@ class DijetProcessor(HadronicProcessorBase):
                 #### If there are no events passing MET filters end here to avoid errors
                 if ak.sum(METsel) < 1 :
                     self.logging.debug("No events passing MET filters.")
+                    self._flush_cutflow(out, datastr, sel, jetsyst)
                     return out
                 
                 
@@ -927,6 +928,7 @@ class DijetProcessor(HadronicProcessorBase):
                     weights_obj, _kin_sel)
                 if (len(events_corr[sel.all("recoTot_seq")]) < 1):
                     self.logging.debug("no events passing reco sel")
+                    self._flush_cutflow(out, datastr, sel, jetsyst)
                     return out
                 
                 ################
@@ -958,8 +960,9 @@ class DijetProcessor(HadronicProcessorBase):
                         # print("Len of missed dijets ", len(miss_dijets), " and weights ", len(miss_weights))
                         fill_hist(out, "misses_u", dataset=dataset, systematic=jetsyst, **jkkw, ptgen = miss_dijets.pt, mgen = miss_dijets.mass, weight = miss_weights)
                         fill_hist(out, "misses_g", dataset=dataset, systematic=jetsyst, **jkkw, ptgen = miss_dijets.pt, mgen = groomed_gen_dijet.mass, weight = miss_weights)
-                    if len(events_corr[sel.all("genTot_seq", "recoTot_seq", "matched_gen")])<1: 
+                    if len(events_corr[sel.all("genTot_seq", "recoTot_seq", "matched_gen")])<1:
                         self.logging.debug("No events after all selections and removing misses")
+                        self._flush_cutflow(out, datastr, sel, jetsyst)
                         return out
                     #### Fakes include events missing a gen level mass or sdmass value, events failing index dr matching, and events passing reco cut but failing the gen cut
                     matches = ~ak.any(ak.is_none(events_corr.FatJet[:,:2].matched_gen.pt, axis=-1), axis=1)
@@ -983,8 +986,9 @@ class DijetProcessor(HadronicProcessorBase):
                                 fill_hist(out, "fakes_g", dataset=dataset, systematic=syst, **jkkw, ptreco = fake_dijets[~ak.is_none(fake_dijets.msoftdrop)].pt, mreco = fake_dijets[~ak.is_none(fake_dijets.msoftdrop)].msoftdrop, weight = fake_weights[~ak.is_none(fake_dijets.msoftdrop)])
 
                     if jetsyst == "nominal": out['cutflow'][datastr]['fakes_u'] += (len(events_corr[fakes].FatJet))
-                    if len(events_corr[sel.all("genTot_seq", "recoTot_seq", "matched_gen", "matched_reco")])<1: 
+                    if len(events_corr[sel.all("genTot_seq", "recoTot_seq", "matched_gen", "matched_reco")])<1:
                         self.logging.debug("No events after all selections and removing fakes & misses")
+                        self._flush_cutflow(out, datastr, sel, jetsyst)
                         return out
                     #######################
                     #### Make final selection and fill gen plots
@@ -1100,6 +1104,7 @@ class DijetProcessor(HadronicProcessorBase):
                 #######################
                 if len(events_corr[sel.all("final_seq")])<1:
                         self.logging.debug("no more events after final selection")
+                        self._flush_cutflow(out, datastr, sel, jetsyst)
                         return out
                 final_weights = weights_obj.weight()[sel.all("final_seq")]
                 self.logging.debug("Weights after all selections ", final_weights)
