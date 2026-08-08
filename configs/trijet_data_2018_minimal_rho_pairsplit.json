@@ -1,0 +1,21 @@
+{
+  "channel": "trijet",
+  "dataset": "data",
+  "era": "2018",
+  "mode": "minimal_rho",
+  "systematic_profile": "minimal_syst",
+  "executor_mode": "dask-casa",
+  "casa": true,
+  "test": false,
+  "useDefault": false,
+  "chunksize": 100000,
+  "chunksize_test": 50000,
+  "group_mode": "all_in_one",
+  "redirector": "casa",
+  "prependstr": "root://xcache/",
+  "worker_memory": "6 GiB",
+  "n_workers": 400,
+  "worker_merge": 4,
+  "treereduce": true,
+  "_comment": "Systematics-grade minimal_rho trijet DATA production on the 2026-08-06 pair_split fiducial (the processor default since 5f098fb). Same rho axis and running conditions as trijet_data_2018_minimal_rho.json; the only change is the selection. The systematic profile is left at minimal_syst because it is a no-op on data: the jetsyst loop skips every non-nominal entry when do_gen is False, and the data weights object carries no variations, so data is nominal-only by construction whatever the profile says. Also carries the per-jet kinematic validation hists, which is the point of the run -- they are the data leg of the pair_split kinematic data/MC ratios. JetHT Run2018A-D."
+}

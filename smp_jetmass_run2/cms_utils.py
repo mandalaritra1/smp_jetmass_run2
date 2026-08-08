@@ -23,7 +23,7 @@ from coffea.jetmet_tools import JECStack, CorrectedJetsFactory
 #from jmeCorrections import ApplyJetCorrections, corrected_polar_met
 from collections import defaultdict
 from functools import lru_cache
-from importlib.resources import files
+from .corrections import _resource_root
 import correctionlib
 import uproot
 import hist
@@ -961,7 +961,7 @@ def GetMuonSF(IOV, corrset, abseta, pt, var="sf"):
 @lru_cache(maxsize=None)
 def _load_ele_trig_corrections() -> correctionlib.CorrectionSet:
     """Load electron trigger scale factors from packaged resources."""
-    data_path = files("smp_jetmass_run2") / "corrections" / "eleSF" / "egammaEffi_EGM2D.json"
+    data_path = _resource_root() / "corrections" / "eleSF" / "egammaEffi_EGM2D.json"
     with data_path.open("r", encoding="utf-8") as fh:
         return correctionlib.CorrectionSet.from_string(fh.read())
 
