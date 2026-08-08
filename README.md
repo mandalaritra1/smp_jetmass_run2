@@ -281,6 +281,33 @@ shipped to the workers (`upload_package_if_casa` via `client.upload_file`, plus
 `transfer_input_files` on LPC), so `importlib.resources` resolves the bundled
 correction files remotely. Outputs are pickled to `outputs/`.
 
+### Acceptance gate — DAS event-count check (run on every production)
+
+coffea can **silently drop whole chunks**: preprocessing occasionally
+enumerates fewer chunks than a file contains, the run reports
+"Processing 100%" (of the chunks it discovered), exits 0, and the logs carry
+no warning at all. The 2018 LHE-basis archive lost 6.2M events (0.15%) this
+way across 10 of 28 files, and 4 of 12 channel-eras of the 2026-08 pair_split
+campaign show the same signature at the 0.02–0.05% level. Exit code 0 +
+"100%" is therefore **not** evidence of completeness.
+
+Before accepting any downloaded output, assert its `nEvents initial` cutflow
+against the DAS event count of the input datasets:
+
+```bash
+.venv/bin/python tools/check_das_event_counts.py outputs/   # or the archive dir
+```
+
+Any nonzero delta prints a `FAIL` line and exits 1 — re-produce that output
+(a rerun typically re-enumerates the chunks correctly). Dijet outputs are
+checked per DAS dataset (the cutflow names its inputs); trijet outputs carry
+one anonymous counter, resolved from the filename against
+`samples/hadronic/fileset_*.json` (legacy pre-pair_split trijet outputs
+double-counted the counter; the tool detects the ~2x and halves it).
+DAS is queried through `lxwk`/dasgoclient, DBS with a local grid proxy, or
+McM's public API (MC only) — first one that answers wins, and counts are
+cached in `samples/hadronic/das_nevents_cache.json`, so reruns are offline.
+
 ### Programmatic (notebook / quick local test)
 
 ```python
