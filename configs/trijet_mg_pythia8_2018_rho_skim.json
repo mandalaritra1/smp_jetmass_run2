@@ -16,5 +16,6 @@
   "worker_memory": "6 GiB",
   "worker_merge": 4,
   "treereduce": true,
+  "n_workers": 400,
   "_comment": "Trijet counterpart of dijet_mg_pythia8_2018_rho_skim.json (2026-07-25). No prescale (`rho_skim`, unlike the dijet data run): trijet measures ONE jet per event and requires three AK8 jets, so surviving reco statistics are ~30x scarcer than dijet's and every row is wanted. Run via scripts/run_dijet_skim_split.py --config this -- one submit per HT bin, same 4-core/8-GiB client-reduce reason as dijet."
 }
