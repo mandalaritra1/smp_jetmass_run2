@@ -45,6 +45,11 @@ COMPARISONS = [
 # Consulted only when a hist is missing from some compared channel: the
 # channels that DO have it must be a subset of the allowed set.
 CHANNEL_SPECIFIC = {
+    "ptjet_rhojet_g_reco_flav": (
+        {"dijet", "trijet"},
+        "hadronic q/g content per measurement bin (matched jets, partonFlavour "
+        "categories); zjet port undecided",
+    ),
     "ptjet_rhojet_g_reco_mfloor2": (
         {"dijet", "trijet"},
         "hadronic-only full-stat diagnostic for the historical m_g > 2 GeV floor",

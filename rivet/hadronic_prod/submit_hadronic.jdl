@@ -1,0 +1,20 @@
+universe                = vanilla
+executable              = inner_hadronic.sh
+arguments               = $(bin) $(seed) $(nevt) $(config)
+should_transfer_files   = YES
+when_to_transfer_output = ON_EXIT
+transfer_input_files    = pythia_rivet, RivetCMS_HADRONIC_JETMASS.so, cp5.cmnd
+# .out/.err/.log to /dev/null -- an AFS-resident condor log filled the quota and
+# held every job in the DY wave; the job logs to stdout which we discard.
+output                  = /dev/null
+error                   = /dev/null
+log                     = /dev/null
+MY.SendCredential       = True
++JobFlavour             = "workday"
+request_cpus            = 1
+request_memory          = 2000
+requirements            = (OpSysAndVer =?= "AlmaLinux9")
+# self-heal transient segfaults / evictions (fresh worker); cap total starts
+periodic_release        = (NumJobStarts < 4) && (HoldReasonCode =!= 1)
+max_retries             = 4
+queue bin,seed,nevt,config from joblist.txt

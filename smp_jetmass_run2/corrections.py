@@ -1257,6 +1257,24 @@ def ApplyVetoMap(IOV, jets, mapname='jetvetomap'):
     return ~vetoedjets
 
 
+def partonFlavourMasks(genjet):
+    """Per-jet boolean masks by |partonFlavour| of a (matched) gen jet.
+
+    Same categories as getJetFlavors below, except partonFlavour == 0 (no
+    matching parton) is split out as "Undefined" instead of being counted as
+    UDS. Returns numpy masks aligned with the input, None flavours -> 0.
+    """
+    pf = np.abs(ak.to_numpy(ak.fill_none(genjet.partonFlavour, 0)))
+    return {
+        "Gluon":     pf == 21,
+        "UDS":       (pf >= 1) & (pf < 4),
+        "Charm":     pf == 4,
+        "Bottom":    pf == 5,
+        "Undefined": pf == 0,
+        "Other":     (pf > 5) & (pf != 21),
+    }
+
+
 def getJetFlavors(jet):
     genjet = jet.matched_gen
     jetflavs = {}

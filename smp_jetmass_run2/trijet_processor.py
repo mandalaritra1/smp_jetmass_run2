@@ -12,18 +12,8 @@ from collections import defaultdict
 #### import our python packages
 from .corrections import *
 from .hist_utils import util_binning, register_hist, fill_hist
+from .hadronic_base import HadronicProcessorBase, Log
 from copy import deepcopy
-
-
-class Log:
-    def __init__(self, mode="info"):
-        self.mode = mode
-    def info(self, *msg):
-        if self.mode in ["info", "debug"]:
-            print("[INFO]", *msg)
-    def debug(self, *msg):
-        if self.mode == "debug":
-            print("[DEBUG]", *msg)
 
 
 ##### TO DO #####
@@ -33,7 +23,7 @@ class Log:
 #bcut options: b_loose (apply loose bTag threshold to only hardest jet), bb_loose (apply loose bTag to leading two jets),
 #              b_med(apply medium bTag to only the hardest jet), bb_med (apply medium bTag to leading two jets)
 
-class TrijetProcessor(processor.ProcessorABC):
+class TrijetProcessor(HadronicProcessorBase):
     '''
     Processor to run a trijet jet mass cross section analysis.
     Ported from GluonJetMass python/trijetProcessor.py to the zjet QJetMassProcessor
@@ -42,6 +32,16 @@ class TrijetProcessor(processor.ProcessorABC):
     MC, hard veto for 2018 data) and canonical systematic-axis names
     (PUSF->pu, L1prefiring->l1prefiring, PDF->pdf, ISR->isr, FSR->fsr).
     '''
+    #### Weight systematics that genuinely change the gen-level prediction
+    #### (theory reweightings, nominal weight 1.0). Under these the gen truth,
+    #### the response and the misses must move consistently; every other weight
+    #### systematic is detector-side and leaves the gen truth nominal
+    #### (mirrors dijet/zjet).
+    _THEORY_GEN_SYSTS = frozenset({
+        "isrUp", "isrDown", "fsrUp", "fsrDown", "pdfUp", "pdfDown",
+        "Q2muFUp", "Q2muFDown", "Q2muRUp", "Q2muRDown",
+    })
+
     def __init__(self, do_gen=True, mode="minimal", debug=False,
                  jet_systematics=None, systematics=None,
                  ycut=2.5, btag='None', jk=False, jk_range=None):
@@ -181,6 +181,10 @@ class TrijetProcessor(processor.ProcessorABC):
             register_hist(self.hists, 'ptjet_rhojet_u_reco', [dataset_axis, syst_cat, *jk_axes, pt_bin, rho_bin])
             register_hist(self.hists, 'ptjet_rhojet_g_reco', [dataset_axis, syst_cat, *jk_axes, pt_bin, rho_g_bin])
             register_hist(self.hists, 'ptjet_rhojet_g_reco_mfloor2', [dataset_axis, syst_cat, *jk_axes, pt_bin, rho_g_bin])
+            #### Quark/gluon content per measurement bin (see dijet_processor
+            #### for the category definitions -- getJetFlavors + "Undefined").
+            if self.do_gen:
+                register_hist(self.hists, 'ptjet_rhojet_g_reco_flav', [dataset_axis, parton_cat, pt_bin, rho_g_bin])
             if self.do_gen:
                 register_hist(self.hists, 'ptjet_rhojet_u_gen', [dataset_axis, syst_cat, *jk_axes, pt_gen_bin, rho_gen_bin])
                 register_hist(self.hists, 'ptjet_rhojet_g_gen', [dataset_axis, syst_cat, *jk_axes, pt_gen_bin, rho_gen_g_bin])
@@ -211,13 +215,6 @@ class TrijetProcessor(processor.ProcessorABC):
             register_hist(self.hists, 'm_u_jet_reco_over_gen', [dataset_axis, pt_gen_bin, mass_gen_bin, frac_axis])
             register_hist(self.hists, 'm_g_jet_reco_over_gen', [dataset_axis, pt_gen_bin, mass_gen_bin, frac_axis])
     
-    @property
-    def accumulator(self):
-        return self.hists
-
-    def _rho(self, mass, pt):
-        return 2 * np.log10(mass / (pt * self._jetR))
-
     #############################################################
     #### Binning-study skim ("rho_skim" mode)
     #############################################################
@@ -288,218 +285,6 @@ class TrijetProcessor(processor.ProcessorABC):
     #### ended up with instead of letting them dominate the output by 10x.
     _SKIM_EVENT_FACTOR = 1000
 
-    @staticmethod
-    def _skim_dataset_id(dataset):
-        return np.uint32(zlib.crc32(dataset.encode()))
-
-    @staticmethod
-    def _skim_f32(x):
-        #### None -> NaN so downstream masks are a single np.isfinite
-        return ak.to_numpy(ak.fill_none(x, np.nan)).astype(np.float32)
-
-    def _skim_subjet_cols(self, jets, n):
-        #### zg/Rg need the SubJet cross-reference, which does not always survive
-        #### the corrected-jet rebuild. Degrade to NaN rather than crash -- these
-        #### are diagnostic columns, not unfolding inputs.
-        nsub = np.full(n, -1, dtype=np.int8)
-        zg = np.full(n, np.nan, dtype=np.float32)
-        rg = np.full(n, np.nan, dtype=np.float32)
-        try:
-            sj = jets.subjets
-            nsub = ak.to_numpy(ak.num(sj, axis=1)).astype(np.int8)
-            sj2 = ak.pad_none(sj, 2, clip=True)
-            p1, p2 = sj2[:, 0], sj2[:, 1]
-            a, b = self._skim_f32(p1.pt), self._skim_f32(p2.pt)
-            with np.errstate(invalid="ignore"):
-                zg = (np.minimum(a, b) / (a + b)).astype(np.float32)
-            rg = self._skim_f32(p1.delta_r(p2))
-        except Exception as exc:
-            self.logging.debug(f"rho_skim: subjet columns unavailable ({exc})")
-        return nsub, zg, rg
-
-    def _fill_skim(self, out, table, dataset, weights, evt,
-                   reco=None, gen=None, gen_groomed=None):
-        """Append one block of per-jet rows to out['skim'][table].
-
-        One row per EVENT here (the third-leading jet), so `weights`/`reco`/`gen`
-        are already flat arrays aligned with `evt`.
-        """
-        n = len(weights)
-        if n == 0:
-            return
-        keep = None
-        if self._skim_prescale > 1:
-            ev = ak.to_numpy(evt.event).astype(np.int64)
-            keep = ev % self._skim_prescale == 0
-            if not keep.any():
-                return
-        cols = {
-            "weight":     np.asarray(weights, dtype=np.float64) * self._skim_prescale,
-            "dataset_id": np.full(n, self._skim_dataset_id(dataset), dtype=np.uint32),
-            #### the measured jet is the THIRD-leading one, so its index within
-            #### the event is 2 -- kept as a column for schema parity with dijet
-            "jetidx":     np.full(n, 2, dtype=np.int8),
-        }
-        for name, src, dtype in (("pu_rho", "fixedGridRhoFastjetAll", np.float32),
-                                 ("npv", "PV", np.int16)):
-            try:
-                v = evt.PV.npvsGood if src == "PV" else evt[src]
-                cols[name] = ak.to_numpy(ak.fill_none(v, -1)).astype(dtype)
-            except Exception:
-                cols[name] = np.full(n, -1, dtype=dtype)
-        if reco is not None:
-            nsub, zg, rg = self._skim_subjet_cols(reco, n)
-            cols.update(
-                ptreco=self._skim_f32(reco.pt), etareco=self._skim_f32(reco.eta),
-                phireco=self._skim_f32(reco.phi), mreco_u=self._skim_f32(reco.mass),
-                mreco_g=self._skim_f32(reco.msoftdrop),
-                nconst=ak.to_numpy(ak.fill_none(reco.nConstituents, -1)).astype(np.int16),
-                nsub=nsub, zg=zg, Rg=rg,
-            )
-        if gen is not None:
-            cols.update(
-                ptgen=self._skim_f32(gen.pt), etagen=self._skim_f32(gen.eta),
-                phigen=self._skim_f32(gen.phi), mgen_u=self._skim_f32(gen.mass),
-                mgen_g=self._skim_f32(gen_groomed.mass),
-            )
-        out['skim']['datasets'].add(dataset)
-        acc = out['skim'][table]
-        for name, arr in cols.items():
-            arr = np.asarray(arr)
-            acc[name] += processor.column_accumulator(arr if keep is None else arr[keep])
-
-    def _fill_skim_event(self, out, dataset, weights, evt, sel):
-        """Append the event-display block: one `events` row per event plus one
-        `alljets`/`allgenjets` row per jet in the FULL collections.
-
-        Filled once per chunk at the point where every cut in _SKIM_CUTS is
-        defined, so `cutbits` records exactly where each event died.
-        """
-        n = len(evt)
-        if n == 0:
-            return
-        stride = self._skim_prescale * self._SKIM_EVENT_FACTOR
-        ev = ak.to_numpy(evt.event).astype(np.int64)
-        keep = ev % stride == 0
-        if not keep.any():
-            return
-        did = self._skim_dataset_id(dataset)
-
-        def key(counts=None):
-            #### (run, lumi, event, dataset_id) -- repeated per jet when counts given
-            k = {"run": ak.to_numpy(evt.run).astype(np.uint32)[keep],
-                 "lumi": ak.to_numpy(evt.luminosityBlock).astype(np.uint32)[keep],
-                 "event": ev[keep],
-                 "dataset_id": np.full(int(keep.sum()), did, dtype=np.uint32)}
-            if counts is None:
-                return k
-            return {c: np.repeat(v, counts) for c, v in k.items()}
-
-        #### cut bitmask. A cut absent from this path (gen cuts in data) stays 0.
-        cutbits = np.zeros(n, dtype=np.uint32)
-        for i, cut in enumerate(self._SKIM_CUTS):
-            if cut not in sel.names:
-                continue
-            cutbits |= (ak.to_numpy(sel.all(cut)).astype(np.uint32) << np.uint32(i))
-
-        def num(coll):
-            try:
-                return ak.to_numpy(ak.num(evt[coll], axis=1)).astype(np.int64)
-            except Exception:
-                return np.zeros(n, dtype=np.int64)
-
-        def ht(coll):
-            try:
-                return self._skim_f32(ak.sum(evt[coll].pt, axis=-1))
-            except Exception:
-                return np.full(n, np.nan, dtype=np.float32)
-
-        try:
-            met = self._skim_f32(evt.MET.pt)
-        except Exception:
-            met = np.full(n, np.nan, dtype=np.float32)
-        try:
-            purho = ak.to_numpy(ak.fill_none(evt.fixedGridRhoFastjetAll, -1)).astype(np.float32)
-        except Exception:
-            purho = np.full(n, -1, dtype=np.float32)
-
-        ev_cols = dict(
-            key(),
-            weight=np.asarray(weights, dtype=np.float64)[keep] * stride,
-            npv=ak.to_numpy(ak.fill_none(evt.PV.npvsGood, -1)).astype(np.int16)[keep],
-            pu_rho=purho[keep],
-            njet_reco=num("FatJet")[keep].astype(np.int16),
-            njet_gen=num("GenJetAK8")[keep].astype(np.int16),
-            ht_reco=ht("FatJet")[keep], ht_gen=ht("GenJetAK8")[keep],
-            met=met[keep], cutbits=cutbits[keep],
-        )
-
-        blocks = [("events", ev_cols)]
-        for table, coll, extra in (("alljets", "FatJet", True),
-                                   ("allgenjets", "GenJetAK8", False)):
-            try:
-                jets = evt[coll][keep]
-            except Exception:
-                continue
-            counts = ak.to_numpy(ak.num(jets, axis=1)).astype(np.int64)
-            flat = ak.flatten(jets, axis=1)
-            if len(flat) == 0:
-                continue
-            cols = dict(
-                key(counts),
-                #### index WITHIN the event, so jetidx != 2 is the rest of the
-                #### topology around the measured third jet
-                jetidx=ak.to_numpy(ak.flatten(ak.local_index(jets, axis=1))).astype(np.int16),
-                pt=self._skim_f32(flat.pt), eta=self._skim_f32(flat.eta),
-                phi=self._skim_f32(flat.phi), mass=self._skim_f32(flat.mass),
-            )
-            if extra:
-                cols.update(
-                    msoftdrop=self._skim_f32(flat.msoftdrop),
-                    jetId=ak.to_numpy(ak.fill_none(flat.jetId, -1)).astype(np.int16),
-                    nconst=ak.to_numpy(ak.fill_none(flat.nConstituents, -1)).astype(np.int16),
-                )
-            blocks.append((table, cols))
-
-        out['skim']['datasets'].add(dataset)
-        for table, cols in blocks:
-            acc = out['skim'][table]
-            for name, arr in cols.items():
-                acc[name] += processor.column_accumulator(np.asarray(arr))
-
-    def _scale_skim_weights(self, accumulator, iov_of):
-        #### Same xs*lumi*1000/sumw scale the hists get, applied per dataset to
-        #### the flat `weight` column (postprocess only walks hist.Hist objects).
-        skim = accumulator.get('skim')
-        if skim is None:
-            return
-        names = sorted(skim.get('datasets', set()))
-        for table, acc in skim.items():
-            #### alljets/allgenjets carry no weight -- they join to `events` on
-            #### (run, lumi, event, dataset_id) and inherit its weight.
-            if table == 'datasets' or 'weight' not in acc:
-                continue
-            w = np.asarray(acc['weight'].value, dtype=np.float64)
-            if len(w) == 0:
-                continue
-            ids = np.asarray(acc['dataset_id'].value, dtype=np.uint32)
-            for d in names:
-                scale = getXSweight(d, iov_of(d))
-                if scale is None or scale == 1.0:
-                    self.logging.info(f"rho_skim[{table}]: no scale for {d}")
-                    continue
-                w[ids == self._skim_dataset_id(d)] *= scale
-            acc['weight'] = processor.column_accumulator(w)
-
-    def _rapidity(self, p4):
-        #### Preserve the original GluonJetMass selection helper exactly.
-        return 0.5 * np.log((p4.energy + p4.pz) / (p4.energy - p4.pz))
-
-    def _weight_variations(self, weights_obj):
-        if self.systematics is None:
-            return list(weights_obj.variations)
-        return [syst for syst in self.systematics if syst != "nominal" and syst in weights_obj.variations]
-        
     def process(self, events):
         out = self.hists
         dataset = events.metadata['dataset']
@@ -715,7 +500,9 @@ class TrijetProcessor(processor.ProcessorABC):
                 ##### Intitialize and fill weights object
                 ###################################
                 
-                weights_obj = Weights(len(weights))
+                #### storeIndividual so partial_weight can build the theory-only
+                #### gen-truth weights (dijet/zjet parity)
+                weights_obj = Weights(len(weights), storeIndividual=True)
                 self.logging.debug("weights ", weights)
                 weights_obj.add('initWeight', weight=weights)
                 if self.do_gen:
@@ -738,7 +525,11 @@ class TrijetProcessor(processor.ProcessorABC):
                         q2muRNom, q2muRUp, q2muRDown = GetQ2muR(events_corr)
                         weights_obj.add("Q2muR", weight=q2muRNom, weightUp=q2muRUp, weightDown=q2muRDown) 
                                         #### Apply L1 prefiring weights
-                    if "PSWeight" in events_corr.fields and 'herwig' not in dataset:
+                    #### require >=4 stored PSWeights: the flat-pT QCD_Pt pythia8
+                    #### samples carry a dummy nPSWeight=1 branch (PSWeight=[1.0]),
+                    #### which GetPSWeights would pad into all-unity isr/fsr
+                    if ("PSWeight" in events_corr.fields and 'herwig' not in dataset
+                            and ak.any(ak.num(events_corr.PSWeight) >= 4)):
                         ISRNom, ISRUp, ISRDown = GetPSWeights(events_corr, shower="ISR")
                         weights_obj.add("isr", weight=ISRNom, weightUp=ISRUp, weightDown=ISRDown)
                         FSRNom, FSRUp, FSRDown = GetPSWeights(events_corr, shower="FSR")
@@ -1056,6 +847,13 @@ class TrijetProcessor(processor.ProcessorABC):
                                   mpt_gen=self._rho(groomed_genjet.mass[floor_response_g], genjet.pt[floor_response_g]),
                                   ptreco=jet.pt[floor_response_g], ptgen=genjet.pt[floor_response_g],
                                   weight=final_weights[floor_response_g])
+                        #### q/g content of the measured (matched) jet 3 per
+                        #### reco (pt, rho_g) bin -- nominal weights
+                        rho_g_flav = self._rho(jet.msoftdrop, jet.pt)
+                        for _fl, _m in partonFlavourMasks(genjet).items():
+                            fill_hist(out, "ptjet_rhojet_g_reco_flav", dataset=dataset, partonFlav=_fl,
+                                      ptreco=jet.pt[_m], mpt_reco=rho_g_flav[_m],
+                                      weight=final_weights[_m])
                     fill_hist(out, "ptjet_mjet_u_reco", dataset=dataset, systematic=jetsyst, **jkkw, ptreco=recojet.pt, mreco=recojet.mass, weight=reco_weights)
                     fill_hist(out, "ptjet_mjet_g_reco", dataset=dataset, systematic=jetsyst, **jkkw, ptreco=recojet.pt, mreco=recojet.msoftdrop, weight=reco_weights )
                     fill_hist(out, "ptjet_rhojet_u_reco", dataset=dataset, systematic=jetsyst, **jkkw, ptreco=recojet.pt, mpt_reco=self._rho(recojet.mass, recojet.pt), weight=reco_weights)
@@ -1092,7 +890,21 @@ class TrijetProcessor(processor.ProcessorABC):
                             fill_hist(out, "ptjet_rhojet_g_reco", dataset=dataset, systematic=syst, **jkkw, ptreco=recojet.pt,mpt_reco=self._rho(recojet.msoftdrop, recojet.pt), weight=reco_weights )
                             if not self.do_minimal:
                                 fill_hist(out, "jet_pt_eta_phi", dataset=dataset, systematic=syst, ptreco=jet.pt, phi=jet.phi, eta=jet.eta, weight=final_weights)
-                        #### Gluon purity plots        
+                            #### GEN truth per weight systematic (dijet/zjet parity):
+                            #### only the theory weights enter (nominal 1.0, so the
+                            #### nominal gen spectrum is unchanged) and only theory
+                            #### variations shift it; detector systematics pass
+                            #### modifier=None.
+                            _gen_modifier = syst if syst in self._THEORY_GEN_SYSTS else None
+                            _gen_include = [n for n in ('initWeight', 'isr', 'fsr', 'pdf', 'Q2muF', 'Q2muR')
+                                            if n in weights_obj._weights]
+                            gen_syst_weights = weights_obj.partial_weight(
+                                include=_gen_include, modifier=_gen_modifier)[gen_truth_sel]
+                            fill_hist(out, 'ptjet_mjet_u_gen', dataset=dataset, systematic=syst, **jkkw, ptgen=genjet_truth.pt, mgen=genjet_truth.mass, weight=gen_syst_weights)
+                            fill_hist(out, 'ptjet_mjet_g_gen', dataset=dataset, systematic=syst, **jkkw, ptgen=genjet_truth.pt, mgen=groomed_genjet_truth.mass, weight=gen_syst_weights)
+                            fill_hist(out, 'ptjet_rhojet_u_gen', dataset=dataset, systematic=syst, **jkkw, ptgen=genjet_truth.pt, mpt_gen=self._rho(genjet_truth.mass, genjet_truth.pt), weight=gen_syst_weights)
+                            fill_hist(out, 'ptjet_rhojet_g_gen', dataset=dataset, systematic=syst, **jkkw, ptgen=genjet_truth.pt, mpt_gen=self._rho(groomed_genjet_truth.mass, genjet_truth.pt), weight=gen_syst_weights)
+                        #### Gluon purity plots
                         jet1flav = getJetFlavors(events_corr[sel.all("final_seq")].FatJet[:,0])
                         jet2flav = getJetFlavors(events_corr[sel.all("final_seq")].FatJet[:,1])
                         jet3flav = getJetFlavors(events_corr[sel.all("final_seq")].FatJet[:,2])
@@ -1170,38 +982,3 @@ class TrijetProcessor(processor.ProcessorABC):
         out['cutflow'][datastr]['chunks'] += 1
         return out
     
-    def postprocess(self, accumulator):
-        #### Apply MC xs*lumi*1000/sumw normalization here (zjet-style), per dataset.
-        #### Data carries no genWeight scaling. The `dataset` axis holds the full
-        #### dataset name so we can infer the IOV and look up xs/sumw.
-        if not self.do_gen:
-            return accumulator
-
-        def _iov(ds):
-            if re.findall(r'APV', ds) or re.findall(r'HIPM', ds):
-                return '2016APV'
-            if re.findall(r'UL18', ds) or re.findall(r'UL2018', ds):
-                return '2018'
-            if re.findall(r'UL17', ds) or re.findall(r'UL2017', ds):
-                return '2017'
-            return '2016'
-
-        for key, h in accumulator.items():
-            if not isinstance(h, hist.Hist):
-                continue
-            axnames = [ax.name for ax in h.axes]
-            if 'dataset' not in axnames:
-                continue
-            ds_axis = h.axes['dataset']
-            view = h.view(flow=True)
-            for ds in list(ds_axis):
-                scale = getXSweight(ds, _iov(ds))
-                if scale is None:
-                    scale = 1.0
-                idx = ds_axis.index(ds)
-                view['value'][idx] *= scale
-                view['variance'][idx] *= scale * scale
-        #### the flat skim tables are not hist.Hist, so they need the same scale
-        #### applied explicitly (XS-in-postprocess is a hard repo invariant)
-        self._scale_skim_weights(accumulator, _iov)
-        return accumulator
