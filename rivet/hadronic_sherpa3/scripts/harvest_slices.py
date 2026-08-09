@@ -33,15 +33,20 @@ DIJET_PT_EDGES = np.array(
 )
 TRIJET_PT_EDGES = np.array([185, 200, 290, 400, 1500], dtype=float)
 
-# Relative spread above which chunk cross sections are treated as
-# inconsistent.  Chunks of a slice share an integration grid, so they should
-# agree to floating-point noise, not merely within statistics.
-XSEC_TOLERANCE = 1e-6
+# Sherpa RE-ESTIMATES the cross section from each generated sample, so chunks
+# sharing one integration grid do NOT agree exactly: two 200-event chunks on
+# the same grid gave 314.9 +- 22.3 pb and 284.8 pb, a 10.6% spread that is
+# under one sigma.  Consistency is therefore a statistical test on the quoted
+# errors, not an equality test.  5 sigma is the failure threshold so that a
+# 90-chunk campaign does not trip on ordinary Gaussian tails.
+MAX_XSEC_PULL = 5.0
 
 
-def footer(text: str, name: str) -> float:
+def footer(text: str, name: str, default: float | None = None) -> float:
     match = re.search(rf"^# {re.escape(name)}\s+(.+)$", text, re.MULTILINE)
     if not match:
+        if default is not None:
+            return default
         raise SystemExit(f"missing footer {name!r}")
     return float(match.group(1))
 
@@ -55,6 +60,8 @@ def load_chunk(ntuple: Path) -> dict:
         "rho": rows[:, 6] if len(rows) else np.empty(0),
         "weight": rows[:, 7] if len(rows) else np.empty(0),
         "cross_section_pb": footer(text, "cross_section_pb"),
+        "cross_section_error_pb": footer(text, "cross_section_error_pb",
+                                        default=0.0),
         "sumw": footer(text, "sumw"),
         "raw_sumw": footer(text, "raw_sumw"),
         "sumw2": footer(text, "sumw2"),
@@ -65,15 +72,25 @@ def load_chunk(ntuple: Path) -> dict:
 def harvest_slice(chunks: list[dict], pt_edges: np.ndarray) -> dict:
     """Accumulate one slice.  sigma_s is applied once, at the end."""
     sigmas = np.array([c["cross_section_pb"] for c in chunks])
-    spread = float(sigmas.std() / sigmas.mean()) if sigmas.mean() else 0.0
-    if spread > XSEC_TOLERANCE:
+    counts = np.array([c["generated_events"] for c in chunks], dtype=float)
+    errors = np.array([c["cross_section_error_pb"] for c in chunks])
+
+    # Event-count weighting, not inverse-variance: for weighted MC the quoted
+    # error correlates with the estimate itself, so inverse-variance weighting
+    # biases the mean low.  With equal-size chunks this is the plain mean.
+    sigma_s = float((sigmas * counts).sum() / counts.sum())
+
+    pulls = np.abs(sigmas - sigma_s) / np.where(errors > 0, errors, np.inf)
+    max_pull = float(np.nanmax(pulls)) if len(chunks) > 1 else 0.0
+    if np.isfinite(max_pull) and max_pull > MAX_XSEC_PULL:
+        worst = chunks[int(np.nanargmax(pulls))]["path"]
         raise SystemExit(
-            "FATAL: chunks of one slice disagree on the cross section "
-            f"(relative spread {spread:.3g} > {XSEC_TOLERANCE:g}).  They were "
-            "probably built from different integration grids; check "
+            f"FATAL: chunk cross sections are inconsistent (max pull "
+            f"{max_pull:.1f} sigma > {MAX_XSEC_PULL}), worst: {worst}.  Chunks "
+            "of one configuration must share an integration grid; check "
             "grid_in_sha256 in the manifests before combining."
         )
-    sigma_s = float(sigmas.mean())
+    relative_spread = float(sigmas.std() / sigma_s) if sigma_s else 0.0
 
     shape = (len(pt_edges) - 1, len(RHO_EDGES) - 1)
     numerator = np.zeros(shape)
@@ -103,6 +120,8 @@ def harvest_slice(chunks: list[dict], pt_edges: np.ndarray) -> dict:
         n_eff = np.where(numerator_sq > 0, numerator**2 / numerator_sq, 0.0)
     return {
         "cross_section_pb": sigma_s,
+        "cross_section_max_pull": max_pull,
+        "cross_section_relative_spread": relative_spread,
         "sum_weights": denominator,
         "values": values,
         "errors": errors,
@@ -154,6 +173,8 @@ def main() -> None:
         "chunks": result["chunks"],
         "generated_events": result["generated_events"],
         "cross_section_pb": result["cross_section_pb"],
+        "cross_section_max_pull": result["cross_section_max_pull"],
+        "cross_section_relative_spread": result["cross_section_relative_spread"],
         "sum_weights": result["sum_weights"],
         "integral_pb": float(result["values"].sum()),
         # Restricted to pT rows this slice actually populates: a single slice

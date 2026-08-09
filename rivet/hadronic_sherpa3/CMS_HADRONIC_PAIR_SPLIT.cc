@@ -143,6 +143,11 @@ public:
   void finalize() {
     const double sumWeights = sumOfWeights();
     const double crossSectionPb = crossSection() / picobarn;
+    // Sherpa re-estimates the cross section from the generated sample, so
+    // independent chunks on one integration grid scatter by their own
+    // statistical error (~7% at 200 events).  Record the error so downstream
+    // consistency checks can be statistical instead of exact.
+    const double crossSectionErrorPb = crossSectionError() / picobarn;
     if (sumWeights != 0.0) {
       for (auto& entry : _histograms) {
         scale(entry.second, crossSectionPb / sumWeights);
@@ -153,6 +158,8 @@ public:
       for (std::ofstream* stream : {&_dijetNtuple, &_trijetNtuple}) {
         *stream << "# generated_events " << _eventIndex << '\n';
         *stream << "# cross_section_pb " << crossSectionPb << '\n';
+        *stream << "# cross_section_error_pb " << crossSectionErrorPb
+                << '\n';
         *stream << "# sumw " << sumWeights << '\n';
         *stream << "# raw_sumw " << _rawSumWeights << '\n';
         *stream << "# sumw2 " << _rawSumWeightsSquared << '\n';
@@ -162,6 +169,8 @@ public:
     if (_writeEventNtuple) {
       _eventNtuple << "# generated_events " << _eventIndex << '\n';
       _eventNtuple << "# cross_section_pb " << crossSectionPb << '\n';
+      _eventNtuple << "# cross_section_error_pb " << crossSectionErrorPb
+                   << '\n';
       _eventNtuple << "# sumw " << sumWeights << '\n';
       _eventNtuple << "# raw_sumw " << _rawSumWeights << '\n';
       _eventNtuple << "# sumw2 " << _rawSumWeightsSquared << '\n';

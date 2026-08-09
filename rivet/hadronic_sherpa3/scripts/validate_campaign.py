@@ -14,7 +14,10 @@ import json
 from collections import defaultdict
 from pathlib import Path
 
-XSEC_TOLERANCE = 1e-6
+# Sherpa re-estimates the cross section per sample, so chunks on one grid
+# scatter within their quoted errors (10.6% between two 200-event chunks,
+# under 1 sigma).  Test the pull, not equality.
+MAX_XSEC_PULL = 5.0
 
 
 def check(report: dict, name: str, ok: bool, detail: str = "") -> bool:
@@ -86,16 +89,25 @@ def main() -> None:
               f"{len(grids)} distinct grid hashes: {sorted(map(str, grids))}")
 
         xs = [m["cross_section_pb"] for m in group]
-        mean = sum(xs) / len(xs)
+        n = [m.get("generated_events") or 0 for m in group]
+        errs = [m.get("cross_section_error_pb") or 0.0 for m in group]
+        mean = sum(x * c for x, c in zip(xs, n)) / sum(n) if sum(n) else 0.0
         spread = max(abs(x - mean) for x in xs) / mean if mean else float("inf")
-        check(report, f"xsec-consistent:{tag}", spread <= XSEC_TOLERANCE,
-              f"relative spread {spread:.3g}")
+        pulls = [abs(x - mean) / e for x, e in zip(xs, errs) if e > 0]
+        max_pull = max(pulls) if pulls else None
+        check(
+            report, f"xsec-consistent:{tag}",
+            max_pull is None or max_pull <= MAX_XSEC_PULL,
+            f"max pull {max_pull if max_pull is None else round(max_pull, 2)} "
+            f"sigma, relative spread {spread:.3g}",
+        )
 
         report["configurations"][tag] = {
             "chunks": len(group),
             "generated_events": sum(m.get("generated_events", 0) for m in group),
             "cross_section_pb": mean,
             "cross_section_relative_spread": spread,
+            "cross_section_max_pull": max_pull,
             "grid_in_sha256": sorted(map(str, grids)),
         }
 

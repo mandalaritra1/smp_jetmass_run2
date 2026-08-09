@@ -25,12 +25,14 @@ def read_optional(path: Path) -> str | None:
     return path.read_text().strip()
 
 
-def footer(path: Path, name: str) -> float:
+def footer(path: Path, name: str, default: float | None = None) -> float:
     pattern = re.compile(rf"^# {re.escape(name)}\s+(.+)$")
     for line in path.read_text().splitlines():
         match = pattern.match(line)
         if match:
             return float(match.group(1))
+    if default is not None:
+        return default
     raise ValueError(f"missing {name} footer in {path}")
 
 
@@ -98,6 +100,9 @@ def main() -> None:
         "requested_events": args.requested_events,
         "generated_events": int(footer(event_file, "generated_events")),
         "cross_section_pb": footer(event_file, "cross_section_pb"),
+        "cross_section_error_pb": footer(
+            event_file, "cross_section_error_pb", default=0.0
+        ),
         "sumw": footer(event_file, "sumw"),
         "raw_sumw": footer(event_file, "raw_sumw"),
         "sumw2": footer(event_file, "sumw2"),
