@@ -9,41 +9,98 @@
   "events_per_canary": 200,
   "base_seed": 310000000,
   "slices_GeV": [
-    [300, 400],
-    [400, 480],
-    [480, 570],
-    [570, 680],
-    [680, 760],
-    [760, 820],
-    [820, 1000],
-    [1000, 1250],
-    [1250, 1500],
-    [1500, 2000],
-    [2000, 6500]
+    [
+      300,
+      400
+    ],
+    [
+      400,
+      480
+    ],
+    [
+      480,
+      570
+    ],
+    [
+      570,
+      680
+    ],
+    [
+      680,
+      760
+    ],
+    [
+      760,
+      820
+    ],
+    [
+      820,
+      1000
+    ],
+    [
+      1000,
+      1250
+    ],
+    [
+      1250,
+      1500
+    ],
+    [
+      1500,
+      2000
+    ],
+    [
+      2000,
+      6500
+    ]
   ],
-  "migration_canary_GeV": [250, 300],
-
+  "migration_canary_GeV": [
+    250,
+    300
+  ],
   "lcg_view": "/cvmfs/sft.cern.ch/lcg/views/LCG_110/x86_64-el9-gcc15-opt",
-
   "measured_rates": {
     "seconds_per_event": 9.75,
     "integration_core_hours_per_config": 5.4,
-    "source": "cluster 85063614, Dire 480-570 Qcut=20, 2026-08-09"
+    "source": "cluster 85063614, Dire 480-570 Qcut=20, 2026-08-09",
+    "seconds_per_event_range": [
+      9.75,
+      13.04
+    ],
+    "fixed_overhead_seconds_per_job": 70,
+    "note": "Rate varies ~35% by worker; plan with the slow end.  Grid reuse makes per-job overhead ~70 s, so small chunks cost almost nothing and wall time is set by chunk duration whenever slots are abundant."
   },
-
   "qcut_scan": {
-    "qcut_values_GeV": [15, 20, 30],
-    "slice_indices": [1, 2, 6],
+    "qcut_values_GeV": [
+      15,
+      20,
+      30
+    ],
+    "slice_indices": [
+      1,
+      2,
+      6
+    ],
     "events_per_point": 20000,
-    "events_per_chunk": 2000,
-    "chunk_seed_offset_by_qcut": {"15": 1000, "20": 2000, "30": 3000}
+    "events_per_chunk": 500,
+    "chunk_seed_offset_by_qcut": {
+      "15": 1000,
+      "20": 2000,
+      "30": 3000
+    }
   },
-
   "baseline_allocation_events": {
-    "0": 200000, "1": 300000, "2": 400000, "3": 300000,
-    "4": 250000, "5": 250000, "6": 250000, "7": 200000,
-    "8": 150000, "9": 100000, "10": 50000
+    "0": 200000,
+    "1": 300000,
+    "2": 400000,
+    "3": 300000,
+    "4": 250000,
+    "5": 250000,
+    "6": 250000,
+    "7": 200000,
+    "8": 150000,
+    "9": 100000,
+    "10": 50000
   },
-
   "full_production_approved": false
 }
