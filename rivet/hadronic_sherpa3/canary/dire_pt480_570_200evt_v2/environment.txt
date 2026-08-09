@@ -1,0 +1,16 @@
+hostname=amandal2-85063614-0-cmswn2199.fnal.gov
+uname=Linux 5.14.0-687.25.1.el9_8.x86_64 x86_64
+utc_start=2026-08-09T01:41:36Z
+LCG_VIEW=/cvmfs/sft.cern.ch/lcg/views/LCG_110/x86_64-el9-gcc15-opt
+SOURCE_BUNDLE_SHA256=5ae6f1e3c7aebe7c6c95ea749136a777263ae68e2fd4df0f576c4dd8326e45a4
+Sherpa=/cvmfs/sft.cern.ch/lcg/views/LCG_110/x86_64-el9-gcc15-opt/bin/Sherpa
+rivet=/cvmfs/sft.cern.ch/lcg/views/LCG_110/x86_64-el9-gcc15-opt/bin/rivet
+rivet-build=/cvmfs/sft.cern.ch/lcg/views/LCG_110/x86_64-el9-gcc15-opt/bin/rivet-build
+a87ac9edccf72614c3b6ecf98cd536cf5239362556c1c0455cc5e53b9889542f  /cvmfs/sft.cern.ch/lcg/views/LCG_110/x86_64-el9-gcc15-opt/bin/Sherpa
+rivet v4.1.2
+2.1.2
+6.5.5
+/cvmfs/sft.cern.ch/lcg/releases/MCGenerators/lhapdf/6.5.5-31368/x86_64-el9-gcc15-opt/share/LHAPDF
+SHERPA_SHARE_PATH=unset
+LHAPDF_DATA_PATH=/cvmfs/sft.cern.ch/lcg/external/lhapdfsets/current/:/cvmfs/sft.cern.ch/lcg/releases/MCGenerators/lhapdf/6.5.5-31368/x86_64-el9-gcc15-opt/share/LHAPDF
+RIVET_ANALYSIS_PATH=unset

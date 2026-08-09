@@ -1,0 +1,9 @@
+{
+  "events_with_two_jets": 200,
+  "dijet_selected": 175,
+  "trijet_selected": 10,
+  "overlap": 0,
+  "dijet_mismatches": 0,
+  "trijet_mismatches": 0,
+  "status": "pass"
+}

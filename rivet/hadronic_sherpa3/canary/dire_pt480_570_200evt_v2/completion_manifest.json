@@ -1,0 +1,126 @@
+{
+  "schema_version": 1,
+  "campaign": "pairsplit_2018_sherpa3_canary",
+  "generator": "Sherpa",
+  "shower": "Dire",
+  "hadronization": "Ahadic",
+  "me_generator": "Comix",
+  "me_multiplicities": [
+    "2to2",
+    "2to3",
+    "2to4"
+  ],
+  "qcut_GeV": 20,
+  "slice_index": 2,
+  "slice_low_GeV": 480,
+  "slice_high_GeV": 570,
+  "requested_events": 200,
+  "generated_events": 200,
+  "cross_section_pb": 314.931256,
+  "sumw": 9989851885.53,
+  "raw_sumw": 9989851885.53,
+  "sumw2": 1.33968141284e+18,
+  "wall_seconds": 21365,
+  "sherpa_version": "Sherpa version 3.0.4 (Erebus)",
+  "environment": [
+    "hostname=amandal2-85063614-0-cmswn2199.fnal.gov",
+    "uname=Linux 5.14.0-687.25.1.el9_8.x86_64 x86_64",
+    "utc_start=2026-08-09T01:41:36Z",
+    "LCG_VIEW=/cvmfs/sft.cern.ch/lcg/views/LCG_110/x86_64-el9-gcc15-opt",
+    "SOURCE_BUNDLE_SHA256=5ae6f1e3c7aebe7c6c95ea749136a777263ae68e2fd4df0f576c4dd8326e45a4",
+    "Sherpa=/cvmfs/sft.cern.ch/lcg/views/LCG_110/x86_64-el9-gcc15-opt/bin/Sherpa",
+    "rivet=/cvmfs/sft.cern.ch/lcg/views/LCG_110/x86_64-el9-gcc15-opt/bin/rivet",
+    "rivet-build=/cvmfs/sft.cern.ch/lcg/views/LCG_110/x86_64-el9-gcc15-opt/bin/rivet-build",
+    "a87ac9edccf72614c3b6ecf98cd536cf5239362556c1c0455cc5e53b9889542f  /cvmfs/sft.cern.ch/lcg/views/LCG_110/x86_64-el9-gcc15-opt/bin/Sherpa",
+    "rivet v4.1.2",
+    "2.1.2",
+    "6.5.5",
+    "/cvmfs/sft.cern.ch/lcg/releases/MCGenerators/lhapdf/6.5.5-31368/x86_64-el9-gcc15-opt/share/LHAPDF",
+    "SHERPA_SHARE_PATH=unset",
+    "LHAPDF_DATA_PATH=/cvmfs/sft.cern.ch/lcg/external/lhapdfsets/current/:/cvmfs/sft.cern.ch/lcg/releases/MCGenerators/lhapdf/6.5.5-31368/x86_64-el9-gcc15-opt/share/LHAPDF",
+    "RIVET_ANALYSIS_PATH=unset"
+  ],
+  "config_sha256": "7bbabada18f1d607e2cf50c5e473dcfc70b98a862a57c8996b442e2e63638118",
+  "rivet_source_sha256": "8b94c26df5794814561677e2234bbe0431b18b467d1a0e7eb6fbc8301e1b8f7c",
+  "source_bundle_sha256": "5ae6f1e3c7aebe7c6c95ea749136a777263ae68e2fd4df0f576c4dd8326e45a4",
+  "outputs": {
+    "pair_split.yoda": {
+      "bytes": 194330,
+      "sha256": "60ced50b74cdccacd865bd8da0db859e945c02f816c20301fab70dc01e54ddda"
+    },
+    "pairsplit_dijet.txt": {
+      "bytes": 32163,
+      "sha256": "ad76abc18d3d4f54b1011e4737390fa2c76e88dfb463e6de5f9303981bfebfdf"
+    },
+    "pairsplit_trijet.txt": {
+      "bytes": 1110,
+      "sha256": "a3f97058083a7b178aaefe978bc282703970aae2ae7a0bae6fb7a19d3efa79f0"
+    },
+    "events.txt": {
+      "bytes": 40298,
+      "sha256": "92b32f36cf61d9db356da3699ea673ea95e199e845e35aa756ac41c2349bcc28"
+    },
+    "Sherpa.yaml": {
+      "bytes": 1088,
+      "sha256": "7bbabada18f1d607e2cf50c5e473dcfc70b98a862a57c8996b442e2e63638118"
+    },
+    "selection_validation.json": {
+      "bytes": 171,
+      "sha256": "9c82e944a3d2c280c9357d85280335345305bec40095717df8ceed804f2bc06f"
+    },
+    "environment.txt": {
+      "bytes": 991,
+      "sha256": "fd15a0132cba4d440af110c0bd505b910d2bb30792090cc4a657e393fd7e66c2"
+    },
+    "lhapdf_sets.txt": {
+      "bytes": 33477,
+      "sha256": "48f6ab8c592743715deea90fc88fc7e5245175b69969e2e89776c84fc9300326"
+    },
+    "Results.zip": {
+      "bytes": 1111356,
+      "sha256": "380cb5dff015af695224454c91914b4d793d821685830b10dbdb39bb641bbc1e"
+    },
+    "References.tex": {
+      "bytes": 6379,
+      "sha256": "50a220c66a6739064699aabc3c15d11ddd4d77dd46bdbd87465d1c8309f9ddc1"
+    },
+    "sherpa.log": {
+      "bytes": 25197,
+      "sha256": "039325350285d2b6a7c0dc72a538960b6b838fe32e04a549a219c911ef08c502"
+    },
+    "rivet.log": {
+      "bytes": 41002,
+      "sha256": "5a9f8ce6fb51fabf83c578def2c603d34e7fcb57c08b0c902c424343631a10ac"
+    },
+    "rivet_build.log": {
+      "bytes": 1675,
+      "sha256": "637b07c8eecca07092b9bccfcad07094fc90245b46208d66cf3385b19e62cf29"
+    },
+    "shower_generators.log": {
+      "bytes": 452,
+      "sha256": "dffb541a4ecb843bc2a4ebbae37e316a9da230c1428dece44b24d05fae069907"
+    },
+    "wall_seconds.txt": {
+      "bytes": 6,
+      "sha256": "f79636f0197e326fa44b3b3a6fd8ae0d9c69bd2a48c965f90af6c908ed464255"
+    },
+    "sherpa_version.txt": {
+      "bytes": 30,
+      "sha256": "78498c16087eb90ef3aaf3466aee3d1ebc227689fc5bcce64574f7bc22134a82"
+    },
+    "Settings_Report.md": {
+      "bytes": 151584,
+      "sha256": "9952a469364f63728946604e960a20d84c9de61f62ffcb470e1c79e473f22758"
+    }
+  },
+  "selection_validation": {
+    "events_with_two_jets": 200,
+    "dijet_selected": 175,
+    "trijet_selected": 10,
+    "overlap": 0,
+    "dijet_mismatches": 0,
+    "trijet_mismatches": 0,
+    "status": "pass"
+  },
+  "status": "complete"
+}

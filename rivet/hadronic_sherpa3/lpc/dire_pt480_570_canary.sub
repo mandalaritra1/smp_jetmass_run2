@@ -1,0 +1,30 @@
+# Sherpa 3 pair-split canary, Dire, 480-570 GeV slice.
+# v6 bundle carries the run_canary.sh absolute-OUTDIR fix and the
+# header-driven validate_pair_split.py.  Prepared, NOT submitted:
+# production stays gated on CAMPAIGN_PLAN.md section 12.
+#
+# Budget note: measured 9.75 s/event generation plus ~5.4 core-hours of
+# one-time integration, so a 200-event canary is ~6 h wall.  Raise the
+# event count only with that rate in mind.
+universe = vanilla
+executable = /uscms_data/d3/amandal2/sherpa3_pairsplit_canary_20260809_lpc1/source_v6/lpc/run_transferred_canary.sh
+arguments = sherpa3_pairsplit_canary_source_core_v6.tar.gz f1be2eccbdcabb993e4ea4c8f43cd31597e1322bb9643beb92304f3152e2a3bc 200 2 480 570 Dire dire_pt480_570_200evt_v3.tar.gz
+initialdir = /uscms_data/d3/amandal2/sherpa3_pairsplit_canary_20260809_lpc1
+
+should_transfer_files = YES
+when_to_transfer_output = ON_EXIT
+transfer_input_files = /uscms_data/d3/amandal2/sherpa3_pairsplit_canary_20260809_lpc1/source_v6/sherpa3_pairsplit_canary_source_core_v6.tar.gz
+transfer_output_files = dire_pt480_570_200evt_v3.tar.gz
+getenv = False
+request_cpus = 1
+request_memory = 2048MB
+request_disk = 3000MB
++REQUIRED_OS = "rhel9"
+requirements = (TARGET.OpSysAndVer == "AlmaLinux9")
+
+output = logs/dire_pt480_570_200evt.$(ClusterId).out
+error = logs/dire_pt480_570_200evt.$(ClusterId).err
+log = logs/dire_pt480_570_200evt.$(ClusterId).log
+notification = Never
+
+queue 1

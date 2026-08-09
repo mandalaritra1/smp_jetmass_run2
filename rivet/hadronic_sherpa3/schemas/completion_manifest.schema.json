@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Sherpa pair_split canary completion manifest",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "campaign",
+    "generator",
+    "shower",
+    "hadronization",
+    "me_generator",
+    "me_multiplicities",
+    "qcut_GeV",
+    "slice_low_GeV",
+    "slice_high_GeV",
+    "requested_events",
+    "generated_events",
+    "cross_section_pb",
+    "sumw",
+    "sumw2",
+    "config_sha256",
+    "rivet_source_sha256",
+    "source_bundle_sha256",
+    "outputs",
+    "selection_validation",
+    "status"
+  ],
+  "properties": {
+    "status": {"const": "complete"},
+    "generator": {"const": "Sherpa"},
+    "hadronization": {"const": "Ahadic"},
+    "qcut_GeV": {"const": 20},
+    "requested_events": {"type": "integer", "minimum": 1},
+    "generated_events": {"type": "integer", "minimum": 1},
+    "cross_section_pb": {"type": "number", "exclusiveMinimum": 0},
+    "sumw": {"type": "number"}
+    ,"sumw2": {"type": "number", "exclusiveMinimum": 0}
+  }
+}
