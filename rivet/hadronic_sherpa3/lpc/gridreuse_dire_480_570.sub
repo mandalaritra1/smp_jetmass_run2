@@ -1,0 +1,32 @@
+# Integration-grid reuse test, Dire 480-570, chunk 1 (seed 310020001).
+#
+# Decides whether the campaign is affordable.  Cluster 85063614 spent 5h56m
+# of which only 1950 s was event generation; the other ~5.4 core-hours built
+# the phase-space grid.  If that grid can be handed to later chunks, a
+# 200-event chunk should finish in ~35 min instead of ~6 h.
+#
+# It is simultaneously the plan's normalization gate: an independent chunk on
+# the same grid must report a consistent slice cross section.
+universe = vanilla
+executable = /uscms_data/d3/amandal2/sherpa3_pairsplit_canary_20260809_lpc1/source_v7/lpc/run_transferred_canary.sh
+arguments = sherpa3_pairsplit_canary_source_core_v7.tar.gz 5753376130086baec4150f404db4d9b73af613718c1e3b86c95f2f9b3d050471 200 2 480 570 Dire dire_pt480_570_gridreuse_c1.tar.gz grid_dire_s2_480_570_q20.tar.gz
+environment = "QCUT=20 CHUNK_INDEX=1 MODE=full KEEP_EVENTS=0"
+initialdir = /uscms_data/d3/amandal2/sherpa3_pairsplit_canary_20260809_lpc1
+
+should_transfer_files = YES
+when_to_transfer_output = ON_EXIT
+transfer_input_files = /uscms_data/d3/amandal2/sherpa3_pairsplit_canary_20260809_lpc1/source_v7/sherpa3_pairsplit_canary_source_core_v7.tar.gz, /uscms_data/d3/amandal2/sherpa3_pairsplit_canary_20260809_lpc1/grids/grid_dire_s2_480_570_q20.tar.gz
+transfer_output_files = dire_pt480_570_gridreuse_c1.tar.gz
+getenv = False
+request_cpus = 1
+request_memory = 2048MB
+request_disk = 3000MB
++REQUIRED_OS = "rhel9"
+requirements = (TARGET.OpSysAndVer == "AlmaLinux9")
+
+output = logs/gridreuse_c1.$(ClusterId).out
+error = logs/gridreuse_c1.$(ClusterId).err
+log = logs/gridreuse_c1.$(ClusterId).log
+notification = Never
+
+queue 1

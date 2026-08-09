@@ -26,12 +26,16 @@ def main() -> None:
     parser.add_argument("--slice-index", type=int, required=True)
     parser.add_argument("--chunk-index", type=int, default=0)
     parser.add_argument("--shower", choices=("Dire", "CSS"), default="Dire")
+    parser.add_argument("--qcut", type=float, default=20.0)
     args = parser.parse_args()
 
     if args.pt_low >= args.pt_high:
         raise SystemExit("pt-low must be smaller than pt-high")
-    if args.events <= 0:
-        raise SystemExit("events must be positive")
+    # EVENTS: 0 is the integration-only mode used to build a reusable grid.
+    if args.events < 0:
+        raise SystemExit("events must not be negative")
+    if args.qcut <= 0:
+        raise SystemExit("qcut must be positive")
 
     seed = deterministic_seed(args.base_seed, args.slice_index, args.chunk_index)
     rendered = args.template.read_text()
@@ -41,6 +45,7 @@ def main() -> None:
         "__SHOWER__": args.shower,
         "__PTLOW__": str(args.pt_low),
         "__PTHIGH__": str(args.pt_high),
+        "__QCUT__": ("%g" % args.qcut),
     }
     for placeholder, value in replacements.items():
         rendered = rendered.replace(placeholder, value)

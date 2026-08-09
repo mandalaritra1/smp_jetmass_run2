@@ -10,7 +10,11 @@ Companion: [`CANARY_STATUS.md`](CANARY_STATUS.md) tracks live gate results.
 
 ## 0. Route A summary (approved)
 
-- Sherpa 3.0.4, pinned by **immutable container digest**.
+- Sherpa 3.0.4, pinned by **CVMFS LCG view** (Aritra's preference, 2026-08-09 —
+  this supersedes the original "immutable container digest" requirement).
+  Pin = `/cvmfs/sft.cern.ch/lcg/views/LCG_110/x86_64-el9-gcc15-opt`, recorded
+  together with the `Sherpa` binary sha256 so the build is identifiable even
+  though the view is mutable in principle.
 - Comix MEPS@LO with 2→2, 3, 4 QCD matrix elements.
 - `Qcut = 20` GeV baseline.
 - **Explicit Dire** shower baseline (never rely on the image default).
@@ -278,10 +282,11 @@ Remote output: `/eos/user/a/amandal/hadronic_sherpa3/pairsplit_2018_v1/` with
 
 Full submission stays disabled until **all** pass.
 
-**Environment gate** — exact Sherpa version and git revision recorded;
-immutable container digest recorded (never produce from `:latest`); Rivet,
-YODA, FastJet, LHAPDF versions recorded; Dire and CSS availability queried from
-the executable.
+**Environment gate** — exact Sherpa version and git revision recorded; **CVMFS
+LCG view path plus `Sherpa` binary sha256** recorded (never produce from an
+unpinned `:latest` image; CVMFS view + binary hash is the accepted pin here);
+Rivet, YODA, FastJet, LHAPDF versions recorded; Dire and CSS availability
+queried from the executable.
 
 **Configuration gate** — final settings report says Comix, Dire, Ahadic,
 requested PDF and `Qcut`; process multiplicities are 2→2, 3, 4; no silent

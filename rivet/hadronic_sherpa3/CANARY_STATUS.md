@@ -139,6 +139,47 @@ the measured 9.75 s/event, that re-derivation is worth real money.
 
 ---
 
+---
+
+## Qcut scan — staged, blocked on a grid proxy
+
+Built 2026-08-09 and staged on LPC under
+`~/nobackup/sherpa3_pairsplit_canary_20260809_lpc1/work/qcut_scan/`.
+
+The campaign is split into **integrate** and **chunk** stages, because the
+canary showed the 5h56m wall was ~5.4 core-hours of phase-space integration and
+only 1950 s of generation. The grid is **680 kB**, so handing it to later
+chunks is a file copy. Grid identity is hashed into every manifest
+(`grid_in_sha256`), and chunks of a slice must agree on it for their cross
+sections to be comparable.
+
+| | |
+|---|---|
+| integrate jobs | 9 (3 slices × Qcut 15/20/30) |
+| chunk jobs | 90 × 2,000 events = 180,000 events |
+| estimated generation | 487.5 core-hours |
+| estimated integration | 48.6 core-hours |
+| **estimated total** | **536.1 core-hours** |
+
+Slices 1 (400–480), 2 (480–570), 6 (820–1000). Seeds follow the plan's formula
+with per-Qcut chunk offsets (15 → 1000+, 20 → 2000+, 30 → 3000+), so all 90 are
+unique — asserted by `make_cards.py`, which refuses to emit a colliding list.
+The canary's own grid was aliased to `grid_dire_s2_q20.tar.gz`, so that one
+integration is already done.
+
+**Blocked:** `condor_submit` fails with *"unable to read proxy file"* — there is
+no grid proxy on LPC and creating one needs Aritra's certificate passphrase.
+
+```
+voms-proxy-init -voms cms -valid 192:00
+```
+
+A grid-reuse test (`lpc/gridreuse_dire_480_570.sub`, 200 events on the existing
+grid, seed 310020001) is written and waiting on the same proxy. It should
+finish in **~35 min instead of ~6 h** if reuse works, and doubles as the
+normalization gate's independent-chunk cross-section check. **Run it, and
+confirm the timing, before launching the 536 core-hour scan.**
+
 ## Still open before any production submission
 
 - `Qcut = 15 / 20 / 30` scan (400–480, 480–570, 820–1000)
@@ -148,6 +189,8 @@ the measured 9.75 s/event, that re-derivation is worth real money.
   statistics)
 - standalone Pythia/Rivet vs nominal pair-split Pythia truth closure, with the
   2% C/A-reclustering vs `SubGenJetAK8` threshold from the plan
-- pinned **container digest** — this canary ran from an LCG CVMFS view, not a
-  pinned image; the plan requires an immutable digest for production
 - measured runtime re-budget and a revised per-slice allocation
+
+Resolved: the container-digest requirement is dropped — Aritra prefers CVMFS,
+so the pin is the LCG view path plus the `Sherpa` binary sha256, both already
+recorded above.

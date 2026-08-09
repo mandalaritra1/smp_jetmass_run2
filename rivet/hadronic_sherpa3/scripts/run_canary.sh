@@ -11,6 +11,26 @@ PTHIGH=${5:-570}
 SHOWER=${6:-Dire}
 SOURCE_BUNDLE_SHA256=${SOURCE_BUNDLE_SHA256:?SOURCE_BUNDLE_SHA256 must be set}
 
+# Optional knobs.  Defaults reproduce the original canary exactly.
+#   QCUT      merging scale, for the Qcut = 15/20/30 scan
+#   CHUNK_INDEX  seed offset within a slice (seed = base + 1e4*slice + chunk)
+#   GRID_IN   tarball of a prebuilt integration grid (Process/ + Results.zip)
+#   GRID_OUT  if set, package the grid to this path after integration
+#   MODE      full | integrate   ("integrate" stops before the Rivet stage)
+QCUT=${QCUT:-20}
+CHUNK_INDEX=${CHUNK_INDEX:-0}
+GRID_IN=${GRID_IN:-}
+GRID_OUT=${GRID_OUT:-}
+MODE=${MODE:-full}
+if [[ "$MODE" != "full" && "$MODE" != "integrate" ]]; then
+  echo "FATAL: MODE must be full or integrate, got: $MODE" >&2
+  exit 27
+fi
+if [[ -n "$GRID_IN" ]]; then
+  GRID_IN=$(cd "$(dirname "$GRID_IN")" && pwd)/$(basename "$GRID_IN")
+  [[ -f "$GRID_IN" ]] || { echo "FATAL: no grid archive: $GRID_IN" >&2; exit 28; }
+fi
+
 if [[ -e "$OUTDIR" ]] && [[ -n "$(ls -A "$OUTDIR" 2>/dev/null)" ]]; then
   echo "FATAL: refusing to reuse non-empty canary directory: $OUTDIR" >&2
   exit 19
@@ -25,6 +45,7 @@ python3 "$HERE/scripts/render_card.py" \
   --output "$OUTDIR/Sherpa.yaml" \
   --pt-low "$PTLOW" --pt-high "$PTHIGH" --events "$EVENTS" \
   --slice-index "$SLICE_INDEX" --shower "$SHOWER" \
+  --qcut "$QCUT" --chunk-index "$CHUNK_INDEX" \
   > "$OUTDIR/card.json"
 
 command -v Sherpa >/dev/null || { echo "FATAL: Sherpa is not on PATH" >&2; exit 20; }
@@ -71,6 +92,16 @@ grep -Eq "^[[:space:]]*${SHOWER}[[:space:]]" "$OUTDIR/shower_generators.log" || 
   exit 26
 }
 
+# A prebuilt integration grid turns a ~5.4 core-hour phase-space optimization
+# into a file copy.  It is keyed on the process, cuts, PDF and Qcut, so it may
+# only be reused across chunks of the SAME configuration; the seed and the
+# event count are free.  Grid provenance is hashed into the manifest.
+if [[ -n "$GRID_IN" ]]; then
+  tar -xzf "$GRID_IN" -C "$OUTDIR"
+  sha256sum "$GRID_IN" | awk '{print $1}' > "$OUTDIR/grid_in.sha256"
+  echo "reused integration grid: $GRID_IN" >&2
+fi
+
 (cd "$OUTDIR" && rivet-build \
   RivetCMS_HADRONIC_PAIR_SPLIT.so "$HERE/CMS_HADRONIC_PAIR_SPLIT.cc") \
   > "$OUTDIR/rivet_build.log" 2>&1
@@ -84,6 +115,17 @@ START=$(date +%s)
 END=$(date +%s)
 echo $((END - START)) > "$OUTDIR/wall_seconds.txt"
 
+# Package the grid for reuse by every later chunk of this configuration.
+if [[ -n "$GRID_OUT" ]]; then
+  (cd "$OUTDIR" && tar -czf "$GRID_OUT" Process Results.zip)
+  sha256sum "$GRID_OUT" | awk '{print $1}' > "$OUTDIR/grid_out.sha256"
+fi
+
+if [[ "$MODE" == "integrate" ]]; then
+  echo "Integration complete: $OUTDIR"
+  exit 0
+fi
+
 (cd "$OUTDIR" && rivet -a CMS_HADRONIC_PAIR_SPLIT events \
   -o pair_split.yoda) > "$OUTDIR/rivet.log" 2>&1
 
@@ -92,6 +134,7 @@ python3 "$HERE/scripts/validate_pair_split.py" "$OUTDIR/events.txt" \
 python3 "$HERE/scripts/make_manifest.py" "$OUTDIR" \
   --source "$HERE/CMS_HADRONIC_PAIR_SPLIT.cc" \
   --shower "$SHOWER" --slice-index "$SLICE_INDEX" \
+  --qcut "$QCUT" --chunk-index "$CHUNK_INDEX" \
   --pt-low "$PTLOW" --pt-high "$PTHIGH" --requested-events "$EVENTS" \
   --source-bundle-sha256 "$SOURCE_BUNDLE_SHA256"
 
