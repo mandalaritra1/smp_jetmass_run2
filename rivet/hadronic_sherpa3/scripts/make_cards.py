@@ -35,7 +35,7 @@ notification = Never
 
 arguments = {bundle_name} {bundle_sha} $(events) $(slice_index) $(ptlow) \
 $(pthigh) $(shower) $(outname) $(gridname)
-environment = "QCUT=$(qcut) CHUNK_INDEX=$(chunk) MODE={mode} KEEP_EVENTS=0"
+environment = "QCUT=$(qcut) CHUNK_INDEX=$(chunk) MODE={mode} KEEP_EVENTS=0 EVTMODE={evtmode}"
 transfer_input_files = {inputs}
 transfer_output_files = {outputs}
 {extra}
@@ -143,6 +143,7 @@ def main() -> None:
 
     bundle = f"{args.remote_root}/{args.bundle_dir}/{args.bundle_name}"
     common = dict(
+        evtmode=cfg.get('event_generation_mode', 'Unweighted'),
         phase=args.phase,
         remote_root=args.remote_root,
         bundle_dir=args.bundle_dir,

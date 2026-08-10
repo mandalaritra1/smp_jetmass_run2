@@ -4,6 +4,9 @@ BEAMS: [2212, 2212]
 BEAM_ENERGIES: 6500
 
 EVENTS: __NEVENTS__
+# PartiallyUnweighted (the default) leaves residual overweights whose
+# tail destroys N_eff; Unweighted redistributes them instead.
+EVENT_GENERATION_MODE: __EVTMODE__
 RANDOM_SEED: __SEED__
 
 ME_GENERATORS: [Comix]
@@ -28,8 +31,8 @@ PROCESSES:
 # CKKW does not regularize the 2->2 core process.
 SELECTORS:
 - NJetFinder:
-    N: 2
-    PTMin: 20.0
+    N: __ME_NJET__
+    PTMin: __ME_PTMIN__
     ETMin: 0.0
     R: 0.4
     Exp: -1

@@ -30,6 +30,7 @@ export SOURCE_BUNDLE_SHA256="$PAIR_SPLIT_ARCHIVE_SHA256"
 export QCUT=${QCUT:-20}
 export CHUNK_INDEX=${CHUNK_INDEX:-0}
 export MODE=${MODE:-full}
+export EVTMODE=${EVTMODE:-PartiallyUnweighted}
 
 # Argument 9 is the grid archive name.  Its meaning follows MODE: an
 # integrate job PRODUCES that file, a chunk job CONSUMES it.  Naming it

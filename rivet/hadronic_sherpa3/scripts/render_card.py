@@ -27,6 +27,13 @@ def main() -> None:
     parser.add_argument("--chunk-index", type=int, default=0)
     parser.add_argument("--shower", choices=("Dire", "CSS"), default="Dire")
     parser.add_argument("--qcut", type=float, default=20.0)
+    # Core-process jet selector.  Raising PTMin to just under the slice
+    # edge makes the integrator build the grid inside the slice instead
+    # of rejecting into it (acceptance was 1 in 220,000 at PTMin=20).
+    parser.add_argument("--me-njet", type=int, default=2)
+    parser.add_argument("--me-ptmin", type=float, default=20.0)
+    parser.add_argument("--evtmode", default="PartiallyUnweighted",
+                        choices=("PartiallyUnweighted", "Unweighted", "Weighted"))
     args = parser.parse_args()
 
     if args.pt_low >= args.pt_high:
@@ -46,6 +53,9 @@ def main() -> None:
         "__PTLOW__": str(args.pt_low),
         "__PTHIGH__": str(args.pt_high),
         "__QCUT__": ("%g" % args.qcut),
+        "__ME_NJET__": str(args.me_njet),
+        "__ME_PTMIN__": ("%.1f" % args.me_ptmin),
+        "__EVTMODE__": args.evtmode,
     }
     for placeholder, value in replacements.items():
         rendered = rendered.replace(placeholder, value)

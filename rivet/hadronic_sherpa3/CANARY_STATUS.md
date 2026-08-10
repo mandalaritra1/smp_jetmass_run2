@@ -141,6 +141,75 @@ the measured 9.75 s/event, that re-derivation is worth real money.
 
 ---
 
+## The campaign-blocking finding: `EVENT_GENERATION_MODE` (2026-08-10)
+
+**Sherpa's default `PartiallyUnweighted` makes this fiducial statistically
+unusable. Production must set `EVENT_GENERATION_MODE: Unweighted`.**
+
+The first Qcut scan (360 chunks, 180k events, all exit 0, all gates passed)
+produced shapes that could not be interpreted. Every one of the nine
+configurations had `N_eff` between 0.0 and 4.3 in the `rho_g >= -3` study
+region despite ~20,000 fills each — against a target of 2,500–5,000.
+
+### Mechanism
+
+Partial unweighting flattens weights up to a *reduced* maximum and lets
+everything above it keep a residual overweight. Measured on `s2_q20`:
+
+| quantity | value |
+|---|---|
+| median \|w\| | 5.7e7 |
+| max \|w\| | 1.39e14 (100x Sherpa's own `OVERWEIGHT_THRESHOLD` of 1e12) |
+| max/median | 2.4e6 |
+| 8 fills of 34,972 (0.02%) carry | **98.9% of sum\|w\|** |
+
+The unweighting efficiency collapses with ME multiplicity — `exp. eff`
+0.385% (2→2), 0.0281% (2→3), **0.00498%** (2→4) — and 2→4 dominates the
+cross section. That is intrinsic to CKKW merging at high multiplicity, not
+a phase-space or sampling-region problem.
+
+### Fix, measured (cluster 30014479)
+
+`EVENT_GENERATION_MODE: Unweighted`, same grid reused, same slice and Qcut:
+
+| | PartiallyUnweighted | Unweighted |
+|---|---|---|
+| max/median \|w\| | 2,400,000 | **5.76** |
+| N_eff (rho >= -3) | 0.0 of 22,277 | **129.8 of 224** |
+| cross section | 313.6 pb | 305.8 +- 21.7 pb (**0.36 sigma**) |
+| s/event | 19.3 | **21.2** |
+
+Physics unchanged, cost unchanged, pathology gone. **The integration grids
+are unaffected** — this test reused `grid_dire_s2_q20` untouched, so a
+re-run needs only the chunk stage.
+
+With bounded weights, `N_eff` scales linearly with N again (it did not
+before), so allocation extrapolation is valid: the two key rho bins give
+N_eff ~14 per 200 events, i.e. **~1,400 at the scan's 20k events per point
+(~2.7% precision, inside the 5% criterion)** and ~71,000 events to reach the
+plan's 5,000-N_eff production target.
+
+### Three dead ends, recorded so they are not retried
+
+1. **Linear N_eff extrapolation from the 200-event canary.** Predicted ~95k
+   events would suffice. Invalid: with a heavy tail N_eff *fell* from 200 to
+   20,000 events. Only valid once weights are bounded.
+2. **`NJetFinder PTMin` at the slice edge.** Hypothesis was that the
+   integrator was rejecting into the slice. Disproved by the control: per
+   multiplicity the cross sections (420.6/1635.7 vs 421.5/1647.8 pb) and
+   efficiencies (0.385%/0.0281% vs 0.350%/0.0313%) are identical. The
+   integrator handled the slice correctly all along.
+3. **Outlier clipping.** Every threshold removes 79–99% of `sum w` — the
+   tail *is* the integral, so truncation biases rather than cleans. Split-half
+   shape reproducibility stayed 10–25% against a 5% criterion, and was
+   non-monotonic in the threshold. Unweighting works because it redistributes
+   those events instead of discarding them.
+
+**Lesson:** `EVENT_GENERATION_MODE` was in the Settings_Report from the very
+first canary. Reading the configuration should precede theorising about it.
+
+---
+
 ## Qcut scan — staged, blocked on a grid proxy
 
 Built 2026-08-09 and staged on LPC under

@@ -18,6 +18,9 @@ SOURCE_BUNDLE_SHA256=${SOURCE_BUNDLE_SHA256:?SOURCE_BUNDLE_SHA256 must be set}
 #   GRID_OUT  if set, package the grid to this path after integration
 #   MODE      full | integrate   ("integrate" stops before the Rivet stage)
 QCUT=${QCUT:-20}
+ME_NJET=${ME_NJET:-2}
+ME_PTMIN=${ME_PTMIN:-20}
+EVTMODE=${EVTMODE:-PartiallyUnweighted}
 CHUNK_INDEX=${CHUNK_INDEX:-0}
 GRID_IN=${GRID_IN:-}
 GRID_OUT=${GRID_OUT:-}
@@ -46,6 +49,7 @@ python3 "$HERE/scripts/render_card.py" \
   --pt-low "$PTLOW" --pt-high "$PTHIGH" --events "$EVENTS" \
   --slice-index "$SLICE_INDEX" --shower "$SHOWER" \
   --qcut "$QCUT" --chunk-index "$CHUNK_INDEX" \
+  --me-njet "$ME_NJET" --me-ptmin "$ME_PTMIN" --evtmode "$EVTMODE" \
   > "$OUTDIR/card.json"
 
 command -v Sherpa >/dev/null || { echo "FATAL: Sherpa is not on PATH" >&2; exit 20; }
