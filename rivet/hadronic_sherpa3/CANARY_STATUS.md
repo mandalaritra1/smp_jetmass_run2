@@ -208,6 +208,53 @@ plan's 5,000-N_eff production target.
 **Lesson:** `EVENT_GENERATION_MODE` was in the Settings_Report from the very
 first canary. Reading the configuration should precede theorising about it.
 
+### Unweighted was necessary but NOT sufficient — campaign blocked
+
+The full re-run (720 chunks, 180k events, all returned, all gates passed)
+shows the pathology survives. `Unweighted` fixes the **bulk** — per-chunk
+`median|w|` is identical across all 80 chunks of a configuration, so ordinary
+events genuinely carry unit weight, and cross sections reproduce the earlier
+run to <0.7%. But Sherpa still emits rare **overweight** events past
+`OVERWEIGHT_THRESHOLD`, at ~4-14 per 20,000 events, and those still carry the
+integral.
+
+Study region (`rho_g >= -3`), primary pT row of each slice:
+
+| config | fills | overweights | N_eff raw | N_eff clipped | sum w change |
+|---|---|---|---|---|---|
+| s1_q15 | 11705 | 4 (0.034%) | 0.3 | 19 | +121% |
+| s1_q20 | 11596 | 8 | 1.3 | 70 | +102% |
+| s1_q30 | 11472 | 5 | 0.7 | 34 | +162% |
+| s2_q15 | 11534 | 9 | 0.2 | 110 | +300% |
+| s2_q20 | 11403 | 11 | 0.5 | 87 | -99.6% |
+| s2_q30 | 11247 | 14 | 1.0 | 66 | -97.5% |
+| s6_q15 | 11805 | 4 | 3.2 | 112 | -77% |
+| s6_q20 | 11714 | 6 | 1.4 | 105 | -62% |
+| s6_q30 | 11340 | 6 | 0.0 | 120 | +866% |
+
+Removing 0.03-0.12% of fills moves the integral by -99.6% to +866%, in both
+directions. Split-half shape reproducibility at a 1000x-median clip is 126%
+(s2_q20) and 510% (s1_q15) — worse than the PartiallyUnweighted run.
+
+**The Qcut scan cannot be produced with this configuration.** Options, none
+yet tested:
+
+1. `Integration_Error: 0.02` may not locate the true weight maximum in a
+   narrow slice, so rare configurations exceed it. Tightening to ~0.005 is
+   the only option that targets the measured mechanism. One integration
+   cycle to test.
+2. Drop 2→4 (`93 93 -> 93 93 93{1}`). The 0.005% unweighting efficiency at
+   the highest multiplicity is where the overweights originate — but 2→4 is
+   what makes the trijet channel meaningful.
+3. Abandon exclusive pT slicing for one inclusive enhanced sample, removing
+   the narrow-window pathology at its root.
+4. Use Herwig/Vincia machinery that already works in this environment
+   instead of Sherpa for this measurement.
+
+Four approaches have now failed (linear N_eff extrapolation, `PTMin`,
+clipping, `Unweighted`). Do not try a fifth without either Sherpa-expert
+input or a mechanism-level understanding of the overweight population.
+
 ---
 
 ## Qcut scan — staged, blocked on a grid proxy
