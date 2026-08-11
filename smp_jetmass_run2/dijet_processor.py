@@ -598,24 +598,27 @@ class DijetProcessor(HadronicProcessorBase):
                         corr_jets_final = deepcopy(corrected_fatjets)
                     else:
                         corr_jets_final = applyjmrSF(IOV, applyjmsSF(IOV,corrected_fatjets))
-                elif 'JER' in jetsyst and self.do_gen:
-                    if "Up" in jetsyst:
+                #### Exact names only (as zjet_processor): the JES_RelativeJEREC1/
+                #### JEREC2/JERHF source names contain "JER", so substring tests
+                #### here would misroute them into the JER smearing branch.
+                elif jetsyst in ('JERUp', 'JERDown') and self.do_gen:
+                    if jetsyst == 'JERUp':
                         corr_jets_final  = applyjmrSF(IOV, applyjmsSF(IOV,corrected_fatjets.JER.up))
                         corr_jets_final['msoftdrop'] = (corrected_subjets.JER.up[corrected_fatjets.subJetIdx1] + corrected_subjets.JER.up[corrected_fatjets.subJetIdx2]).mass
-                    else: 
+                    else:
                         corr_jets_final  = applyjmrSF(IOV, applyjmsSF(IOV,corrected_fatjets.JER.down))
                         corr_jets_final['msoftdrop'] = (corrected_subjets.JER.down[corrected_fatjets.subJetIdx1] + corrected_subjets.JER.down[corrected_fatjets.subJetIdx2]).mass
-                elif "JMR" in jetsyst and self.do_gen:
-                    if "Up" in jetsyst:
+                elif jetsyst in ('JMRUp', 'JMRDown') and self.do_gen:
+                    if jetsyst == 'JMRUp':
                         corr_jets_final  = applyjmrSF(IOV, applyjmsSF(IOV,corrected_fatjets), var = "up")
-                    else: 
+                    else:
                         corr_jets_final  =  applyjmrSF(IOV, applyjmsSF(IOV,corrected_fatjets), var = "down")
-                elif "JMS" in jetsyst and self.do_gen:
-                    if "Up" in jetsyst:
+                elif jetsyst in ('JMSUp', 'JMSDown') and self.do_gen:
+                    if jetsyst == 'JMSUp':
                         corr_jets_final  = applyjmrSF(IOV, applyjmsSF(IOV,corrected_fatjets, var = "up"))
                     else:
                         corr_jets_final =  applyjmrSF(IOV, applyjmsSF(IOV,corrected_fatjets, var = "down"))
-                elif "JES" in jetsyst and self.do_gen:
+                elif jetsyst.startswith("JES_") and self.do_gen:
                     if jetsyst[-2:]=="Up":
                         field = jetsyst[:-2]
                         corr_jets_final =  applyjmrSF(IOV, applyjmsSF(IOV,corrected_fatjets[field].up))
