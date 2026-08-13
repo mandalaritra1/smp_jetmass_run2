@@ -8,7 +8,6 @@ python foo.py` will not work.
 ```
 scripts/                 runners and shared modules — the things you still use
 scripts/studies/split/   how the dijet/trijet split was chosen (thread closed)
-scripts/studies/unfold/  rho binning / unfolding studies (coupled to ~/Projects/unfold)
 scripts/plots/           one-off figure producers
 ```
 
@@ -65,27 +64,20 @@ justification for the choice.
 
 ---
 
-## `studies/unfold/` — rho binning and unfolding
+## Unfolding lives in `~/Projects/unfold`, not here
 
-All committed 2026-07-31, all coupled to `~/Projects/unfold`. **Import-checked
-only.** Known from earlier sessions: the stored `combine_full` npz predate the
-current binning, so the comparison and diagnostics plotters here are expected to
-fail against those inputs until the fits are re-run — re-verify before trusting
-any number one of these prints.
+`scripts/studies/unfold/` was removed on 2026-08-13. Unfolding is the unfold
+repo's job, and the scripts here had drifted into being a second, partly
+uncommitted copy of it.
 
-| file | what it computes | status |
-|---|---|---|
-| `rho_width_scan.py` | minimum resolvable groomed-rho bin width per pT bin | imports — 3 consumers here |
-| `binning_feasibility.py` | purity / stability / fake / miss at any candidate binning | imports |
-| `rho_matching_quality.py` | gen↔reco matching quality per (pT, rho) bin | imports |
-| `rho_data_mc.py` | data/MC at RECO level in a candidate groomed-rho binning | imports |
-| `rho_unfold_inputs.py` | TUnfold inputs for the 12-bin proposal, from the skims | imports |
-| `rho_unfold_inputs_from_hists.py` | same, but from the **production histograms** instead of the ntuples | imports |
-| `rho_unfold_stability.py` | is the 12-bin proposal stable under a τ=0 TUnfold? | imports |
-| `rho_unfold_systematics.py` | propagate JER/JMS/JMR through the adopted unfolds | imports |
-| `rho_unfold_crosschecks.py` | comprehensive numerical cross-checks for the locked unfolds | imports |
-| `rho_profiled_refold.py` | profile response and feed-in nuisances in the refolding fit | imports — covered by `tests/test_rho_profiled_refold.py` (passing) |
-| `rho_alternate_response.py` | nominal vs alternate-generator response on the same rho data | imports |
+The 17 files, the smp test that covered them, and the two 2026-08-11 status
+docs were salvaged to `~/Projects/unfold/_from_smp_20260813/` as reference
+material — see the README there. Six of them were never tracked, and three
+carried uncommitted `--binning` work, so that directory is the only copy of
+those. The 11 tracked files are additionally recoverable from this repo's
+history up to `b4e8e37`.
+
+Do not re-add unfolding scripts to this repo.
 
 ---
 
