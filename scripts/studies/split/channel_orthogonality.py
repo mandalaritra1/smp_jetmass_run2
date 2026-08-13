@@ -34,7 +34,7 @@ from pathlib import Path
 
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 from scripts.channel_overlap import (  # noqa: E402
     DIJET_CUTS, TRIJET_CUTS, PT_EDGES, bit, dedupe, xs_lut)
 

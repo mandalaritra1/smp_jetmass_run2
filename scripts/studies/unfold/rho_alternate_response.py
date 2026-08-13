@@ -20,10 +20,10 @@ from pathlib import Path
 import numpy as np
 from scipy.stats import chi2 as chi2_distribution
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-from scripts.rho_unfold_crosschecks import _prepare, _run, load_npz
-from scripts.rho_unfold_systematics import (
+from scripts.studies.unfold.rho_unfold_crosschecks import _prepare, _run, load_npz
+from scripts.studies.unfold.rho_unfold_systematics import (
     normalized_covariance,
     normalized_shape,
 )

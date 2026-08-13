@@ -25,10 +25,10 @@ from pathlib import Path
 
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 from scripts.channel_overlap import (  # noqa: E402
     DIJET_CUTS, TRIJET_CUTS, PT_EDGES, bit, dedupe)
-from scripts.channel_asym_split import (  # noqa: E402
+from scripts.studies.split.channel_asym_split import (  # noqa: E402
     load_channel, allbits, imbalance, frac,
     DIJET_RECO_NOBAL, DIJET_GEN_NOBAL)
 
@@ -229,7 +229,7 @@ def main(argv=None):
         hep.cms.label("Preliminary", data=False, loc=0, ax=ax, rlabel="(13 TeV)")
         ver = _sp.run(["git", "describe", "--tags", "--always", "--dirty"],
                       capture_output=True, text=True,
-                      cwd=str(Path(__file__).resolve().parent.parent)).stdout.strip()
+                      cwd=str(Path(__file__).resolve().parents[3])).stdout.strip()
         fig.text(0.99, 0.002,
                  f"{_dt.date.today().isoformat()}  |  smp_jetmass_run2 {ver}  |  "
                  f"inputs: dijet+trijet rho_skim event tables, 2018 MC",

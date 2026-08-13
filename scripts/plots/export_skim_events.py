@@ -31,7 +31,7 @@ from pathlib import Path
 
 import numpy as np
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parents[2]
 TEMPLATE = REPO_ROOT / "scripts" / "event_viewer_template.html"
 
 #### The ladder in the order a cut is actually reached. `cutbits` bit i is

@@ -32,9 +32,9 @@ from pathlib import Path
 
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 import smp_jetmass_run2.corrections as corr
-from scripts.rho_width_scan import PROPOSED_RHO, PT_EDGES, idx, rho, xs_weight
+from scripts.studies.unfold.rho_width_scan import PROPOSED_RHO, PT_EDGES, idx, rho, xs_weight
 
 
 def flat(i, j, nr):

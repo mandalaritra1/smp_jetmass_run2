@@ -22,7 +22,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import mplhep as hep  # noqa: E402
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from scripts.plot_stamp import stamp  # noqa: E402
 
 hep.style.use(hep.style.CMS)

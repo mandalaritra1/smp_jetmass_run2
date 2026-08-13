@@ -1,6 +1,6 @@
 import numpy as np
 
-from scripts.rho_profiled_refold import (
+from scripts.studies.unfold.rho_profiled_refold import (
     Nuisance,
     solve_profiled,
     solve_unconstrained_gls,

@@ -27,7 +27,7 @@ except ImportError:
     hep = None
 
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_INPUT = REPO_ROOT / "outputs" / "validation_pythia_2016.pkl"
 DEFAULT_OUTPUT = REPO_ROOT / "outputs" / "plots" / "zjet_gen_flavor_pt_y_2016.pdf"
 

@@ -46,8 +46,8 @@ from pathlib import Path
 
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from scripts.channel_asym_split import (  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+from scripts.studies.split.channel_asym_split import (  # noqa: E402
     load_channel, allbits, asym, frac, stamp,
     DIJET_RECO_NM1, DIJET_RECO_NOBAL, DIJET_GEN_NM1, DIJET_GEN_NOBAL)
 from scripts.channel_overlap import (  # noqa: E402
@@ -499,7 +499,7 @@ def g1_vs_imbalance(C, P0=G1_P0):
     the angle -- keeps events the exact cut throws out.  The size of that leak
     is the asymmetry distribution of the sample, quantified here.
     """
-    from scripts.channel_asym_split import imbalance
+    from scripts.studies.split.channel_asym_split import imbalance
     w, X = C.w, 2.0 * P0
     I = imbalance(C.pt1, C.pt2, C.d12)
     I_t = imbalance(C.tpt1, C.tpt2, C.td12)

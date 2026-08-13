@@ -50,10 +50,10 @@ from pathlib import Path
 
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 from scripts.channel_overlap import (  # noqa: E402
     DIJET_CUTS, TRIJET_CUTS, PT_EDGES, bit, dedupe)
-from scripts.channel_asym_split import (  # noqa: E402
+from scripts.studies.split.channel_asym_split import (  # noqa: E402
     load_channel, allbits, asym, imbalance, frac, stamp,
     DIJET_RECO_NM1, DIJET_RECO_NOBAL, DIJET_GEN_NM1, DIJET_GEN_NOBAL)
 

@@ -41,10 +41,10 @@ from pathlib import Path
 
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 from scripts.channel_overlap import (  # noqa: E402
     DIJET_CUTS, TRIJET_CUTS, PT_EDGES, bit, dedupe)
-from scripts.channel_orthogonality import _topology  # noqa: E402
+from scripts.studies.split.channel_orthogonality import _topology  # noqa: E402
 
 #### dijet reco cuts EXCLUDING the asymmetry bit (the N-1 sample the A cut acts
 #### on). vetoTrijetReco is deliberately absent: this study is "no trijet
@@ -579,7 +579,7 @@ def stamp(fig):
     import subprocess
     ver = subprocess.run(["git", "describe", "--tags", "--always", "--dirty"],
                          capture_output=True, text=True,
-                         cwd=str(Path(__file__).resolve().parent.parent)).stdout.strip()
+                         cwd=str(Path(__file__).resolve().parents[3])).stdout.strip()
     fig.text(0.99, 0.002,
              f"{datetime.date.today().isoformat()}  |  smp_jetmass_run2 {ver}  |  "
              f"inputs: dijet rho_skim10 + trijet rho_skim event tables, 2018",

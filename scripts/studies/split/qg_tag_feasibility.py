@@ -24,14 +24,14 @@ import argparse
 import json
 import os
 import sys
+from pathlib import Path
 
 import awkward as ak
 import numpy as np
 import uproot
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+REPO = str(Path(__file__).resolve().parents[3])
+sys.path.insert(0, REPO)
 DEFAULT_OUT = (
     "/private/tmp/claude-501/-Users-aritra-Projects-smp-jetmass-run2/"
     "a2621af3-b9a7-4e23-a9ea-dd4970a0445f/scratchpad"

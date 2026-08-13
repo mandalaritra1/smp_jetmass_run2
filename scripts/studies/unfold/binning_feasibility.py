@@ -38,7 +38,7 @@ from pathlib import Path
 
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 import smp_jetmass_run2.corrections as corr
 from smp_jetmass_run2.hist_utils import util_binning
 

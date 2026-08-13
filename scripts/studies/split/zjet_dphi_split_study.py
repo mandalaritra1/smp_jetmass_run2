@@ -29,7 +29,7 @@ import awkward as ak
 import numpy as np
 import uproot
 
-REPO = Path(__file__).resolve().parents[1]
+REPO = Path(__file__).resolve().parents[3]
 SCRATCH = Path(
     "/private/tmp/claude-501/-Users-aritra-Projects-smp-jetmass-run2/"
     "a2621af3-b9a7-4e23-a9ea-dd4970a0445f/scratchpad"
