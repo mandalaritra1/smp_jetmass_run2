@@ -131,3 +131,16 @@ tools/arc_diagnostics/
 # Local agent instruction files (not part of the public repo)
 CLAUDE.md
 AGENTS.md
+
+# Campaign work-lists are GENERATED -- submit_internal_variations.sh and
+# submit_mess.sh truncate and rewrite them on every run. The seed recipe and
+# per-HT allocation live in those submit scripts; the joblists are output.
+rivet/hadronic_prod/joblist_*.txt
+
+# Harvested campaign outputs (npz + figures), regenerable from the harvest_*
+# and plot_* scripts in the same directory. Physics results belong in
+# research-notes, same rule as tools/arc_diagnostics/figs/.
+rivet/hadronic_prod/results/
+
+# Notebook caches (the .pkl half is already covered by *.pkl above)
+notebooks/.cache_*/
