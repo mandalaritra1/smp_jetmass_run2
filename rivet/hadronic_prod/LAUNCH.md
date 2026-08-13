@@ -63,6 +63,42 @@ w=1 where cp5 frac < 1e-4 or varied raw count < 25, clip [0.2, 5]) →
 `{vincia,cr1,cr2,fraghard,fragsoft}_rho_reweight_{groomed,ungroomed}.npz`
 per channel. Stitch HT bins by xsec_pb/sumw from the footers.
 
+## Manifest-gated Pythia internal-variation campaign (2026-08-02)
+
+The legacy five-config wave used Pythia 8.312 and has no completion
+manifests. Continue the same-ME CP5/CR/fragmentation production with the
+separate Pythia 8.313 package:
+
+```bash
+# lxplus: ~/hadronic_model_prod
+./submit_internal_variations.sh validation mgmlm_internal_trijet_20260802_v1
+# only after all six manifests pass validate_internal_campaign.py
+./submit_internal_variations.sh five_million mgmlm_internal_trijet_20260802_v1
+```
+
+Vincia is deliberately absent: MG+MLM+Vincia is invalid and its supported
+replacement is the separate MESS campaign. Each internal-variation job makes
+one official UL QCD-HT LHE chunk and showers it with CP5, CR1, CR2,
+frag-hard, and frag-soft using the same shower seed. The completion manifest
+is staged last and records Pythia/Rivet versions, driver/analysis/config
+hashes, cross sections, accepted sums, row counts, and every output path.
+Failed jobs stage a small failure record and their available logs.
+
+The first production tranche is 1,000 x 5,000 requested LHE events, allocated
+by the measured legacy pooled variance as 120/220/260/220/150/30 chunks in
+HT300/500/700/1000/1500/2000. This preserves the dijet low-pT slices while
+feeding all three trijet variance bottlenecks. Seeds are deterministic and
+disjoint from validation, so a later tranche can stack safely.
+
+Outputs are under:
+
+`/eos/user/a/amandal/hadronic_model_prod_internal/mgmlm_internal_trijet_20260802_v1/QCD_HT*/`
+
+Harvest only complete manifests. Within each `(config, HT)` slice, pool raw
+weighted histograms and generated-luminosity denominators (`sumw/xsec`) over
+all chunks, then apply the slice normalization once. Do not normalize each
+chunk to the full HT cross section and add it.
+
 ## Notes / invariants (inherited from the DY wave — each cost a failed wave)
 - gridpack extracted to `$TMPDIR` on the worker, never AFS (quota bomb).
 - condor .out/.err/.log → /dev/null (an AFS-resident log held every job once).
