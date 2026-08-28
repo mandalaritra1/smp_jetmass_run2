@@ -284,24 +284,28 @@ class util_binning :
                 [-10, -8, -7, -6, -5.5, -5, -4.75, -4.5, -4.25, -4, -3.75, -3.5, -3.25,
                  -3, -2.75, -2.5, -2.25, -2, -1.75, -1.5, -1.25, -1, -0.75, -0.5, -0.25, 0],
                 name="mpt_reco", label=r"$\log(\rho^2)$ (Detector)")
-            # Groomed rho: the binning-study result (2026-07-25), replacing the
-            # inherited zjet buffer scheme.  Edges above -4 are the dijet 12-bin
-            # reco proposal; the trijet 7-bin proposal was deliberately chosen as
-            # a SUBSET of it (-2.85, -2.25, -1.8, -1.5, -1.1, -0.75), so one
-            # shared axis serves both channels and the two are comparable by
-            # rebinning instead of interpolation.  Below the -4 floor two coarse
-            # sink bins stand in for the study's single [-10,-4] buffer: they are
-            # never reported, they keep low-rho migrations inside the response
-            # instead of being subtracted as fakes, and they merge to that single
-            # buffer bin at unfold time.  Nothing here is the *reported* binning
-            # -- the reported gen binning coarsens this one (dijet: two lowest
-            # pairs merged -> 10 bins; trijet: lowest pair -> 6), which stays an
-            # unfold-time choice because every candidate is nested in this axis.
-            # Research-notes topics/{dijet,trijet}_rho_binning_proposal_and_unfold_stability.
+            # Groomed rho: the Z+jet-ALIGNED lattice (2026-08-27), replacing the
+            # 2026-07-25 free-edge study grid.  Every edge above the -3.5 shown
+            # floor sits on the quarter-integer grid, so any nested regrouping
+            # shares edges with the Z+jet gen binning (unfold/src/unfold/tools/
+            # binning.py) and the three channels rebin exactly onto the common
+            # [-3.5,-2.5,-2,-1.5,-1,0] axis for combined plots.  The approved
+            # reported groupings (unfold outputs/studies/aligned_binning/):
+            # dijet "aligned_seven" [-3.5,-2.5,-2,-1.5,-1.25,-1,-0.75,0]
+            # (purity 0.36-0.85, matching the legacy coarse_tail grid), trijet
+            # "wide_tail_deep" [-3.5,-2.5,-2,-1.5,-1,0].  Edges at -0.5/-0.25
+            # are carried for freedom but rejected as reported gen edges (the
+            # near-empty kinematic-edge bin above -0.5 has purity ~0.26).
+            # Below the -3.5 floor three coarse sink bins keep low-rho
+            # migrations inside the response instead of subtracting them as
+            # fakes; they merge to one [-10,-3.5] buffer at unfold time and are
+            # never reported.  The reported binning stays an unfold-time merge
+            # because every candidate is nested in this axis.
             # The detector axis is the exact 2:1 refinement of the truth axis,
             # same as zjet (mreco_over_pt_g_axis == gen edges halved).
-            _had_rho_gen_g = [-10, -5, -4, -3.4, -2.85, -2.25, -1.8, -1.5,
-                              -1.3, -1.1, -0.9, -0.75, -0.65, -0.55, 0]
+            _had_rho_gen_g = [-10, -5, -4, -3.5, -3.25, -3.0, -2.75, -2.5,
+                              -2.25, -2.0, -1.75, -1.5, -1.25, -1.0, -0.75,
+                              -0.5, -0.25, 0]
             self.mgen_over_pt_g_axis = hist.axis.Variable(
                 _refine_edges(_had_rho_gen_g, self.rho_refine),
                 name='mpt_gen', label=r'$\log(\rho^2)$')

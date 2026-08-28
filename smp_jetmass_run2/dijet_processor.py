@@ -56,9 +56,17 @@ class DijetProcessor(HadronicProcessorBase):
 
     def __init__(self, do_gen=True, mode="minimal", debug=False,
                  jet_systematics=None, systematics=None,
-                 ptcut=200., ycut=None, jk=False, jk_range=None,
+                 ptcut=185., ycut=None, jk=False, jk_range=None,
                  trijet_veto=True, selection_mode="pair_split"):
-        # should have separate **lower** ptcut for gen
+        #### ptcut=185 (2026-08-27, was 200): the pair floor now matches the
+        #### pt-axis low edge, so the [185, 200] sink bin actually fills --
+        #### zjet's ARC round-2 convention (and trijet's ptcut3=185 measured-
+        #### jet floor). Near-threshold resolution migration around 200 GeV
+        #### stays inside the response as a gen-side sink instead of a
+        #### prior-sensitive fake subtraction on a steep spectrum. Reported
+        #### bins still start at 200; [185, 200] is never reported. Only the
+        #### pair_split floors (genPtFloor/recoPtFloor) consume self.ptcut, so
+        #### legacy mode is untouched.
         self.do_gen = do_gen
         self._mode = mode
         #### Selection variant (group decision 2026-08-06).
