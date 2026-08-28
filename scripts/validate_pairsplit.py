@@ -150,6 +150,19 @@ def set_era(era):
             INPUTS[("min", chan, src)] = (f"{MIN_ROOT}/{era}/{chan}_{src}",
                                           "minimal_rho_*.pkl")
 
+
+ERAS = ("2016APV", "2016", "2017", "2018")
+
+
+def set_run2_labels():
+    """Combined-era labels. The per-era INPUTS stop mattering once the
+    combined loaders have finished summing."""
+    global ERA, LUMI_LABEL, DATA_LABEL, STAMP_INPUTS
+    ERA = "run2"
+    LUMI_LABEL = "138 fb$^{-1}$ (13 TeV)"
+    DATA_LABEL = "Data Run 2 (JetHT)"
+    STAMP_INPUTS = "dphi_12 < pi - 200/pT Run 2"
+
 #### Petroff 6 (CVD-safe); data is always black.
 C_BLUE, C_ORANGE, C_RED, C_PURPLE, C_GREY = (
     "#5790fc", "#f89c20", "#e42536", "#964a8b", "#9c9ca1")
@@ -348,6 +361,38 @@ def hist1d_sum(prod, chan, src, name, quiet=False):
     axes, per = hist_variations(prod, chan, src, name, quiet=quiet)
     v, va = per["nominal"] if "nominal" in per else (
         sum(x[0] for x in per.values()), sum(x[1] for x in per.values()))
+    return v, va, axes[0].edges, axes[0].label
+
+
+def hist_variations_run2(prod, chan, src, name, quiet=False):
+    """Era-summed hist_variations. The stored hists already carry the per-era
+    xs*lumi (MC) and prescale (data) weights, so the plain sum over eras IS
+    the Run-2 combination. A systematic category absent in an era contributes
+    that era's nominal there (no variation stored = no variation)."""
+    per_era, axes_out = [], None
+    for era in ERAS:
+        set_era(era)
+        axes, per = hist_variations(prod, chan, src, name, quiet=quiet)
+        per_era.append(per)
+        if axes_out is None:
+            axes_out = axes
+    keys = set().union(*(p.keys() for p in per_era))
+    out = {}
+    for s in sorted(keys):
+        v = va = None
+        for p in per_era:
+            pv, pva = p.get(s, p["nominal"])
+            v = pv.copy() if v is None else v + pv
+            va = pva.copy() if va is None else va + pva
+        out[s] = (v, va)
+    set_run2_labels()
+    return axes_out, out
+
+
+def hist1d_sum_run2(prod, chan, src, name, quiet=False):
+    """Era-summed nominal 1D hist (values, variances, edges, xlabel)."""
+    axes, per = hist_variations_run2(prod, chan, src, name, quiet=quiet)
+    v, va = per["nominal"]
     return v, va, axes[0].edges, axes[0].label
 
 
@@ -1002,6 +1047,9 @@ def cmd_kinematics(args):
     outdir = Path(args.outdir)
     syst = bool(getattr(args, "syst", False))
     sfx = "_syst" if syst else ""
+    combined = ERA == "run2"
+    hv = hist_variations_run2 if combined else hist_variations
+    h1 = hist1d_sum_run2 if combined else hist1d_sum
     for chan, jets in (("dijet", ("jet1", "jet2")), ("trijet", ("jet3",))):
         prod = "min" if syst else "new"
         cache, varcache = {}, {}
@@ -1010,11 +1058,10 @@ def cmd_kinematics(args):
                 for src in ("mc", "data"):
                     print(f"[kinematics] {chan} {src} {var}_{j} ({prod})")
                     if syst and src == "mc":
-                        _, per = hist_variations(prod, chan, src, f"{var}_{j}",
-                                                 quiet=True)
+                        _, per = hv(prod, chan, src, f"{var}_{j}", quiet=True)
                         varcache[(var, j)] = per
-                    cache[(var, j, src)] = hist1d_sum(prod, chan, src,
-                                                      f"{var}_{j}", quiet=True)
+                    cache[(var, j, src)] = h1(prod, chan, src,
+                                              f"{var}_{j}", quiet=True)
         #### absolute MC-vs-data normalization, from the pT hist (all jets)
         facs = []
         for j in jets:
@@ -1024,7 +1071,8 @@ def cmd_kinematics(args):
             print(f"  {chan} {j}: data/MC absolute yield = {d/m:.4f} "
                   f"(data {d:.5g}, MC {m:.5g})")
         fac = float(np.mean(facs))
-        if syst:
+        if syst and not combined:
+            #### skim cross-check is per-era (the rho_skim area is 2018-only)
             crosscheck_nominal(chan, jets, cache)
 
         for norm in ("shape", "abs"):
@@ -1750,20 +1798,34 @@ NEEDS_OLD = ("yields", "etaedge", "sculpting", "fakesmisses")
 
 
 def main(argv=None):
+    global MIN_ROOT
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("cmd", choices=list(CMDS) + ["all"])
     ap.add_argument("--outdir", default="pairsplit_validation")
-    ap.add_argument("--era", default="2018", choices=sorted(LUMI_BY_ERA),
+    ap.add_argument("--era", default="2018",
+                    choices=sorted(LUMI_BY_ERA) + ["run2"],
                     help="which era's pair_split production to read; the "
                          "new/old comparison subcommands "
-                         f"({', '.join(NEEDS_OLD)}) are 2018-only")
+                         f"({', '.join(NEEDS_OLD)}) are 2018-only; 'run2' "
+                         "sums the four eras (kinematics only)")
     ap.add_argument("--syst", action="store_true",
                     help="kinematics/msdrho only: read the all_syst minimal_rho "
                          "production and add the stat (+) syst ratio band "
                          "(writes <name>_syst.png)")
+    ap.add_argument("--min-root", default=MIN_ROOT,
+                    help="root of the all_syst minimal_rho production "
+                         "(per-era subdirectories); pass the aligned tree "
+                         "for the current production")
     args = ap.parse_args(argv)
-    set_era(args.era)
+    MIN_ROOT = args.min_root
+    if args.era == "run2":
+        if args.cmd != "kinematics":
+            raise SystemExit("--era run2 is wired for the kinematics "
+                             "subcommand only")
+        set_run2_labels()
+    else:
+        set_era(args.era)
     todo = list(CMDS) if args.cmd == "all" else [args.cmd]
     if args.cmd == "all":
         #### systbreakdown needs the all_syst production; run it explicitly
