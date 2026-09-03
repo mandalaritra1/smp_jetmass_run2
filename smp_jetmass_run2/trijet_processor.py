@@ -83,7 +83,11 @@ class TrijetProcessor(HadronicProcessorBase):
         self.btag = btag
         self.jk = jk
         self.jk_range = jk_range
-        self._do_jk = bool(self.jk) or self._mode in ("mass_jk", "rho_jk")
+        self._do_jk = bool(self.jk) or self._mode in ("mass_jk", "rho_jk", "rho_split")
+        #### rho_split (mirrors zjet minimal_rho_fine_split): two disjoint halves
+        #### (chunk index % 2) carried on the jk axis in one pass, for the
+        #### split-sample closure test. Nominal jets/weights only, like rho_jk.
+        self._split2 = self._mode == "rho_split"
         #### Flat per-jet ntuple for binning studies, ported from
         #### dijet_processor. Nominal jet systematic only; selections untouched --
         #### this is a pure extra output. "rho_skim" keeps every event,
@@ -231,7 +235,7 @@ class TrijetProcessor(HadronicProcessorBase):
         mass_modes = ("minimal", "mass_jk", "validation", "full")
         #### rho_skim also books the standard rho hists: they are cheap and give
         #### a free closure test of the ntuple against the histogram path.
-        rho_modes = ("minimal_rho", "rho_jk", "validation", "full")
+        rho_modes = ("minimal_rho", "rho_jk", "rho_split", "validation", "full")
 
         if self._mode in mass_modes:
             register_hist(self.hists, 'ptjet_mjet_u_reco', [dataset_axis, syst_cat, *jk_axes, pt_bin, mass_bin])
@@ -422,7 +426,7 @@ class TrijetProcessor(HadronicProcessorBase):
         ###### Choose number of slices to break data into for jackknife method
         if self._do_jk:
             self.logging.debug("Self.jk ", self.jk)
-            range_max = 10
+            range_max = 2 if self._split2 else 10
         else: range_max=1
             
         if self.jk_range == None:
@@ -438,7 +442,8 @@ class TrijetProcessor(HadronicProcessorBase):
                 jk_index=-1
             jkkw = {'jk': jk_index} if self._do_jk else {}
             self.logging.debug(index_list%range_max == jk_index)
-            jk_sel = ak.where(index_list%range_max == jk_index, False, True)
+            jk_sel = ((index_list % 2) == jk_index) if self._split2 else \
+                ak.where(index_list%range_max == jk_index, False, True)  # split: KEEP one half; jk: delete one-tenth
             ######## Select portion for jackknife and ensure that all jets have a softdrop mass so sd mass correction does not fail
             events_jk = events[jk_sel]
             del jk_sel

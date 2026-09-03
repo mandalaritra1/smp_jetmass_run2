@@ -72,6 +72,7 @@ RHO_MODE_OPTIONS = [
     "minimal_rho_fine",
     "minimal_rho_fine_split",
     "rho_jk",
+    "rho_split",
     "reweight_pythia_rho",
     "reweight_data_prior_rho",
     "rho_skim",
@@ -480,7 +481,7 @@ HADRONIC_MODE_ALIASES = {
     "mass_jk_mc": "mass_jk",
     "mass_jk_data": "mass_jk",
 }
-HADRONIC_MODES = {"minimal", "minimal_rho", "validation", "full", "mass_jk", "rho_jk",
+HADRONIC_MODES = {"minimal", "minimal_rho", "validation", "full", "mass_jk", "rho_jk", "rho_split",
                   "reweight_pythia_rho", "rho_skim"}
 # Modes only available for some hadronic channels. reweight_pythia_rho needs a
 # Herwig sample to build the h/p splines; that exists for dijet but not trijet.

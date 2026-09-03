@@ -110,7 +110,11 @@ class DijetProcessor(HadronicProcessorBase):
         self.jk = jk
         self.jk_range = jk_range
         # jackknife active either via the jk flag or the *_jk modes (mirrors zjet)
-        self._do_jk = bool(self.jk) or self._mode in ("mass_jk", "rho_jk")
+        self._do_jk = bool(self.jk) or self._mode in ("mass_jk", "rho_jk", "rho_split")
+        #### rho_split (mirrors zjet minimal_rho_fine_split): two disjoint halves
+        #### (chunk index % 2) carried on the jk axis in one pass, for the
+        #### split-sample closure test. Nominal jets/weights only, like rho_jk.
+        self._split2 = self._mode == "rho_split"
         # Herwig/Pythia rho reweighting (mirrors zjet's "reweight_pythia_rho").
         # Only rho is available for dijet (no mass herwig inputs). Requires gen.
         self._do_reweight = self._mode == "reweight_pythia_rho"
@@ -266,7 +270,7 @@ class DijetProcessor(HadronicProcessorBase):
         mass_modes = ("minimal", "mass_jk", "validation", "full")
         #### rho_skim also books the standard rho hists: they are cheap and give
         #### a free closure test of the ntuple against the histogram path.
-        rho_modes  = ("minimal_rho", "rho_jk", "reweight_pythia_rho", "validation", "full")
+        rho_modes  = ("minimal_rho", "rho_jk", "rho_split", "reweight_pythia_rho", "validation", "full")
 
         #### Mass unfolding inputs
         if self._mode in mass_modes:
@@ -507,7 +511,7 @@ class DijetProcessor(HadronicProcessorBase):
         ###### Choose number of slices to break data into for jackknife method
         if self._do_jk:
             self.logging.debug("Self.jk ", self.jk)
-            range_max = 10
+            range_max = 2 if self._split2 else 10
         else: range_max=1
             
             #####################################
@@ -527,7 +531,8 @@ class DijetProcessor(HadronicProcessorBase):
             #### jk axis is only present on hists in jackknife modes; pass it only then
             jkkw = {'jk': jk_index} if self._do_jk else {}
             # print("range max ", range_max)
-            jk_sel = ak.where(index_list%range_max == jk_index, False, True)
+            jk_sel = ((index_list % 2) == jk_index) if self._split2 else \
+                ak.where(index_list%range_max == jk_index, False, True)  # split: KEEP one half; jk: delete one-tenth
             #####################################
             #### Apply JK selection
             #####################################

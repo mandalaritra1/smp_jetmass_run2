@@ -1,0 +1,21 @@
+{
+  "channel": "trijet",
+  "dataset": "mg_pythia8",
+  "era": "2017",
+  "mode": "rho_split",
+  "systematic_profile": "no_syst",
+  "executor_mode": "dask-casa",
+  "casa": true,
+  "test": false,
+  "useDefault": false,
+  "chunksize": 50000,
+  "chunksize_test": 50000,
+  "group_mode": "all_in_one",
+  "redirector": "casa",
+  "prependstr": "root://xcache/",
+  "worker_memory": "6 GiB",
+  "n_workers": 400,
+  "worker_merge": 4,
+  "treereduce": true,
+  "_comment": "Split-sample closure input for the pair-split unfolding (AN-25-039 unfolding-section TODO): the same aligned-lattice pair_split fiducial and axes as the *_minimal_rho_pairsplit_allsyst.json sibling, run in rho_split mode (nominal jets and weights only). rho_split mirrors zjet's minimal_rho_fine_split: the rho reco/gen/response hists carry a jk axis with two disjoint halves of the events (chunk index % 2 == 0 -> jk=0, == 1 -> jk=1), each normalized by the full-sample sumw, so the two halves are statistically independent. Consumed by unfold/scripts/diagnostics/study_pairsplit_split_closure.py."
+}
