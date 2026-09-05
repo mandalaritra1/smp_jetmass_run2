@@ -13,7 +13,6 @@ from collections import defaultdict
 from .corrections import *
 from .hist_utils import util_binning, register_hist, fill_hist
 from .hadronic_base import HadronicProcessorBase, Log, FULL_JET_SYSTEMATICS
-from copy import deepcopy
 
 
 ##### TO DO #####
@@ -41,6 +40,16 @@ class TrijetProcessor(HadronicProcessorBase):
         "isrUp", "isrDown", "fsrUp", "fsrDown", "pdfUp", "pdfDown",
         "Q2muFUp", "Q2muFDown", "Q2muRUp", "Q2muRDown",
     })
+
+    @staticmethod
+    def _minimum_pair_dphi(dphi12, dphi13, dphi23):
+        # Passing a Python list directly to ak.min rebuilds every value via
+        # Python iteration. Concatenate buffers, keeping the original reduction
+        # order, missing-value handling, and float64 promotion.
+        pairs = ak.concatenate([
+            dphi12[np.newaxis, :], dphi13[np.newaxis, :], dphi23[np.newaxis, :],
+        ], axis=0)
+        return ak.values_astype(ak.min(pairs, axis=0), np.float64)
 
     def __init__(self, do_gen=True, mode="minimal", debug=False,
                  jet_systematics=None, systematics=None,
@@ -469,12 +478,16 @@ class TrijetProcessor(HadronicProcessorBase):
             self.logging.debug("starting jet corrections")
             #### Rewrite getjetcorrections to correct all jets and correct sd mass at the same time
             if ak.any(ak.num(FatJet) > 0):
-                corrected_fatjets = GetJetCorrections(FatJet, events_jk, era, IOV, isData=not self.do_gen)
+                corrected_fatjets = GetJetCorrections(
+                    FatJet, events_jk, era, IOV, isData=not self.do_gen,
+                    uncertainties=requested_jes_sources(self.jet_systematics))
             else:
                 corrected_fatjets = self._empty_jet_variations(FatJet)
             corrected_fatjets = corrected_fatjets[corrected_fatjets.subJetIdx1 > -1]
             if ak.any(ak.num(events_jk.SubJet) > 0):
-                corrected_subjets = GetJetCorrections(events_jk.SubJet, events_jk, era, IOV, isData = not self.do_gen, mode = 'AK4')
+                corrected_subjets = GetJetCorrections(
+                    events_jk.SubJet, events_jk, era, IOV, isData=not self.do_gen,
+                    mode='AK4', uncertainties=requested_jes_sources(self.jet_systematics))
             else:
                 corrected_subjets = self._empty_jet_variations(events_jk.SubJet)
             corrected_fatjets['msoftdrop'] =   (corrected_subjets[corrected_fatjets.subJetIdx1] + corrected_subjets[corrected_fatjets.subJetIdx2]).mass 
@@ -499,7 +512,8 @@ class TrijetProcessor(HadronicProcessorBase):
                 if jetsyst == 'nominal':
                     if not self.do_gen:
                         self.logging.debug("Doing nominal data")
-                        corr_jets_final = deepcopy(corrected_fatjets)
+                        # Sorting below creates a separate array before any field edits.
+                        corr_jets_final = corrected_fatjets
                     else:
                         corr_jets_final = applyjmrSF(IOV, applyjmsSF(IOV,corrected_fatjets))
                 #### Exact names only (as zjet_processor): the JES_RelativeJEREC1/
@@ -662,7 +676,7 @@ class TrijetProcessor(HadronicProcessorBase):
                     dphi12_gen = np.abs(genjet1.delta_phi(genjet2))
                     dphi13_gen = np.abs(genjet1.delta_phi(genjet))
                     dphi23_gen = np.abs(genjet2.delta_phi(genjet))
-                    dphimin_gen = ak.min([dphi12_gen, dphi13_gen, dphi23_gen], axis = 0)
+                    dphimin_gen = self._minimum_pair_dphi(dphi12_gen, dphi13_gen, dphi23_gen)
                     dphimin_gen_sel = ak.where(sel.all("triGenJet"), dphimin_gen > 1.0, False)
                     asymm_gen  = np.abs(genjet1.pt - genjet2.pt)/(genjet1.pt + genjet2.pt)
                     sel.add("dphiGen", dphimin_gen_sel)
@@ -732,7 +746,7 @@ class TrijetProcessor(HadronicProcessorBase):
                 dphi12 = np.abs(jet1.delta_phi(jet2))
                 dphi13 = np.abs(jet1.delta_phi(jet3))
                 dphi23 = np.abs(jet2.delta_phi(jet3))
-                dphimin = ak.min([dphi12, dphi13, dphi23], axis = 0)
+                dphimin = self._minimum_pair_dphi(dphi12, dphi13, dphi23)
                 dphi_sel = ak.where(sel.all("triRecoJet_seq"), (dphimin > 1.0), False)
                 sel.add("recodphimin", dphi_sel)
                 sel.add("recodphi_seq", sel.all("recodphimin", "recoRap_seq"))

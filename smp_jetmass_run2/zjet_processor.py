@@ -941,6 +941,8 @@ class QJetMassProcessor(processor.ProcessorABC):
     def process(self, events_all):
         self.logging.debug(f"Systematics {self.systematics}")
         self.logging.debug(f"Current Mode {self._mode}")
+        # Use the registration gate to skip arrays for disabled diagnostics.
+        needs_reco_validation = self._mode == "validation"
         t0 = time.time()
         dataset = events_all.metadata["dataset"]
         filename = events_all.metadata['filename']
@@ -1351,7 +1353,10 @@ class QJetMassProcessor(processor.ProcessorABC):
             ## Storing jec variation in the main 'Events' class
             
             fatjets_with_mass_diagnostics = self._with_reco_mass_diagnostic_fields(events0.FatJet)
-            corr_jets = GetJetCorrections(fatjets_with_mass_diagnostics, events0, era, IOV, isData = not self._do_gen, mode='AK8')  ###### correcting FatJet.mass
+            corr_jets = GetJetCorrections(
+                fatjets_with_mass_diagnostics, events0, era, IOV,
+                isData=not self._do_gen, mode='AK8',
+                uncertainties=requested_jes_sources(self.jet_systematics))
             corr_jets = corr_jets[(corr_jets.subJetIdx1 > -1) & (corr_jets.subJetIdx2 > -1)]
             corr_jets = self._with_raw_softdrop_mass_from_subjets(corr_jets, events0.SubJet)
             corr_jets = self._with_ak8_scaled_softdrop_mass(corr_jets)
@@ -1362,6 +1367,20 @@ class QJetMassProcessor(processor.ProcessorABC):
             
             
             
+            # Lepton collections and the deterministic Rochester seed are unchanged
+            # across jet variations. Keep uncorrected muons for jet cleaning, and
+            # install the corrected, sorted collection at the original point below.
+            muons_with_rapidity = ak.with_field(events0.Muon, getRapidity(events0.Muon), "rapidity")
+            electrons_with_rapidity = ak.with_field(events0.Electron, getRapidity(events0.Electron), "rapidity")
+            rocc = get_rocc_corrections()
+            rng = np.random.default_rng(seed=12345)
+            if self._do_gen:
+                muon_scale = rocc.ak_kSmearMC(muons_with_rapidity, muons_with_rapidity.nTrackerLayers, rng=rng)
+            else:
+                muon_scale = rocc.ak_kScaleDT(muons_with_rapidity)
+            corrected_muons = ak.with_field(muons_with_rapidity, muons_with_rapidity.pt * muon_scale, "pt")
+            corrected_sorted_muons = corrected_muons[ak.argsort(corrected_muons.pt, axis=1, ascending=False)]
+
             for jet_syst in self.jet_systematics: # Start loop over jet systematics
                 self.logging.debug(f"Processing jet systematic: {jet_syst}")
                         # Apply jet corrections and show leading changes for quick inspection
@@ -1441,25 +1460,8 @@ class QJetMassProcessor(processor.ProcessorABC):
                 )
 
                 
-                events_j = ak.with_field(
-                    events_j,
-                    ak.with_field(
-                        events_j.Muon,
-                        getRapidity(events_j.Muon),
-                        "rapidity"
-                    ),
-                    "Muon"
-                )
-                
-                events_j = ak.with_field(
-                    events_j,
-                    ak.with_field(
-                        events_j.Electron,
-                        getRapidity(events_j.Electron),
-                        "rapidity"
-                    ),
-                    "Electron"
-                )
+                events_j = ak.with_field(events_j, muons_with_rapidity, "Muon")
+                events_j = ak.with_field(events_j, electrons_with_rapidity, "Electron")
                 #events_j.FatJet['y'] = compute_rapidity(events_j.FatJet)
 
 
@@ -1524,30 +1526,9 @@ class QJetMassProcessor(processor.ProcessorABC):
                 #reco_jet = ak.firsts(recojets)
 
 
-                ## Muon correction
-                rocc = get_rocc_corrections()
-                rng = np.random.default_rng(seed=12345)
-                
-                if self._do_gen:
-                    k = rocc.ak_kSmearMC(events_j.Muon, events_j.Muon.nTrackerLayers, rng=rng)
-                else:
-                    
-                    k = rocc.ak_kScaleDT(events_j.Muon)
-                
-                mu_corr = ak.with_field(events_j.Muon, events_j.Muon.pt * k, "pt")
-                events_j = ak.with_field(events_j, mu_corr, "Muon")
+                # Rochester corrections and muon ordering are independent of jet variations.
+                events_j = ak.with_field(events_j, corrected_sorted_muons, "Muon")
 
-                ### Sorting by pt
-                mu = events_j.Muon
-
-                index = ak.argsort(mu.pt, axis=1, ascending=False)
-                mu_sorted = mu[index]
-                
-                # Replace the Muon collection in events_j
-                events_j = ak.with_field(events_j, mu_sorted, "Muon")
-
-
-            
                 #print("Special event reco_jet object pt", reco_jet[sel_spl].pt)
                 #print("Special event FatJets object pt, eta, jetid", events0[sel_spl].FatJet.pt, events0[sel_spl].FatJet.eta, events0[sel_spl].FatJet.jetId)
 
@@ -2731,85 +2712,86 @@ class QJetMassProcessor(processor.ProcessorABC):
                             mpt_reco = 2*np.log10(mreco/(ptreco*jetR))
                             mpt_reco_g = 2*np.log10(mreco_g/(ptreco*jetR))
 
-                            events_j_meas = events_j[sel_reco]
-                            z_reco_meas = z_reco[sel_reco]
-                            print("Fatjet y ", reco_jet_meas.rapidity)
-                            print("Fatjet eta ", reco_jet_meas.eta)
-                            # print(
-                            #     "energy:", reco_jet_meas.p4.energy,
-                            #     "\npz:", reco_jet_meas.p4.pz,
-                            #     "\np4.energy:", reco_jet_meas.p4.energy,
-                            #     "\np4.pz:", reco_jet_meas.p4.pz
-                            # )
-                            if channel == "mm":
-                                pt_mu0  = events_j_meas.Muon[:, 0].pt
-                                eta_mu0 = events_j_meas.Muon[:, 0].eta
-                                phi_mu0 = events_j_meas.Muon[:, 0].phi
+                            if needs_reco_validation:
+                                events_j_meas = events_j[sel_reco]
+                                z_reco_meas = z_reco[sel_reco]
+                                print("Fatjet y ", reco_jet_meas.rapidity)
+                                print("Fatjet eta ", reco_jet_meas.eta)
+                                # print(
+                                #     "energy:", reco_jet_meas.p4.energy,
+                                #     "\npz:", reco_jet_meas.p4.pz,
+                                #     "\np4.energy:", reco_jet_meas.p4.energy,
+                                #     "\np4.pz:", reco_jet_meas.p4.pz
+                                # )
+                                if channel == "mm":
+                                    pt_mu0  = events_j_meas.Muon[:, 0].pt
+                                    eta_mu0 = events_j_meas.Muon[:, 0].eta
+                                    phi_mu0 = events_j_meas.Muon[:, 0].phi
                             
-                                pt_mu1  = events_j_meas.Muon[:, 1].pt
-                                eta_mu1 = events_j_meas.Muon[:, 1].eta
-                                phi_mu1 = events_j_meas.Muon[:, 1].phi
+                                    pt_mu1  = events_j_meas.Muon[:, 1].pt
+                                    eta_mu1 = events_j_meas.Muon[:, 1].eta
+                                    phi_mu1 = events_j_meas.Muon[:, 1].phi
                                 
-                                y_mu0 = events_j_meas.Muon[:,0].rapidity
-                                y_mu1 = events_j_meas.Muon[:,1].rapidity
+                                    y_mu0 = events_j_meas.Muon[:,0].rapidity
+                                    y_mu1 = events_j_meas.Muon[:,1].rapidity
                                 
                                                          
-                                q0 = events_j_meas.Muon[:, 0].charge
-                                q1 = events_j_meas.Muon[:, 1].charge
+                                    q0 = events_j_meas.Muon[:, 0].charge
+                                    q1 = events_j_meas.Muon[:, 1].charge
                             
-                                pt_mupos  = ak.where(q0 > 0, pt_mu0, pt_mu1)
-                                pt_muneg  = ak.where(q0 < 0, pt_mu0, pt_mu1)
+                                    pt_mupos  = ak.where(q0 > 0, pt_mu0, pt_mu1)
+                                    pt_muneg  = ak.where(q0 < 0, pt_mu0, pt_mu1)
                             
-                                eta_mupos = ak.where(q0 > 0, eta_mu0, eta_mu1)
-                                eta_muneg = ak.where(q0 < 0, eta_mu0, eta_mu1)
+                                    eta_mupos = ak.where(q0 > 0, eta_mu0, eta_mu1)
+                                    eta_muneg = ak.where(q0 < 0, eta_mu0, eta_mu1)
                             
-                                phi_mupos = ak.where(q0 > 0, phi_mu0, phi_mu1)
-                                phi_muneg = ak.where(q0 < 0, phi_mu0, phi_mu1)
+                                    phi_mupos = ak.where(q0 > 0, phi_mu0, phi_mu1)
+                                    phi_muneg = ak.where(q0 < 0, phi_mu0, phi_mu1)
 
-                                y_mupos = ak.where(q0 > 0, y_mu0, y_mu1)
-                                y_muneg = ak.where(q0 < 0, y_mu0, y_mu1)   
+                                    y_mupos = ak.where(q0 > 0, y_mu0, y_mu1)
+                                    y_muneg = ak.where(q0 < 0, y_mu0, y_mu1)
                             
                             
-                            if channel == "ee":
-                                pt_el0  = events_j_meas.Electron[:, 0].pt
-                                eta_el0 = events_j_meas.Electron[:, 0].eta
-                                phi_el0 = events_j_meas.Electron[:, 0].phi
+                                if channel == "ee":
+                                    pt_el0  = events_j_meas.Electron[:, 0].pt
+                                    eta_el0 = events_j_meas.Electron[:, 0].eta
+                                    phi_el0 = events_j_meas.Electron[:, 0].phi
                             
-                                pt_el1  = events_j_meas.Electron[:, 1].pt
-                                eta_el1 = events_j_meas.Electron[:, 1].eta
-                                phi_el1 = events_j_meas.Electron[:, 1].phi
-                                y_el0 = events_j_meas.Electron[:,0].rapidity
-                                y_el1 = events_j_meas.Electron[:,1].rapidity
+                                    pt_el1  = events_j_meas.Electron[:, 1].pt
+                                    eta_el1 = events_j_meas.Electron[:, 1].eta
+                                    phi_el1 = events_j_meas.Electron[:, 1].phi
+                                    y_el0 = events_j_meas.Electron[:,0].rapidity
+                                    y_el1 = events_j_meas.Electron[:,1].rapidity
                                 
-                                q0 = events_j_meas.Electron[:, 0].charge
-                                q1 = events_j_meas.Electron[:, 1].charge
+                                    q0 = events_j_meas.Electron[:, 0].charge
+                                    q1 = events_j_meas.Electron[:, 1].charge
 
                                 
-                                y_elpos = ak.where(q0 > 0, y_el0, y_el1)
-                                y_elneg = ak.where(q0 < 0, y_el0, y_el1)
-                                pt_elpos  = ak.where(q0 > 0, pt_el0, pt_el1)
-                                pt_elneg  = ak.where(q0 < 0, pt_el0, pt_el1)
+                                    y_elpos = ak.where(q0 > 0, y_el0, y_el1)
+                                    y_elneg = ak.where(q0 < 0, y_el0, y_el1)
+                                    pt_elpos  = ak.where(q0 > 0, pt_el0, pt_el1)
+                                    pt_elneg  = ak.where(q0 < 0, pt_el0, pt_el1)
                             
-                                eta_elpos = ak.where(q0 > 0, eta_el0, eta_el1)
-                                eta_elneg = ak.where(q0 < 0, eta_el0, eta_el1)
+                                    eta_elpos = ak.where(q0 > 0, eta_el0, eta_el1)
+                                    eta_elneg = ak.where(q0 < 0, eta_el0, eta_el1)
                             
-                                phi_elpos = ak.where(q0 > 0, phi_el0, phi_el1)
-                                phi_elneg = ak.where(q0 < 0, phi_el0, phi_el1)
+                                    phi_elpos = ak.where(q0 > 0, phi_el0, phi_el1)
+                                    phi_elneg = ak.where(q0 < 0, phi_el0, phi_el1)
 
-                                y_elpos = ak.where(q0 > 0, y_el0, y_el1)
-                                y_elneg = ak.where(q0 < 0, y_el0, y_el1)
+                                    y_elpos = ak.where(q0 > 0, y_el0, y_el1)
+                                    y_elneg = ak.where(q0 < 0, y_el0, y_el1)
 
 
                             
-                            pt_Z = z_reco_meas.pt
-                            eta_Z = z_reco_meas.eta
-                            phi_Z = z_reco_meas.phi
-                            mass_Z = z_reco_meas.mass
-                            nJet = ak.num(events_j_meas.FatJet, axis = 1)
+                                pt_Z = z_reco_meas.pt
+                                eta_Z = z_reco_meas.eta
+                                phi_Z = z_reco_meas.phi
+                                mass_Z = z_reco_meas.mass
+                                nJet = ak.num(events_j_meas.FatJet, axis = 1)
                             
-                            dr = z_jet_dr_reco[sel_reco]
-                            dphi = z_jet_dphi_reco[sel_reco]
-                            ptasym = z_pt_asym_reco[sel_reco]
+                                dr = z_jet_dr_reco[sel_reco]
+                                dphi = z_jet_dphi_reco[sel_reco]
+                                ptasym = z_pt_asym_reco[sel_reco]
                             
                             
 
@@ -2886,120 +2868,121 @@ class QJetMassProcessor(processor.ProcessorABC):
                                 fill_hist(self.hists, "ptjet_rhojet_g_reco", dataset = dataset, ptreco = ptreco_g,
                                           mpt_reco = 2*np.log10(mreco_g/(ptreco*jetR)), systematic = syst, weight = weights_reco_g)
 
-                                ### Required for data/MC validation
-                                # weights_gen_reco = weights.partial_weight('genWeight')[sel_reco]
-                                # print(weights_gen_reco)
-                                ## Filling validation plots ##
-                                if channel == "mm":
-                                    fill_hist(self.hists, "pt_mupos",  dataset=dataset, pt=pt_mupos,   systematic=syst, weight=weights_reco)
-                                    fill_hist(self.hists, "eta_mupos", dataset=dataset, eta=eta_mupos, systematic=syst, weight=weights_reco)
-                                    fill_hist(self.hists, "phi_mupos", dataset=dataset, phi=phi_mupos, systematic=syst, weight=weights_reco)
-                                    fill_hist(self.hists, "y_mupos",   dataset=dataset, y=y_mupos,     systematic=syst, weight=weights_reco)
+                                if needs_reco_validation:
+                                    ### Required for data/MC validation
+                                    # weights_gen_reco = weights.partial_weight('genWeight')[sel_reco]
+                                    # print(weights_gen_reco)
+                                    ## Filling validation plots ##
+                                    if channel == "mm":
+                                        fill_hist(self.hists, "pt_mupos",  dataset=dataset, pt=pt_mupos,   systematic=syst, weight=weights_reco)
+                                        fill_hist(self.hists, "eta_mupos", dataset=dataset, eta=eta_mupos, systematic=syst, weight=weights_reco)
+                                        fill_hist(self.hists, "phi_mupos", dataset=dataset, phi=phi_mupos, systematic=syst, weight=weights_reco)
+                                        fill_hist(self.hists, "y_mupos",   dataset=dataset, y=y_mupos,     systematic=syst, weight=weights_reco)
                                 
-                                    fill_hist(self.hists, "pt_muneg",  dataset=dataset, pt=pt_muneg,   systematic=syst, weight=weights_reco)
-                                    fill_hist(self.hists, "eta_muneg", dataset=dataset, eta=eta_muneg, systematic=syst, weight=weights_reco)
-                                    fill_hist(self.hists, "phi_muneg", dataset=dataset, phi=phi_muneg, systematic=syst, weight=weights_reco)
-                                    fill_hist(self.hists, "y_muneg",   dataset=dataset, y=y_muneg,     systematic=syst, weight=weights_reco)
+                                        fill_hist(self.hists, "pt_muneg",  dataset=dataset, pt=pt_muneg,   systematic=syst, weight=weights_reco)
+                                        fill_hist(self.hists, "eta_muneg", dataset=dataset, eta=eta_muneg, systematic=syst, weight=weights_reco)
+                                        fill_hist(self.hists, "phi_muneg", dataset=dataset, phi=phi_muneg, systematic=syst, weight=weights_reco)
+                                        fill_hist(self.hists, "y_muneg",   dataset=dataset, y=y_muneg,     systematic=syst, weight=weights_reco)
 
-                                    del (
-                                        pt_mu0, pt_mu1,
-                                        eta_mu0, eta_mu1,
-                                        phi_mu0, phi_mu1,
-                                        y_mu0, y_mu1,
-                                        q0, q1,
-                                        pt_mupos, pt_muneg,
-                                        eta_mupos, eta_muneg,
-                                        phi_mupos, phi_muneg,
-                                        y_mupos, y_muneg
-                                    )
+                                        del (
+                                            pt_mu0, pt_mu1,
+                                            eta_mu0, eta_mu1,
+                                            phi_mu0, phi_mu1,
+                                            y_mu0, y_mu1,
+                                            q0, q1,
+                                            pt_mupos, pt_muneg,
+                                            eta_mupos, eta_muneg,
+                                            phi_mupos, phi_muneg,
+                                            y_mupos, y_muneg
+                                        )
                                 
                                 
-                                # electrons (pos/neg)
-                                if channel == "ee":
-                                    fill_hist(self.hists, "pt_elpos",  dataset=dataset, pt=pt_elpos,   systematic=syst, weight=weights_reco)
-                                    fill_hist(self.hists, "eta_elpos", dataset=dataset, eta=eta_elpos, systematic=syst, weight=weights_reco)
-                                    fill_hist(self.hists, "phi_elpos", dataset=dataset, phi=phi_elpos, systematic=syst, weight=weights_reco)
-                                    fill_hist(self.hists, "y_elpos",   dataset=dataset, y=y_elpos,     systematic=syst, weight=weights_reco)
+                                    # electrons (pos/neg)
+                                    if channel == "ee":
+                                        fill_hist(self.hists, "pt_elpos",  dataset=dataset, pt=pt_elpos,   systematic=syst, weight=weights_reco)
+                                        fill_hist(self.hists, "eta_elpos", dataset=dataset, eta=eta_elpos, systematic=syst, weight=weights_reco)
+                                        fill_hist(self.hists, "phi_elpos", dataset=dataset, phi=phi_elpos, systematic=syst, weight=weights_reco)
+                                        fill_hist(self.hists, "y_elpos",   dataset=dataset, y=y_elpos,     systematic=syst, weight=weights_reco)
                                 
-                                    fill_hist(self.hists, "pt_elneg",  dataset=dataset, pt=pt_elneg,   systematic=syst, weight=weights_reco)
-                                    fill_hist(self.hists, "eta_elneg", dataset=dataset, eta=eta_elneg, systematic=syst, weight=weights_reco)
-                                    fill_hist(self.hists, "phi_elneg", dataset=dataset, phi=phi_elneg, systematic=syst, weight=weights_reco)
-                                    fill_hist(self.hists, "y_elneg",   dataset=dataset, y=y_elneg,     systematic=syst, weight=weights_reco)
+                                        fill_hist(self.hists, "pt_elneg",  dataset=dataset, pt=pt_elneg,   systematic=syst, weight=weights_reco)
+                                        fill_hist(self.hists, "eta_elneg", dataset=dataset, eta=eta_elneg, systematic=syst, weight=weights_reco)
+                                        fill_hist(self.hists, "phi_elneg", dataset=dataset, phi=phi_elneg, systematic=syst, weight=weights_reco)
+                                        fill_hist(self.hists, "y_elneg",   dataset=dataset, y=y_elneg,     systematic=syst, weight=weights_reco)
 
-                                    del (
-                                        pt_el0, pt_el1,
-                                        eta_el0, eta_el1,
-                                        phi_el0, phi_el1,
-                                        y_el0, y_el1,
-                                        q0, q1,
-                                        pt_elpos, pt_elneg,
-                                        eta_elpos, eta_elneg,
-                                        phi_elpos, phi_elneg,
-                                        y_elpos, y_elneg
-                                    )
+                                        del (
+                                            pt_el0, pt_el1,
+                                            eta_el0, eta_el1,
+                                            phi_el0, phi_el1,
+                                            y_el0, y_el1,
+                                            q0, q1,
+                                            pt_elpos, pt_elneg,
+                                            eta_elpos, eta_elneg,
+                                            phi_elpos, phi_elneg,
+                                            y_elpos, y_elneg
+                                        )
                                 
-                                ## nJets
-                                fill_hist(self.hists, "nJets", dataset = dataset, n = nJet, systematic = syst, weight = weights_reco )
+                                    ## nJets
+                                    fill_hist(self.hists, "nJets", dataset = dataset, n = nJet, systematic = syst, weight = weights_reco )
                                 
-                                ## Z object
-                                fill_hist(self.hists, "pt_Z", dataset = dataset, pt = pt_Z, systematic = syst, weight = weights_reco )
-                                fill_hist(self.hists, "eta_Z", dataset = dataset, eta = eta_Z, systematic = syst, weight = weights_reco )
-                                fill_hist(self.hists, "phi_Z", dataset = dataset, phi = phi_Z, systematic = syst, weight = weights_reco )
-                                fill_hist(self.hists, "mass_Z", dataset = dataset, mass = mass_Z, systematic = syst, weight = weights_reco )
-                                fill_hist(self.hists, "y_Z", dataset = dataset, y = getRapidity(z_reco_meas), systematic = syst, weight = weights_reco)
+                                    ## Z object
+                                    fill_hist(self.hists, "pt_Z", dataset = dataset, pt = pt_Z, systematic = syst, weight = weights_reco )
+                                    fill_hist(self.hists, "eta_Z", dataset = dataset, eta = eta_Z, systematic = syst, weight = weights_reco )
+                                    fill_hist(self.hists, "phi_Z", dataset = dataset, phi = phi_Z, systematic = syst, weight = weights_reco )
+                                    fill_hist(self.hists, "mass_Z", dataset = dataset, mass = mass_Z, systematic = syst, weight = weights_reco )
+                                    fill_hist(self.hists, "y_Z", dataset = dataset, y = getRapidity(z_reco_meas), systematic = syst, weight = weights_reco)
 
-                                ## MET (PF Type-1) -- HEM implementation cross-check (2018)
-                                fill_hist(self.hists, "met_pt",  dataset = dataset, pt  = events_j_meas.MET.pt,  systematic = syst, weight = weights_reco)
-                                fill_hist(self.hists, "met_phi", dataset = dataset, phi = events_j_meas.MET.phi, systematic = syst, weight = weights_reco)
-                                ## joint MET x jet-pt and MET x jet-mass (per-event correlation)
-                                fill_hist(self.hists, "met_ptjet_reco", dataset = dataset, pt = events_j_meas.MET.pt, ptreco = reco_jet_meas.pt,   systematic = syst, weight = weights_reco)
-                                fill_hist(self.hists, "mass_met_reco",  dataset = dataset, mass = reco_jet_meas.mass, pt = events_j_meas.MET.pt,   systematic = syst, weight = weights_reco)
-                                met_pt_xy, met_phi_xy = METXYCorr(
-                                    events_j_meas.MET.pt, events_j_meas.MET.phi, events_j_meas.PV.npvs,
-                                    IOV, isMC = self._do_gen, run = events_j_meas.run)
-                                fill_hist(self.hists, "met_pt_xy",  dataset = dataset, pt  = met_pt_xy,  systematic = syst, weight = weights_reco)
-                                fill_hist(self.hists, "met_phi_xy", dataset = dataset, phi = met_phi_xy, systematic = syst, weight = weights_reco)
+                                    ## MET (PF Type-1) -- HEM implementation cross-check (2018)
+                                    fill_hist(self.hists, "met_pt",  dataset = dataset, pt  = events_j_meas.MET.pt,  systematic = syst, weight = weights_reco)
+                                    fill_hist(self.hists, "met_phi", dataset = dataset, phi = events_j_meas.MET.phi, systematic = syst, weight = weights_reco)
+                                    ## joint MET x jet-pt and MET x jet-mass (per-event correlation)
+                                    fill_hist(self.hists, "met_ptjet_reco", dataset = dataset, pt = events_j_meas.MET.pt, ptreco = reco_jet_meas.pt,   systematic = syst, weight = weights_reco)
+                                    fill_hist(self.hists, "mass_met_reco",  dataset = dataset, mass = reco_jet_meas.mass, pt = events_j_meas.MET.pt,   systematic = syst, weight = weights_reco)
+                                    met_pt_xy, met_phi_xy = METXYCorr(
+                                        events_j_meas.MET.pt, events_j_meas.MET.phi, events_j_meas.PV.npvs,
+                                        IOV, isMC = self._do_gen, run = events_j_meas.run)
+                                    fill_hist(self.hists, "met_pt_xy",  dataset = dataset, pt  = met_pt_xy,  systematic = syst, weight = weights_reco)
+                                    fill_hist(self.hists, "met_phi_xy", dataset = dataset, phi = met_phi_xy, systematic = syst, weight = weights_reco)
 
-                                ## AK4-jet HEM occupancy cross-check (per jet; nominal only,
-                                ## hists carry no systematic axis so fill once per event)
-                                if syst == "nominal":
-                                    ak4 = events_j_meas.Jet
-                                    ak4 = ak4[(ak4.pt > 30) & (ak4.jetId >= 2)]
-                                    ak4_w = ak.broadcast_arrays(weights_reco, ak4.pt)[0]
-                                    fill_hist(self.hists, "ak4_eta_phi_reco", dataset = dataset,
-                                              eta = ak.flatten(ak4.eta), phi = ak.flatten(ak4.phi),
-                                              weight = ak.flatten(ak4_w))
-                                    ak4_hem = ak4[(ak4.eta > -3.0) & (ak4.eta < -1.3)]
-                                    ak4_hem_w = ak.broadcast_arrays(weights_reco, ak4_hem.pt)[0]
-                                    fill_hist(self.hists, "ak4_phi_hemeta", dataset = dataset,
-                                              phi = ak.flatten(ak4_hem.phi), weight = ak.flatten(ak4_hem_w))
+                                    ## AK4-jet HEM occupancy cross-check (per jet; nominal only,
+                                    ## hists carry no systematic axis so fill once per event)
+                                    if syst == "nominal":
+                                        ak4 = events_j_meas.Jet
+                                        ak4 = ak4[(ak4.pt > 30) & (ak4.jetId >= 2)]
+                                        ak4_w = ak.broadcast_arrays(weights_reco, ak4.pt)[0]
+                                        fill_hist(self.hists, "ak4_eta_phi_reco", dataset = dataset,
+                                                  eta = ak.flatten(ak4.eta), phi = ak.flatten(ak4.phi),
+                                                  weight = ak.flatten(ak4_w))
+                                        ak4_hem = ak4[(ak4.eta > -3.0) & (ak4.eta < -1.3)]
+                                        ak4_hem_w = ak.broadcast_arrays(weights_reco, ak4_hem.pt)[0]
+                                        fill_hist(self.hists, "ak4_phi_hemeta", dataset = dataset,
+                                                  phi = ak.flatten(ak4_hem.phi), weight = ak.flatten(ak4_hem_w))
 
-                                    ## AK4-in-HEM event veto: reuse HEMVeto on the AK4 collection
-                                    ## (data -> pass/fail mask; 2018 MC -> flat lumi weight). Only
-                                    ## meaningful for 2018; elsewhere it's a no-op (weight 1).
-                                    if IOV == "2018":
-                                        ak4_veto = HEMVeto(events_j_meas.Jet, events_j_meas.run, isMC = self._do_gen)
-                                        ak4_veto_w = ak.to_numpy(ak4_veto).astype(float)
-                                    else:
-                                        ak4_veto_w = np.ones(len(weights_reco))
-                                    w_ak4veto = weights_reco * ak4_veto_w
-                                    fill_hist(self.hists, "met_pt_ak4veto",    dataset = dataset, pt   = events_j_meas.MET.pt,  systematic = syst, weight = w_ak4veto)
-                                    fill_hist(self.hists, "met_phi_ak4veto",   dataset = dataset, phi  = events_j_meas.MET.phi, systematic = syst, weight = w_ak4veto)
-                                    fill_hist(self.hists, "mass_jet0_ak4veto", dataset = dataset, mass = reco_jet_meas.mass,     systematic = syst, weight = w_ak4veto)
+                                        ## AK4-in-HEM event veto: reuse HEMVeto on the AK4 collection
+                                        ## (data -> pass/fail mask; 2018 MC -> flat lumi weight). Only
+                                        ## meaningful for 2018; elsewhere it's a no-op (weight 1).
+                                        if IOV == "2018":
+                                            ak4_veto = HEMVeto(events_j_meas.Jet, events_j_meas.run, isMC = self._do_gen)
+                                            ak4_veto_w = ak.to_numpy(ak4_veto).astype(float)
+                                        else:
+                                            ak4_veto_w = np.ones(len(weights_reco))
+                                        w_ak4veto = weights_reco * ak4_veto_w
+                                        fill_hist(self.hists, "met_pt_ak4veto",    dataset = dataset, pt   = events_j_meas.MET.pt,  systematic = syst, weight = w_ak4veto)
+                                        fill_hist(self.hists, "met_phi_ak4veto",   dataset = dataset, phi  = events_j_meas.MET.phi, systematic = syst, weight = w_ak4veto)
+                                        fill_hist(self.hists, "mass_jet0_ak4veto", dataset = dataset, mass = reco_jet_meas.mass,     systematic = syst, weight = w_ak4veto)
 
 
-                                ## Jet
-                                fill_hist(self.hists, "pt_jet0", dataset = dataset, pt = ptreco, systematic = syst, weight = weights_reco )
-                                fill_hist(self.hists, "eta_jet0", dataset = dataset, eta = reco_jet_meas.eta, systematic = syst, weight = weights_reco )
-                                fill_hist(self.hists, "phi_jet0", dataset = dataset, phi = reco_jet_meas.phi, systematic = syst, weight = weights_reco )
-                                fill_hist(self.hists, "mass_jet0", dataset = dataset, mass = reco_jet_meas.mass, systematic = syst, weight = weights_reco )
-                                fill_hist(self.hists, "y_jet0", dataset = dataset, y = reco_jet_meas.rapidity, systematic = syst, weight = weights_reco)
-                                fill_hist(self.hists, "eta_phi_jet_reco", dataset = dataset, eta = reco_jet_meas.eta, phi = reco_jet_meas.phi, weight = weights_reco)
+                                    ## Jet
+                                    fill_hist(self.hists, "pt_jet0", dataset = dataset, pt = ptreco, systematic = syst, weight = weights_reco )
+                                    fill_hist(self.hists, "eta_jet0", dataset = dataset, eta = reco_jet_meas.eta, systematic = syst, weight = weights_reco )
+                                    fill_hist(self.hists, "phi_jet0", dataset = dataset, phi = reco_jet_meas.phi, systematic = syst, weight = weights_reco )
+                                    fill_hist(self.hists, "mass_jet0", dataset = dataset, mass = reco_jet_meas.mass, systematic = syst, weight = weights_reco )
+                                    fill_hist(self.hists, "y_jet0", dataset = dataset, y = reco_jet_meas.rapidity, systematic = syst, weight = weights_reco)
+                                    fill_hist(self.hists, "eta_phi_jet_reco", dataset = dataset, eta = reco_jet_meas.eta, phi = reco_jet_meas.phi, weight = weights_reco)
 
-                                ## Combo
-                                fill_hist(self.hists, "ptasym", dataset = dataset, frac = ptasym, systematic = syst, weight = weights_reco)
-                                fill_hist(self.hists, "dr", dataset = dataset, dr = dr, systematic = syst, weight = weights_reco)
-                                fill_hist(self.hists, "dphi", dataset = dataset, dphi = dphi, systematic = syst, weight = weights_reco)
+                                    ## Combo
+                                    fill_hist(self.hists, "ptasym", dataset = dataset, frac = ptasym, systematic = syst, weight = weights_reco)
+                                    fill_hist(self.hists, "dr", dataset = dataset, dr = dr, systematic = syst, weight = weights_reco)
+                                    fill_hist(self.hists, "dphi", dataset = dataset, dphi = dphi, systematic = syst, weight = weights_reco)
                                 
                             
 
@@ -3049,78 +3032,79 @@ class QJetMassProcessor(processor.ProcessorABC):
                         weights_reco = weights_reco[~ak.is_none(mreco)]
 
 
-                        events_j_meas = events_j[sel_reco]
-                        z_reco_meas = z_reco[sel_reco]
-                        if channel == "mm":
-                            pt_mu0  = events_j_meas.Muon[:, 0].pt
-                            eta_mu0 = events_j_meas.Muon[:, 0].eta
-                            phi_mu0 = events_j_meas.Muon[:, 0].phi
+                        if needs_reco_validation:
+                            events_j_meas = events_j[sel_reco]
+                            z_reco_meas = z_reco[sel_reco]
+                            if channel == "mm":
+                                pt_mu0  = events_j_meas.Muon[:, 0].pt
+                                eta_mu0 = events_j_meas.Muon[:, 0].eta
+                                phi_mu0 = events_j_meas.Muon[:, 0].phi
                         
-                            pt_mu1  = events_j_meas.Muon[:, 1].pt
-                            eta_mu1 = events_j_meas.Muon[:, 1].eta
-                            phi_mu1 = events_j_meas.Muon[:, 1].phi
+                                pt_mu1  = events_j_meas.Muon[:, 1].pt
+                                eta_mu1 = events_j_meas.Muon[:, 1].eta
+                                phi_mu1 = events_j_meas.Muon[:, 1].phi
                             
-                            y_mu0 = events_j_meas.Muon[:,0].rapidity
-                            y_mu1 = events_j_meas.Muon[:,1].rapidity
+                                y_mu0 = events_j_meas.Muon[:,0].rapidity
+                                y_mu1 = events_j_meas.Muon[:,1].rapidity
                             
                                                      
-                            q0 = events_j_meas.Muon[:, 0].charge
-                            q1 = events_j_meas.Muon[:, 1].charge
+                                q0 = events_j_meas.Muon[:, 0].charge
+                                q1 = events_j_meas.Muon[:, 1].charge
                         
-                            pt_mupos  = ak.where(q0 > 0, pt_mu0, pt_mu1)
-                            pt_muneg  = ak.where(q0 < 0, pt_mu0, pt_mu1)
+                                pt_mupos  = ak.where(q0 > 0, pt_mu0, pt_mu1)
+                                pt_muneg  = ak.where(q0 < 0, pt_mu0, pt_mu1)
                         
-                            eta_mupos = ak.where(q0 > 0, eta_mu0, eta_mu1)
-                            eta_muneg = ak.where(q0 < 0, eta_mu0, eta_mu1)
+                                eta_mupos = ak.where(q0 > 0, eta_mu0, eta_mu1)
+                                eta_muneg = ak.where(q0 < 0, eta_mu0, eta_mu1)
                         
-                            phi_mupos = ak.where(q0 > 0, phi_mu0, phi_mu1)
-                            phi_muneg = ak.where(q0 < 0, phi_mu0, phi_mu1)
+                                phi_mupos = ak.where(q0 > 0, phi_mu0, phi_mu1)
+                                phi_muneg = ak.where(q0 < 0, phi_mu0, phi_mu1)
 
-                            y_mupos = ak.where(q0 > 0, y_mu0, y_mu1)
-                            y_muneg = ak.where(q0 < 0, y_mu0, y_mu1)   
+                                y_mupos = ak.where(q0 > 0, y_mu0, y_mu1)
+                                y_muneg = ak.where(q0 < 0, y_mu0, y_mu1)
                         
                         
-                        if channel == "ee":
-                            pt_el0  = events_j_meas.Electron[:, 0].pt
-                            eta_el0 = events_j_meas.Electron[:, 0].eta
-                            phi_el0 = events_j_meas.Electron[:, 0].phi
+                            if channel == "ee":
+                                pt_el0  = events_j_meas.Electron[:, 0].pt
+                                eta_el0 = events_j_meas.Electron[:, 0].eta
+                                phi_el0 = events_j_meas.Electron[:, 0].phi
                         
-                            pt_el1  = events_j_meas.Electron[:, 1].pt
-                            eta_el1 = events_j_meas.Electron[:, 1].eta
-                            phi_el1 = events_j_meas.Electron[:, 1].phi
-                            y_el0 = events_j_meas.Electron[:,0].rapidity
-                            y_el1 = events_j_meas.Electron[:,1].rapidity
-                            q0 = events_j_meas.Electron[:, 0].charge
-                            q1 = events_j_meas.Electron[:, 1].charge
+                                pt_el1  = events_j_meas.Electron[:, 1].pt
+                                eta_el1 = events_j_meas.Electron[:, 1].eta
+                                phi_el1 = events_j_meas.Electron[:, 1].phi
+                                y_el0 = events_j_meas.Electron[:,0].rapidity
+                                y_el1 = events_j_meas.Electron[:,1].rapidity
+                                q0 = events_j_meas.Electron[:, 0].charge
+                                q1 = events_j_meas.Electron[:, 1].charge
                             
-                            y_elpos = ak.where(q0 > 0, y_el0, y_el1)
-                            y_elneg = ak.where(q0 < 0, y_el0, y_el1)
+                                y_elpos = ak.where(q0 > 0, y_el0, y_el1)
+                                y_elneg = ak.where(q0 < 0, y_el0, y_el1)
                         
 
                         
-                            pt_elpos  = ak.where(q0 > 0, pt_el0, pt_el1)
-                            pt_elneg  = ak.where(q0 < 0, pt_el0, pt_el1)
+                                pt_elpos  = ak.where(q0 > 0, pt_el0, pt_el1)
+                                pt_elneg  = ak.where(q0 < 0, pt_el0, pt_el1)
                         
-                            eta_elpos = ak.where(q0 > 0, eta_el0, eta_el1)
-                            eta_elneg = ak.where(q0 < 0, eta_el0, eta_el1)
+                                eta_elpos = ak.where(q0 > 0, eta_el0, eta_el1)
+                                eta_elneg = ak.where(q0 < 0, eta_el0, eta_el1)
                         
-                            phi_elpos = ak.where(q0 > 0, phi_el0, phi_el1)
-                            phi_elneg = ak.where(q0 < 0, phi_el0, phi_el1)
+                                phi_elpos = ak.where(q0 > 0, phi_el0, phi_el1)
+                                phi_elneg = ak.where(q0 < 0, phi_el0, phi_el1)
 
-                            y_elpos = ak.where(q0 > 0, y_el0, y_el1)
-                            y_elneg = ak.where(q0 < 0, y_el0, y_el1)
+                                y_elpos = ak.where(q0 > 0, y_el0, y_el1)
+                                y_elneg = ak.where(q0 < 0, y_el0, y_el1)
 
 
                         
-                        pt_Z = z_reco_meas.pt
-                        eta_Z = z_reco_meas.eta
-                        phi_Z = z_reco_meas.phi
-                        mass_Z = z_reco_meas.mass
-                        nJet = ak.num(events_j_meas.FatJet, axis = 1)
+                            pt_Z = z_reco_meas.pt
+                            eta_Z = z_reco_meas.eta
+                            phi_Z = z_reco_meas.phi
+                            mass_Z = z_reco_meas.mass
+                            nJet = ak.num(events_j_meas.FatJet, axis = 1)
                         
-                        dr = z_jet_dr_reco[sel_reco]
-                        dphi = z_jet_dphi_reco[sel_reco]
-                        ptasym = z_pt_asym_reco[sel_reco]
+                            dr = z_jet_dr_reco[sel_reco]
+                            dphi = z_jet_dphi_reco[sel_reco]
+                            ptasym = z_pt_asym_reco[sel_reco]
 
                         #self.logging.debug(f"No of RECO JET {len(mreco)}")
                             
@@ -3142,86 +3126,87 @@ class QJetMassProcessor(processor.ProcessorABC):
                             fill_hist(self.hists, "ptjet_mjet_u_reco", dataset = dataset, channel = channel, ptreco = ptreco, mreco = mreco, systematic = jet_syst, weight = weights_reco)
                             fill_hist(self.hists, "ptjet_mjet_g_reco", dataset = dataset, channel = channel, ptreco = ptreco_g, mreco = mreco_g, systematic = jet_syst, weight = weights_reco_g)
 
-                            ### Required for data/MC validation
-                            if channel == "mm":
-                                fill_hist(self.hists, "pt_mupos",  dataset=dataset, pt=pt_mupos,   systematic=jet_syst, weight=weights_reco)
-                                fill_hist(self.hists, "eta_mupos", dataset=dataset, eta=eta_mupos, systematic=jet_syst, weight=weights_reco)
-                                fill_hist(self.hists, "phi_mupos", dataset=dataset, phi=phi_mupos, systematic=jet_syst, weight=weights_reco)
-                                fill_hist(self.hists, "y_mupos",   dataset=dataset, y=y_mupos,     systematic=jet_syst, weight=weights_reco)
+                            if needs_reco_validation:
+                                ### Required for data/MC validation
+                                if channel == "mm":
+                                    fill_hist(self.hists, "pt_mupos",  dataset=dataset, pt=pt_mupos,   systematic=jet_syst, weight=weights_reco)
+                                    fill_hist(self.hists, "eta_mupos", dataset=dataset, eta=eta_mupos, systematic=jet_syst, weight=weights_reco)
+                                    fill_hist(self.hists, "phi_mupos", dataset=dataset, phi=phi_mupos, systematic=jet_syst, weight=weights_reco)
+                                    fill_hist(self.hists, "y_mupos",   dataset=dataset, y=y_mupos,     systematic=jet_syst, weight=weights_reco)
                             
-                                fill_hist(self.hists, "pt_muneg",  dataset=dataset, pt=pt_muneg,   systematic=jet_syst, weight=weights_reco)
-                                fill_hist(self.hists, "eta_muneg", dataset=dataset, eta=eta_muneg, systematic=jet_syst, weight=weights_reco)
-                                fill_hist(self.hists, "phi_muneg", dataset=dataset, phi=phi_muneg, systematic=jet_syst, weight=weights_reco)
-                                fill_hist(self.hists, "y_muneg",   dataset=dataset, y=y_muneg,     systematic=jet_syst, weight=weights_reco)
+                                    fill_hist(self.hists, "pt_muneg",  dataset=dataset, pt=pt_muneg,   systematic=jet_syst, weight=weights_reco)
+                                    fill_hist(self.hists, "eta_muneg", dataset=dataset, eta=eta_muneg, systematic=jet_syst, weight=weights_reco)
+                                    fill_hist(self.hists, "phi_muneg", dataset=dataset, phi=phi_muneg, systematic=jet_syst, weight=weights_reco)
+                                    fill_hist(self.hists, "y_muneg",   dataset=dataset, y=y_muneg,     systematic=jet_syst, weight=weights_reco)
 
-                                del (
-                                    pt_mu0, pt_mu1,
-                                    eta_mu0, eta_mu1,
-                                    phi_mu0, phi_mu1,
-                                    y_mu0, y_mu1,
-                                    q0, q1,
-                                    pt_mupos, pt_muneg,
-                                    eta_mupos, eta_muneg,
-                                    phi_mupos, phi_muneg,
-                                    y_mupos, y_muneg
-                                )
+                                    del (
+                                        pt_mu0, pt_mu1,
+                                        eta_mu0, eta_mu1,
+                                        phi_mu0, phi_mu1,
+                                        y_mu0, y_mu1,
+                                        q0, q1,
+                                        pt_mupos, pt_muneg,
+                                        eta_mupos, eta_muneg,
+                                        phi_mupos, phi_muneg,
+                                        y_mupos, y_muneg
+                                    )
                             
                             
-                            # electrons (pos/neg)
-                            if channel == "ee":
-                                fill_hist(self.hists, "pt_elpos",  dataset=dataset, pt=pt_elpos,   systematic=jet_syst, weight=weights_reco)
-                                fill_hist(self.hists, "eta_elpos", dataset=dataset, eta=eta_elpos, systematic=jet_syst, weight=weights_reco)
-                                fill_hist(self.hists, "phi_elpos", dataset=dataset, phi=phi_elpos, systematic=jet_syst, weight=weights_reco)
-                                fill_hist(self.hists, "y_elpos",   dataset=dataset, y=y_elpos,     systematic=jet_syst, weight=weights_reco)
+                                # electrons (pos/neg)
+                                if channel == "ee":
+                                    fill_hist(self.hists, "pt_elpos",  dataset=dataset, pt=pt_elpos,   systematic=jet_syst, weight=weights_reco)
+                                    fill_hist(self.hists, "eta_elpos", dataset=dataset, eta=eta_elpos, systematic=jet_syst, weight=weights_reco)
+                                    fill_hist(self.hists, "phi_elpos", dataset=dataset, phi=phi_elpos, systematic=jet_syst, weight=weights_reco)
+                                    fill_hist(self.hists, "y_elpos",   dataset=dataset, y=y_elpos,     systematic=jet_syst, weight=weights_reco)
                             
-                                fill_hist(self.hists, "pt_elneg",  dataset=dataset, pt=pt_elneg,   systematic=jet_syst, weight=weights_reco)
-                                fill_hist(self.hists, "eta_elneg", dataset=dataset, eta=eta_elneg, systematic=jet_syst, weight=weights_reco)
-                                fill_hist(self.hists, "phi_elneg", dataset=dataset, phi=phi_elneg, systematic=jet_syst, weight=weights_reco)
-                                fill_hist(self.hists, "y_elneg",   dataset=dataset, y=y_elneg,     systematic=jet_syst, weight=weights_reco)
+                                    fill_hist(self.hists, "pt_elneg",  dataset=dataset, pt=pt_elneg,   systematic=jet_syst, weight=weights_reco)
+                                    fill_hist(self.hists, "eta_elneg", dataset=dataset, eta=eta_elneg, systematic=jet_syst, weight=weights_reco)
+                                    fill_hist(self.hists, "phi_elneg", dataset=dataset, phi=phi_elneg, systematic=jet_syst, weight=weights_reco)
+                                    fill_hist(self.hists, "y_elneg",   dataset=dataset, y=y_elneg,     systematic=jet_syst, weight=weights_reco)
 
-                                del (
-                                    pt_el0, pt_el1,
-                                    eta_el0, eta_el1,
-                                    phi_el0, phi_el1,
-                                    y_el0, y_el1,
-                                    q0, q1,
-                                    pt_elpos, pt_elneg,
-                                    eta_elpos, eta_elneg,
-                                    phi_elpos, phi_elneg,
-                                    y_elpos, y_elneg
-                                )
+                                    del (
+                                        pt_el0, pt_el1,
+                                        eta_el0, eta_el1,
+                                        phi_el0, phi_el1,
+                                        y_el0, y_el1,
+                                        q0, q1,
+                                        pt_elpos, pt_elneg,
+                                        eta_elpos, eta_elneg,
+                                        phi_elpos, phi_elneg,
+                                        y_elpos, y_elneg
+                                    )
                             
-                            ## nJets
-                            fill_hist(self.hists, "nJets", dataset = dataset, n = nJet, systematic = jet_syst, weight = weights_reco )
+                                ## nJets
+                                fill_hist(self.hists, "nJets", dataset = dataset, n = nJet, systematic = jet_syst, weight = weights_reco )
                             
-                            ## Z object
-                            fill_hist(self.hists, "pt_Z", dataset = dataset, pt = pt_Z, systematic = jet_syst, weight = weights_reco )
-                            fill_hist(self.hists, "eta_Z", dataset = dataset, eta = eta_Z, systematic = jet_syst, weight = weights_reco )
-                            fill_hist(self.hists, "phi_Z", dataset = dataset, phi = phi_Z, systematic = jet_syst, weight = weights_reco )
-                            fill_hist(self.hists, "mass_Z", dataset = dataset, mass = mass_Z, systematic = jet_syst, weight = weights_reco )
-                            fill_hist(self.hists, "y_Z", dataset = dataset, y = getRapidity(z_reco_meas), systematic = jet_syst, weight = weights_reco)
-                            ## MET (PF Type-1) -- HEM implementation cross-check (2018)
-                            fill_hist(self.hists, "met_pt",  dataset = dataset, pt  = events_j_meas.MET.pt,  systematic = jet_syst, weight = weights_reco)
-                            fill_hist(self.hists, "met_phi", dataset = dataset, phi = events_j_meas.MET.phi, systematic = jet_syst, weight = weights_reco)
-                            ## joint MET x jet-pt and MET x jet-mass (per-event correlation)
-                            fill_hist(self.hists, "met_ptjet_reco", dataset = dataset, pt = events_j_meas.MET.pt, ptreco = reco_jet_meas.pt,   systematic = jet_syst, weight = weights_reco)
-                            fill_hist(self.hists, "mass_met_reco",  dataset = dataset, mass = reco_jet_meas.mass, pt = events_j_meas.MET.pt,   systematic = jet_syst, weight = weights_reco)
-                            met_pt_xy, met_phi_xy = METXYCorr(
-                                events_j_meas.MET.pt, events_j_meas.MET.phi, events_j_meas.PV.npvs,
-                                IOV, isMC = self._do_gen, run = events_j_meas.run)
-                            fill_hist(self.hists, "met_pt_xy",  dataset = dataset, pt  = met_pt_xy,  systematic = jet_syst, weight = weights_reco)
-                            fill_hist(self.hists, "met_phi_xy", dataset = dataset, phi = met_phi_xy, systematic = jet_syst, weight = weights_reco)
-                            ## Jet
-                            fill_hist(self.hists, "pt_jet0", dataset = dataset, pt = ptreco, systematic = jet_syst, weight = weights_reco )
-                            fill_hist(self.hists, "eta_jet0", dataset = dataset, eta = reco_jet_meas.eta, systematic = jet_syst, weight = weights_reco )
-                            fill_hist(self.hists, "phi_jet0", dataset = dataset, phi = reco_jet_meas.phi, systematic = jet_syst, weight = weights_reco )
-                            fill_hist(self.hists, "mass_jet0", dataset = dataset, mass = reco_jet_meas.mass, systematic = jet_syst, weight = weights_reco )
-                            fill_hist(self.hists, "y_jet0", dataset = dataset, y = reco_jet_meas.rapidity, systematic = jet_syst, weight = weights_reco)
+                                ## Z object
+                                fill_hist(self.hists, "pt_Z", dataset = dataset, pt = pt_Z, systematic = jet_syst, weight = weights_reco )
+                                fill_hist(self.hists, "eta_Z", dataset = dataset, eta = eta_Z, systematic = jet_syst, weight = weights_reco )
+                                fill_hist(self.hists, "phi_Z", dataset = dataset, phi = phi_Z, systematic = jet_syst, weight = weights_reco )
+                                fill_hist(self.hists, "mass_Z", dataset = dataset, mass = mass_Z, systematic = jet_syst, weight = weights_reco )
+                                fill_hist(self.hists, "y_Z", dataset = dataset, y = getRapidity(z_reco_meas), systematic = jet_syst, weight = weights_reco)
+                                ## MET (PF Type-1) -- HEM implementation cross-check (2018)
+                                fill_hist(self.hists, "met_pt",  dataset = dataset, pt  = events_j_meas.MET.pt,  systematic = jet_syst, weight = weights_reco)
+                                fill_hist(self.hists, "met_phi", dataset = dataset, phi = events_j_meas.MET.phi, systematic = jet_syst, weight = weights_reco)
+                                ## joint MET x jet-pt and MET x jet-mass (per-event correlation)
+                                fill_hist(self.hists, "met_ptjet_reco", dataset = dataset, pt = events_j_meas.MET.pt, ptreco = reco_jet_meas.pt,   systematic = jet_syst, weight = weights_reco)
+                                fill_hist(self.hists, "mass_met_reco",  dataset = dataset, mass = reco_jet_meas.mass, pt = events_j_meas.MET.pt,   systematic = jet_syst, weight = weights_reco)
+                                met_pt_xy, met_phi_xy = METXYCorr(
+                                    events_j_meas.MET.pt, events_j_meas.MET.phi, events_j_meas.PV.npvs,
+                                    IOV, isMC = self._do_gen, run = events_j_meas.run)
+                                fill_hist(self.hists, "met_pt_xy",  dataset = dataset, pt  = met_pt_xy,  systematic = jet_syst, weight = weights_reco)
+                                fill_hist(self.hists, "met_phi_xy", dataset = dataset, phi = met_phi_xy, systematic = jet_syst, weight = weights_reco)
+                                ## Jet
+                                fill_hist(self.hists, "pt_jet0", dataset = dataset, pt = ptreco, systematic = jet_syst, weight = weights_reco )
+                                fill_hist(self.hists, "eta_jet0", dataset = dataset, eta = reco_jet_meas.eta, systematic = jet_syst, weight = weights_reco )
+                                fill_hist(self.hists, "phi_jet0", dataset = dataset, phi = reco_jet_meas.phi, systematic = jet_syst, weight = weights_reco )
+                                fill_hist(self.hists, "mass_jet0", dataset = dataset, mass = reco_jet_meas.mass, systematic = jet_syst, weight = weights_reco )
+                                fill_hist(self.hists, "y_jet0", dataset = dataset, y = reco_jet_meas.rapidity, systematic = jet_syst, weight = weights_reco)
 
-                            ## Combo
-                            fill_hist(self.hists, "ptasym", dataset = dataset, frac = ptasym, systematic = jet_syst, weight = weights_reco)
-                            fill_hist(self.hists, "dr", dataset = dataset, dr = dr, systematic = jet_syst, weight = weights_reco)
-                            fill_hist(self.hists, "dphi", dataset = dataset, dphi = dphi, systematic = jet_syst, weight = weights_reco)
+                                ## Combo
+                                fill_hist(self.hists, "ptasym", dataset = dataset, frac = ptasym, systematic = jet_syst, weight = weights_reco)
+                                fill_hist(self.hists, "dr", dataset = dataset, dr = dr, systematic = jet_syst, weight = weights_reco)
+                                fill_hist(self.hists, "dphi", dataset = dataset, dphi = dphi, systematic = jet_syst, weight = weights_reco)
 
                         else:
                             fill_hist(self.hists, "ptjet_mjet_u_reco", dataset = dataset, channel = channel, ptreco = ptreco, mreco = mreco, systematic = jet_syst, weight = weights_reco, **mass_jk_fill)

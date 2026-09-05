@@ -17,7 +17,6 @@ from collections import defaultdict
 from .corrections import *
 from .hist_utils import util_binning, register_hist, fill_hist
 from .hadronic_base import HadronicProcessorBase, Log, FULL_JET_SYSTEMATICS
-from copy import deepcopy
 import hist
 import time
 
@@ -562,7 +561,9 @@ class DijetProcessor(HadronicProcessorBase):
             #####################################
             self.logging.debug("starting jet corrections")
             if ak.any(ak.num(FatJet) > 0):
-                corrected_fatjets = GetJetCorrections(FatJet, events_jk, era, IOV, isData=not self.do_gen)
+                corrected_fatjets = GetJetCorrections(
+                    FatJet, events_jk, era, IOV, isData=not self.do_gen,
+                    uncertainties=requested_jes_sources(self.jet_systematics))
             else:
                 corrected_fatjets = self._empty_jet_variations(FatJet)
             corrected_fatjets = corrected_fatjets[corrected_fatjets.subJetIdx1 > -1]
@@ -572,7 +573,9 @@ class DijetProcessor(HadronicProcessorBase):
             self.logging.debug("ak sum of fat jet mass", ak.sum( events_jk.FatJet.mass))
             self.logging.debug("starting softdrop mass correction")
             if ak.any(ak.num(events_jk.SubJet) > 0):
-                corrected_subjets = GetJetCorrections(events_jk.SubJet, events_jk, era, IOV, isData = not self.do_gen, mode = 'AK4')
+                corrected_subjets = GetJetCorrections(
+                    events_jk.SubJet, events_jk, era, IOV, isData=not self.do_gen,
+                    mode='AK4', uncertainties=requested_jes_sources(self.jet_systematics))
             else:
                 corrected_subjets = self._empty_jet_variations(events_jk.SubJet)
             corrected_fatjets['msoftdrop'] =   (corrected_subjets[corrected_fatjets.subJetIdx1] + corrected_subjets[corrected_fatjets.subJetIdx2]).mass 
@@ -607,7 +610,8 @@ class DijetProcessor(HadronicProcessorBase):
                 if jetsyst == 'nominal':
                     if not self.do_gen:
                         self.logging.debug("Doing nominal data")
-                        corr_jets_final = deepcopy(corrected_fatjets)
+                        # Sorting below creates a separate array before any field edits.
+                        corr_jets_final = corrected_fatjets
                     else:
                         corr_jets_final = applyjmrSF(IOV, applyjmsSF(IOV,corrected_fatjets))
                 #### Exact names only (as zjet_processor): the JES_RelativeJEREC1/

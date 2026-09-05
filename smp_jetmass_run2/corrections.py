@@ -837,9 +837,17 @@ def _get_jet_factory(IOV, isData, mode, era, uncertainties_key):
                 '* * ' + resource_file("JEC", jec_tag, f"{jec_tag}_L1FastJet_{AK_str}.jec.txt").as_posix(),
                 '* * ' + resource_file("JEC", jec_tag, f"{jec_tag}_L2Relative_{AK_str}.jec.txt").as_posix(),
                 '* * ' + resource_file("JEC", jec_tag, f"{jec_tag}_L3Absolute_{AK_str}.jec.txt").as_posix(),
-                '* * ' + resource_file("JEC", jec_tag, f"{jec_tag}_UncertaintySources_{AK_str}.junc.txt").as_posix(),
-                '* * ' + resource_file("JEC", jec_tag, f"{jec_tag}_Uncertainty_{AK_str}.junc.txt").as_posix(),
             ])
+            # Nominal/JER/JMS/JMR runs do not consume JES variations. Avoid
+            # parsing their tables when no JES source was requested.
+            if any(source != "jes" for source in uncertainty_sources):
+                ext.add_weight_sets([
+                    '* * ' + resource_file("JEC", jec_tag, f"{jec_tag}_UncertaintySources_{AK_str}.junc.txt").as_posix(),
+                ])
+            if "jes" in uncertainty_sources:
+                ext.add_weight_sets([
+                    '* * ' + resource_file("JEC", jec_tag, f"{jec_tag}_Uncertainty_{AK_str}.junc.txt").as_posix(),
+                ])
             #### Do AK8PUPPI jer files exist??
             if jer_tag:
                 ext.add_weight_sets([
@@ -916,6 +924,23 @@ def _get_jet_factory(IOV, isData, mode, era, uncertainties_key):
     name_map['Rho'] = 'jec_rho'
 
     return CorrectedJetsFactory(name_map, jec_stack)
+
+
+def requested_jes_sources(jet_systematics):
+    """JES sources actually consumed by a processor's jet-variation loop."""
+    sources = []
+    for systematic in jet_systematics:
+        if not systematic.startswith("JES_"):
+            continue
+        if systematic.endswith("Up"):
+            source = systematic[4:-2]
+        elif systematic.endswith("Down"):
+            source = systematic[4:-4]
+        else:
+            continue
+        if source not in sources:
+            sources.append(source)
+    return tuple(sources)
 
 
 def GetJetCorrections(FatJets, events, era, IOV, isData=False, uncertainties=None, mode='AK8'):
