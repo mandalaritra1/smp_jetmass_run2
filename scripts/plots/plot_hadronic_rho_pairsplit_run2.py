@@ -78,8 +78,9 @@ DET_COLOR = "#5790fc"
 FSR_COLOR = "#f89c20"
 JES_COLOR = "#a96b59"
 
-#### the 27-source era-correlated JES band (scripts/studies/unfold/
-#### rho_jes_era_correlated.py).  Off by default so the production figure set
+#### the 27-source era-correlated JES band lives in the unfold repo (currently
+#### ~/Projects/unfold/_from_smp_20260813/studies_unfold/rho_jes_era_correlated.py).
+#### Off by default so the production figure set
 #### is unchanged; ``--jes-update`` points it at the JSON and writes ONLY the
 #### uncertainty family, into OUT/"jes_update".
 JES_JSON: Path | None = None

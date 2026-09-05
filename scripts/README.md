@@ -28,12 +28,12 @@ against data. Anything stronger is stated explicitly.
 | `run_overnight_skims.sh` | unattended skim batch | live |
 | `merge_skims.py` | merge per-chunk skim Parquet into one Parquet per dataset | live |
 | `plot_stamp.py` | provenance stamp for working plots — **mandatory**, see the `cms-plot-style` skill | shared module, 3 consumers |
-| `channel_overlap.py` | dijet/trijet event overlap per leading-jet pT bin; exports `DIJET_CUTS` / `TRIJET_CUTS` / `bit` / `dedupe` | shared module, 8 consumers — **cut tuples are stale, see below** |
+| `channel_overlap.py` | dijet/trijet event overlap per leading-jet pT bin; exports `DIJET_CUTS` / `TRIJET_CUTS` / `bit` / `dedupe` | shared module, 8 consumers — cut tuple parity tested |
 | `extract_pythia_var_rho.py` | gen Z+jet rho from the pythia_var NanoGEN (nom + cr1/cr2/frag\*), HT-stitched → per-variation npz | produces tracked npz |
-| `build_pythia_var_weighters.py` | 24-bin CR/hadronization weighters → `corrections/{cr1,cr2,fraghard,fragsoft}_rho_reweight_*.npz` | **broken at import** — `np.load()` runs at module level against a deleted session scratchpad path |
+| `build_pythia_var_weighters.py` | 24-bin CR/hadronization weighters → `corrections/{cr1,cr2,fraghard,fragsoft}_rho_reweight_*.npz`; takes the gen-rho cache as a positional argument | imports; physics output not regenerated in this cleanup |
 | `build_vincia_reweight_npz.py` | Vincia gen reweight (derived in the unfold repo) → PtVarWeighter format | produces tracked npz |
 
-Untracked, pending review — left at top level because they import
+Tracked validation/study tools — left at top level because they import
 `scripts.channel_overlap` and `scripts.plot_stamp` and need no path edits:
 
 | file | what it does |
@@ -98,19 +98,12 @@ Do not re-add unfolding scripts to this repo.
 
 ---
 
-## Known breakage
+## Repaired scripts
 
-**`channel_overlap.py` cut tuples are stale.** `tests/test_channel_overlap_cutbits.py`
-has been failing on `dev` since the pair_split selection landed — the processors
-gained cuts that were never added to the tuples:
+The `channel_overlap.py` pair_split cut tuples were repaired on 2026-08-13.
+`tests/test_channel_overlap_cutbits.py` pins their append-only order to the two
+processor `_SKIM_CUTS` tuples.
 
-- dijet: `recoPtFloor`, `recodphiPair`, `genPtFloor`, `dphiGenPair`
-- trijet: `recoPtFloor3`, `rapLead3`, `recodphiPairInv`, `genPtFloor3`, `rapGenLead3`, `dphiGenPairInv`
-
-Anything reading `DIJET_CUTS` / `TRIJET_CUTS` — including the bit masks in
-`validate_pairsplit.py` — is working off the pre-`pair_split` cut list. Fix the
-tuples before trusting an overlap or cutbit number.
-
-**`build_pythia_var_weighters.py` fails at import** — it calls `np.load(CACHE)`
-at module level and `CACHE` points at a session scratchpad that no longer exists.
-Needs the path turned into an argument.
+`build_pythia_var_weighters.py` was made import-safe on 2026-08-13. Its cache
+is now a required positional argument; the fine-bin input and correction output
+retain their prior defaults.
