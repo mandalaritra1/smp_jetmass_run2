@@ -11,10 +11,10 @@ Status **2026-07-01: fully de-risked in a 100/200-event test.** Full 6-bin condo
 NOT yet built. Everything below is validated end-to-end (LHE→GEN→NANOGEN, branches, size).
 
 ## Environment / access
-- lxplus (LPC is expiring). `ssh lxw` gives a **broken RC4 ticket** (no AFS token). Use **`lxwk`**
-  (in `~/.zshrc`): keytab `~/.private/cern_amandal.keytab` (from `cern-get-keytab --user`) →
-  native AES256 ticket. Automation pattern: base64-pipe the keytab per ssh, `kinit -kt <tmp> amandal@CERN.CH && aklog`.
-  Full writeup: research-notes `topics/cern_lxplus_noninteractive_ssh.md` (troubleshooting §3).
+- lxplus (LPC is expiring). Open a password/OTP-authenticated master with
+  `ssh -MNf amandal@lxplus.cern.ch`, verify it with
+  `ssh -O check amandal@lxplus.cern.ch`, and use `ssh lxplus` for subsequent
+  commands during the control-persistence window.
 - **Release: `CMSSW_10_6_28`, `SCRAM_ARCH=slc7_amd64_gcc700`, inside `cmssw-el7` container** (lxplus is el9).
   Has CH3 + `Herwig7MGMergingSettings` + NanoGEN. NANOGEN is a real `--step` (not in `--help`).
 

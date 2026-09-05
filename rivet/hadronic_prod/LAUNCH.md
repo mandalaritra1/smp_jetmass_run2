@@ -26,8 +26,8 @@ jet pT > 185 (a 185 GeV dijet already has parton HT ≈ 370).
 
 ## Push (from Mac)
 ```
-rsync -av ~/Projects/smp_jetmass_run2/rivet/hadronic_prod/ lxw:~/hadronic_model_prod/
-rsync -av ~/Projects/smp_jetmass_run2/rivet/CMS_HADRONIC_JETMASS.cc lxw:~/hadronic_model_prod/
+rsync -av ~/Projects/smp_jetmass_run2/rivet/hadronic_prod/ lxplus:~/hadronic_model_prod/
+rsync -av ~/Projects/smp_jetmass_run2/rivet/CMS_HADRONIC_JETMASS.cc lxplus:~/hadronic_model_prod/
 ```
 
 ## On lxplus (interactive login needed for condor_submit)
