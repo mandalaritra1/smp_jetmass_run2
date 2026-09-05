@@ -1,14 +1,19 @@
-"""Pure-logic pieces of the DAS event-count gate: filename -> dataset
+"""Offline checks of the DAS event-count gate: filename -> dataset
 resolution against the shipped filesets, and cutflow extraction for both the
-dijet (per-dataset keys) and trijet (anonymous counter) conventions."""
+dijet (per-dataset keys) and trijet (anonymous counter) conventions.
+SSH responses are mocked; these tests never connect to CERN.
+"""
 
 from collections import defaultdict
 from pathlib import Path
+import subprocess
+from unittest.mock import patch
 
 import pytest
 
-from tools.check_das_event_counts import (era_of_dataset, extract_reads,
-                                          is_data_dataset, resolve_datasets)
+from tools.check_das_event_counts import (BackendDown, era_of_dataset, extract_reads,
+                                          is_data_dataset, query_lxplus,
+                                          resolve_datasets)
 
 
 def test_data_vs_mc_campaign_classification():
@@ -81,3 +86,38 @@ def test_unresolvable_filenames_raise():
         resolve_datasets(Path("no_era_token_here.pkl"))
     with pytest.raises(ValueError):
         resolve_datasets(Path("minimal_rho_trijet_sherpa_2018.pkl"))
+
+
+def test_lxplus_count_uses_noninteractive_ssh():
+    dataset = "/QCD_X/RunIISummer20UL18_X/NANOAODSIM"
+    response = subprocess.CompletedProcess(
+        [], 0, '[{"summary": [{"nevents": 123}]}]', ""
+    )
+    with patch("tools.check_das_event_counts.subprocess.run", return_value=response) as run:
+        assert query_lxplus(dataset, timeout=7) == 123
+    command = run.call_args.args[0]
+    assert command[:4] == ["ssh", "-o", "BatchMode=yes", "lxplus"]
+    assert command[4] == f"dasgoclient -query 'summary dataset={dataset}' -json"
+    assert run.call_args.kwargs["stdin"] == subprocess.DEVNULL
+    assert run.call_args.kwargs["timeout"] == 7
+
+
+def test_lxplus_auth_failure_is_unavailable_not_zero_events():
+    response = subprocess.CompletedProcess([], 255, "", "Permission denied")
+    with patch("tools.check_das_event_counts.subprocess.run", return_value=response):
+        with pytest.raises(BackendDown, match="Permission denied"):
+            query_lxplus("/QCD_X/campaign/NANOAODSIM", timeout=7)
+
+
+def test_lxplus_timeout_is_unavailable_not_zero_events():
+    with patch("tools.check_das_event_counts.subprocess.run",
+               side_effect=subprocess.TimeoutExpired("ssh", 7)):
+        with pytest.raises(BackendDown, match="timeout"):
+            query_lxplus("/QCD_X/campaign/NANOAODSIM", timeout=7)
+
+
+@pytest.mark.parametrize("stdout", ["not JSON", "[]", '[{"summary": [{}]}]'])
+def test_lxplus_missing_count_does_not_become_zero(stdout):
+    response = subprocess.CompletedProcess([], 0, stdout, "")
+    with patch("tools.check_das_event_counts.subprocess.run", return_value=response):
+        assert query_lxplus("/QCD_X/campaign/NANOAODSIM", timeout=7) is None

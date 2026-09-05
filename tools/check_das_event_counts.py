@@ -30,8 +30,7 @@ accepted.
 
 DAS BACKENDS (tried in order under the default `--backend auto`):
 - cached value in `--cache` (DAS counts for a fixed dataset never change);
-- `lxwk`: `dasgoclient` on lxplus via the `lxwk` zsh helper (needs the
-  node's cached CERN 2FA blessing -- if it expired, run `lxbless` once);
+- `lxplus`: `dasgoclient` through the authenticated lxplus SSH master;
 - `dbs`: DBS `filesummaries` on cmsweb with a valid local grid proxy
   (`voms-proxy-init -voms cms`; on macOS `X509_CERT_DIR` defaults to
   `~/.globus/certificates`, see tools/compute_sumw_qcd_mg.py);
@@ -156,19 +155,19 @@ def _curl(url: str, extra: list[str], timeout: int) -> str:
     return res.stdout
 
 
-def query_lxwk(dataset: str, timeout: int) -> int | None:
-    inner = f'dasgoclient -query \\"summary dataset={dataset}\\" -json'
+def query_lxplus(dataset: str, timeout: int) -> int | None:
+    inner = f"dasgoclient -query 'summary dataset={dataset}' -json"
     try:
-        #### stdin closed so an expired 2FA node blessing fails fast instead
-        #### of ssh sitting on a keyboard-interactive prompt until timeout
-        res = subprocess.run(["zsh", "-ic", f'lxwk -c "{inner}"'],
+        #### BatchMode and closed stdin make an expired SSH master fail fast
+        #### instead of waiting for a password or OTP prompt.
+        res = subprocess.run(["ssh", "-o", "BatchMode=yes", "lxplus", inner],
                              capture_output=True, text=True, timeout=timeout,
                              stdin=subprocess.DEVNULL)
     except subprocess.TimeoutExpired as exc:
-        raise BackendDown("lxwk/ssh timeout") from exc
+        raise BackendDown("lxplus SSH timeout") from exc
     if res.returncode != 0:
         raise BackendDown(res.stderr.strip().splitlines()[-1][:120]
-                          if res.stderr.strip() else "lxwk failed")
+                          if res.stderr.strip() else "lxplus SSH failed")
     try:
         recs = json.loads(res.stdout)
         for rec in recs:
@@ -221,7 +220,7 @@ def query_mcm(dataset: str, timeout: int) -> int | None:
     return None
 
 
-BACKENDS = {"lxwk": query_lxwk, "dbs": query_dbs, "mcm": query_mcm}
+BACKENDS = {"lxplus": query_lxplus, "dbs": query_dbs, "mcm": query_mcm}
 
 
 class DASCounts:

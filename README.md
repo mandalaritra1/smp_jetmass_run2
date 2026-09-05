@@ -283,6 +283,9 @@ correction files remotely. Outputs are pickled to `outputs/`.
 
 ### Acceptance gate — DAS event-count check (run on every production)
 
+The production commands live in [`tools/`](tools/README.md); their automated
+regression tests live in `tests/`.
+
 coffea can **silently drop whole chunks**: preprocessing occasionally
 enumerates fewer chunks than a file contains, the run reports
 "Processing 100%" (of the chunks it discovered), exits 0, and the logs carry
@@ -304,7 +307,8 @@ checked per DAS dataset (the cutflow names its inputs); trijet outputs carry
 one anonymous counter, resolved from the filename against
 `samples/hadronic/fileset_*.json` (legacy pre-pair_split trijet outputs
 double-counted the counter; the tool detects the ~2x and halves it).
-DAS is queried through `lxwk`/dasgoclient, DBS with a local grid proxy, or
+DAS is queried through `ssh lxplus`/dasgoclient using an authenticated SSH
+master, DBS with a local grid proxy, or
 McM's public API (MC only) — first one that answers wins, and counts are
 cached in `samples/hadronic/das_nevents_cache.json`, so reruns are offline.
 
