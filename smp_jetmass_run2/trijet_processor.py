@@ -456,10 +456,6 @@ class TrijetProcessor(HadronicProcessorBase):
             FatJet=events_jk.FatJet
             FatJet["p4"] = ak.with_name(events_jk.FatJet[["pt", "eta", "phi", "mass"]],"PtEtaPhiMLorentzVector")
             self.logging.debug(FatJet)
-            #### Make sure there is at least one jet to run over
-            if ak.sum(ak.num(FatJet.pt)>0)<1:
-                self.logging.debug("No fat jet pts at all")
-                return out
             if self.do_gen:
                 era = None
                 GenJetAK8 = events_jk.GenJetAK8
@@ -472,12 +468,15 @@ class TrijetProcessor(HadronicProcessorBase):
                 self.logging.debug("IOV ", IOV, ", era ", era)
             self.logging.debug("starting jet corrections")
             #### Rewrite getjetcorrections to correct all jets and correct sd mass at the same time
-            corrected_fatjets = GetJetCorrections(FatJet, events_jk, era, IOV, isData=not self.do_gen)
+            if ak.any(ak.num(FatJet) > 0):
+                corrected_fatjets = GetJetCorrections(FatJet, events_jk, era, IOV, isData=not self.do_gen)
+            else:
+                corrected_fatjets = self._empty_jet_variations(FatJet)
             corrected_fatjets = corrected_fatjets[corrected_fatjets.subJetIdx1 > -1]
-            if ak.sum(ak.num(events_jk.SubJet.mass)>0)<1:
-                self.logging.debug("No subjets")
-                return out
-            corrected_subjets = GetJetCorrections(events_jk.SubJet, events_jk, era, IOV, isData = not self.do_gen, mode = 'AK4')
+            if ak.any(ak.num(events_jk.SubJet) > 0):
+                corrected_subjets = GetJetCorrections(events_jk.SubJet, events_jk, era, IOV, isData = not self.do_gen, mode = 'AK4')
+            else:
+                corrected_subjets = self._empty_jet_variations(events_jk.SubJet)
             corrected_fatjets['msoftdrop'] =   (corrected_subjets[corrected_fatjets.subJetIdx1] + corrected_subjets[corrected_fatjets.subJetIdx2]).mass 
 
             # if not self.do_minimal:
@@ -635,10 +634,6 @@ class TrijetProcessor(HadronicProcessorBase):
                 METsel = np.array([events_corr.Flag[MET_filters[IOV][i]] for i in range(len(MET_filters[IOV])) if MET_filters[IOV][i] in events_corr.Flag.fields])
                 METsel = np.logical_and.reduce(METsel, axis=0) ## a passing event should pass "ALL" the MET filters
                 sel.add("METfilters", METsel)
-                if ak.sum(METsel) < 1 :
-                    self.logging.debug("No events passing MET filters.")
-                    self._flush_cutflow(out, datastr, sel, jetsyst)
-                    return out
                     
                 #####################################
                 #### Gen Jet Selection
@@ -707,10 +702,6 @@ class TrijetProcessor(HadronicProcessorBase):
                     else:
                         gen_kin_seq = sel.all("triGenJet", "dphiGen", "rapGen")
                     sel.add("genTot_seq", gen_kin_seq & ~ak.is_none(genjet.mass) & ~ak.is_none(groomed_genjet.mass))
-                    if (len(events_corr[sel.all("genTot_seq")]) < 1):
-                        self.logging.debug("No gen jets selected")
-                        self._flush_cutflow(out, datastr, sel, jetsyst)
-                        return out
         
                 #####################################
                 #### Reco Jet Selection
@@ -816,10 +807,6 @@ class TrijetProcessor(HadronicProcessorBase):
                 #### Check eta phi map pre cuts
                 if not self.do_minimal and jetsyst=='nominal': 
                         fill_hist(out, 'jet_eta_phi_precuts', dataset=dataset, systematic=jetsyst, phi=events_corr[sel.all("triRecoJet")].FatJet[:,2].phi, eta=events_corr[sel.all("triRecoJet")].FatJet[:,2].eta, weight=weights[sel.all("triRecoJet")])                
-                if (len(events_corr[sel.all("recoTot_seq")]) < 1):
-                    self.logging.debug("no events passing reco sel")
-                    self._flush_cutflow(out, datastr, sel, jetsyst)
-                    return out
                 ################
                 #### Find fakes, misses, and underflow and remove them to get final selection
                 ###############
@@ -843,10 +830,6 @@ class TrijetProcessor(HadronicProcessorBase):
                         miss_weights = weights[miss_sel]
                         fill_hist(out, "misses_u", dataset=dataset, systematic=jetsyst, **jkkw, ptgen = miss_jets[~ak.is_none(miss_jets.mass)].pt, mgen = miss_jets[~ak.is_none(miss_jets.mass)].mass, weight = miss_weights[~ak.is_none(miss_jets.mass)])
                         fill_hist(out, "misses_g", dataset=dataset, systematic=jetsyst, **jkkw, ptgen = miss_jets[~ak.is_none(groomed_missjet.mass)].pt, mgen = groomed_missjet[~ak.is_none(groomed_missjet.mass)].mass, weight = miss_weights[~ak.is_none(groomed_missjet.mass)])
-                    if len(events_corr[sel.all("genTot_seq", "recoTot_seq", "matched_gen")])<1:
-                        self.logging.debug("No events after all selections and removing misses")
-                        self._flush_cutflow(out, datastr, sel, jetsyst)
-                        return out
                     #### Fakes include events missing a reco mass or sdmass value, events failing index dr matching, and events passing reco cut but failing the gen cut
                     matches = ~ak.is_none(jet.matched_gen)
                     sel.add("matched_reco", matches)
@@ -867,10 +850,6 @@ class TrijetProcessor(HadronicProcessorBase):
                                 fill_hist(out, "fakes_g", dataset=dataset, systematic=syst, **jkkw, ptreco = fake_jets[~ak.is_none(fake_jets.msoftdrop)].pt, mreco = fake_jets[~ak.is_none(fake_jets.msoftdrop)].msoftdrop, weight = fake_weights[~ak.is_none(fake_jets.msoftdrop)])
                     if (jetsyst == "nominal"): 
                         out['cutflow'][datastr]['fakes'] += (len(events_corr[fakes].FatJet))
-                    if len(events_corr[sel.all("genTot_seq", "recoTot_seq", "matched_reco", "matched_gen")])<1:
-                        self.logging.debug("No events after all selections and removing fakes & misses")
-                        self._flush_cutflow(out, datastr, sel, jetsyst)
-                        return out
                     ##############
                     ### Make final selection and fill gen truth plots
                     ###############
@@ -883,11 +862,10 @@ class TrijetProcessor(HadronicProcessorBase):
                     #### the inclusive gen table needs: all gen-selected events,
                     #### misses included.
                     ####
-                    #### CAVEAT (survivorship bias at CHUNK level): the guards
-                    #### above `return out` early when a chunk has no event passing
-                    #### recoTot_seq / matched, so a chunk with ZERO survivors
-                    #### contributes no display rows at all. Use the CUTFLOW, never
-                    #### these tables, for any efficiency number.
+                    # Empty gen/reco/matched selections must reach all fills.
+                    # Each marginal uses its own mask; response arrays use only
+                    # final_seq. Empty arrays contribute nothing without dropping
+                    # fakes, misses, or subsequent jet/weight variations.
                     if self._do_skim and jetsyst == "nominal":
                         self._fill_skim_event(out, dataset, weights, events_corr, sel)
                         _gsel = sel.all("genTot_seq")
@@ -936,10 +914,6 @@ class TrijetProcessor(HadronicProcessorBase):
                 #######################
                 #### Apply final selections and jet veto map
                 #######################
-                if len(events_corr[sel.all("final_seq")])<1:
-                        self.logging.debug("no more events after final sel")
-                        self._flush_cutflow(out, datastr, sel, jetsyst)
-                        return out
                 
                 #### Check eta phi map after cuts but before jet veto
                 #### Make eta phi plot to check effects of cuts

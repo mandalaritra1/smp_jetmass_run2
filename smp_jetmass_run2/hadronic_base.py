@@ -73,6 +73,20 @@ class HadronicProcessorBase(processor.ProcessorABC):
     _SKIM_JETS_PER_EVENT = 1
     _SKIM_JETIDX = np.array([2], dtype=np.int8)
 
+    @staticmethod
+    def _empty_jet_variations(jets):
+        """Keep an empty collection usable by the normal systematic dispatch.
+
+        Coffea's JER random-number builder indexes the first/last flattened jet
+        and cannot correct an entirely empty collection. There is nothing to
+        correct here, but gen-only events must still reach the gen marginals.
+        Preserve the jet record type and supply empty up/down records.
+        """
+        variations = ak.zip({"up": jets, "down": jets}, depth_limit=2)
+        for name in ["JER", *(f"JES_{source}" for source in JES_SOURCES)]:
+            jets = ak.with_field(jets, variations, name)
+        return jets
+
     @property
     def accumulator(self):
         return self.hists

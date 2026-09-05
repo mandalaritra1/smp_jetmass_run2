@@ -545,12 +545,8 @@ class DijetProcessor(HadronicProcessorBase):
                                       &(np.abs(events_jk.Muon.eta) < 2.5)
                                       &(events_jk.Muon.pfIsoId > 1) ], 
                                       "Muon")
-            #### require at least one fat jet and one subjet so corrections do not fail
             FatJet=events_jk.FatJet
             FatJet["p4"] = ak.with_name(events_jk.FatJet[["pt", "eta", "phi", "mass"]],"PtEtaPhiMLorentzVector")
-            if ak.sum(ak.num(FatJet.pt)>0)<1:
-                self.logging.debug("No fat jet pts at all")
-                return out
             if self.do_gen:
                 era = None
                 GenJetAK8 = events_jk.GenJetAK8
@@ -565,17 +561,20 @@ class DijetProcessor(HadronicProcessorBase):
             #### Apply jet corrections
             #####################################
             self.logging.debug("starting jet corrections")
-            corrected_fatjets = GetJetCorrections(FatJet, events_jk, era, IOV, isData=not self.do_gen)
+            if ak.any(ak.num(FatJet) > 0):
+                corrected_fatjets = GetJetCorrections(FatJet, events_jk, era, IOV, isData=not self.do_gen)
+            else:
+                corrected_fatjets = self._empty_jet_variations(FatJet)
             corrected_fatjets = corrected_fatjets[corrected_fatjets.subJetIdx1 > -1]
             self.logging.debug(" Uncorrected subjet mass", events_jk.SubJet.mass)
             self.logging.debug(" Uncorrected jet mass", events_jk.FatJet.mass)
             self.logging.debug("ak sum of subjet mass ", ak.sum(events_jk.SubJet.mass))
             self.logging.debug("ak sum of fat jet mass", ak.sum( events_jk.FatJet.mass))
-            if ak.sum(ak.num(events_jk.SubJet.mass)>0)<1:
-                self.logging.debug("No subjet pts")
-                return out
             self.logging.debug("starting softdrop mass correction")
-            corrected_subjets = GetJetCorrections(events_jk.SubJet, events_jk, era, IOV, isData = not self.do_gen, mode = 'AK4')
+            if ak.any(ak.num(events_jk.SubJet) > 0):
+                corrected_subjets = GetJetCorrections(events_jk.SubJet, events_jk, era, IOV, isData = not self.do_gen, mode = 'AK4')
+            else:
+                corrected_subjets = self._empty_jet_variations(events_jk.SubJet)
             corrected_fatjets['msoftdrop'] =   (corrected_subjets[corrected_fatjets.subJetIdx1] + corrected_subjets[corrected_fatjets.subJetIdx2]).mass 
             
             #####################################
@@ -782,7 +781,7 @@ class DijetProcessor(HadronicProcessorBase):
                     genjet2 = ak.firsts(events_corr.GenJetAK8[:,1:])
                     groomed_genjet0 = get_gen_sd_mass_jet(genjet1, events_corr.SubGenJetAK8)
                     groomed_genjet1 = get_gen_sd_mass_jet(genjet2, events_corr.SubGenJetAK8)
-                    groomed_gen_dijet = ak.concatenate([ak.unflatten(groomed_genjet0, 1),  ak.unflatten(groomed_genjet1, 1)], axis=1)
+                    groomed_gen_dijet = ak.concatenate([groomed_genjet0[:, np.newaxis],  groomed_genjet1[:, np.newaxis]], axis=1)
                     self.logging.debug("Length of groomed gen jets", len(groomed_gen_dijet), " len of events ", len(events_corr))
                     sel.add("genAsym0p3", asymm_gen_sel)
                     sel.add("genDphi_seq", sel.all("dphiGen2", "genRap_seq"))
@@ -827,11 +826,6 @@ class DijetProcessor(HadronicProcessorBase):
                 #### Reco Jet Selection
                 #################################### 
 
-                #### If there are no events passing MET filters end here to avoid errors
-                if ak.sum(METsel) < 1 :
-                    self.logging.debug("No events passing MET filters.")
-                    self._flush_cutflow(out, datastr, sel, jetsyst)
-                    return out
                 
                 
                 #### Apply pt and rapidity cuts
@@ -942,10 +936,6 @@ class DijetProcessor(HadronicProcessorBase):
                     out, dataset, jetsyst,
                     {"jet1": _kin.FatJet[:, 0], "jet2": _kin.FatJet[:, 1]},
                     weights_obj, _kin_sel)
-                if (len(events_corr[sel.all("recoTot_seq")]) < 1):
-                    self.logging.debug("no events passing reco sel")
-                    self._flush_cutflow(out, datastr, sel, jetsyst)
-                    return out
                 
                 ################
                 #### Find fakes, misses, and underflow and remove them to get final selection
@@ -969,17 +959,13 @@ class DijetProcessor(HadronicProcessorBase):
                         genjet2 = ak.firsts(events_corr[miss_sel].GenJetAK8[:,1:])
                         groomed_genjet0 = get_gen_sd_mass_jet(genjet1, events_corr[miss_sel].SubGenJetAK8)
                         groomed_genjet1 = get_gen_sd_mass_jet(genjet2, events_corr[miss_sel].SubGenJetAK8)
-                        groomed_gen_dijet = ak.concatenate([ak.unflatten(groomed_genjet0, 1),  ak.unflatten(groomed_genjet1, 1)], axis=1)
+                        groomed_gen_dijet = ak.concatenate([groomed_genjet0[:, np.newaxis],  groomed_genjet1[:, np.newaxis]], axis=1)
                         groomed_gen_dijet = ak.flatten(groomed_gen_dijet, axis=1)
                         miss_dijets = ak.flatten(events_corr[miss_sel].GenJetAK8[:,:2], axis=1)
                         miss_weights = np.repeat(weights[miss_sel], 2)
                         # print("Len of missed dijets ", len(miss_dijets), " and weights ", len(miss_weights))
                         fill_hist(out, "misses_u", dataset=dataset, systematic=jetsyst, **jkkw, ptgen = miss_dijets.pt, mgen = miss_dijets.mass, weight = miss_weights)
                         fill_hist(out, "misses_g", dataset=dataset, systematic=jetsyst, **jkkw, ptgen = miss_dijets.pt, mgen = groomed_gen_dijet.mass, weight = miss_weights)
-                    if len(events_corr[sel.all("genTot_seq", "recoTot_seq", "matched_gen")])<1:
-                        self.logging.debug("No events after all selections and removing misses")
-                        self._flush_cutflow(out, datastr, sel, jetsyst)
-                        return out
                     #### Fakes include events missing a gen level mass or sdmass value, events failing index dr matching, and events passing reco cut but failing the gen cut
                     matches = ~ak.any(ak.is_none(events_corr.FatJet[:,:2].matched_gen.pt, axis=-1), axis=1)
                     sel.add("matched_reco", matches)
@@ -1002,10 +988,6 @@ class DijetProcessor(HadronicProcessorBase):
                                 fill_hist(out, "fakes_g", dataset=dataset, systematic=syst, **jkkw, ptreco = fake_dijets[~ak.is_none(fake_dijets.msoftdrop)].pt, mreco = fake_dijets[~ak.is_none(fake_dijets.msoftdrop)].msoftdrop, weight = fake_weights[~ak.is_none(fake_dijets.msoftdrop)])
 
                     if jetsyst == "nominal": out['cutflow'][datastr]['fakes_u'] += (len(events_corr[fakes].FatJet))
-                    if len(events_corr[sel.all("genTot_seq", "recoTot_seq", "matched_gen", "matched_reco")])<1:
-                        self.logging.debug("No events after all selections and removing fakes & misses")
-                        self._flush_cutflow(out, datastr, sel, jetsyst)
-                        return out
                     #######################
                     #### Make final selection and fill gen plots
                     #######################
@@ -1016,15 +998,10 @@ class DijetProcessor(HadronicProcessorBase):
                     #### are in the file too -- that is the whole point: cutbits
                     #### says where each died, alljets says which jet did it.
                     ####
-                    #### CAVEAT (survivorship bias at CHUNK level): the guards at
-                    #### ~902/966/999/1024 `return out` early when a chunk has no
-                    #### event passing METfilters / recoTot_seq / matched, so a
-                    #### chunk with ZERO survivors contributes no display rows at
-                    #### all. Per-event this is unbiased, but a whole-chunk wipeout
-                    #### is invisible here -- that is why HT100to200 has 0 rows
-                    #### while its cutflow is also 0. Use the CUTFLOW, never these
-                    #### tables, for any efficiency number; these are for looking
-                    #### at individual events.
+                    # Empty gen/reco/matched selections must reach all fills.
+                    # Each marginal uses its own mask; response arrays use only
+                    # final_seq. Empty arrays contribute nothing without dropping
+                    # fakes, misses, or subsequent jet/weight variations.
                     if self._do_skim and jetsyst == "nominal":
                         self._fill_skim_event(out, dataset, weights, events_corr, sel)
 
@@ -1035,11 +1012,13 @@ class DijetProcessor(HadronicProcessorBase):
                     gen_weights = np.repeat(weights[sel.all("genTot_seq")], 2)
                     genjet0 = events_corr[sel.all("genTot_seq")].GenJetAK8[:,0]
                     genjet1 = events_corr[sel.all("genTot_seq")].GenJetAK8[:,1]
-                    gen_dijet_truth = ak.concatenate([ak.unflatten(genjet0, 1),  ak.unflatten(genjet1, 1)], axis=1)
+                    # A singleton axis also works for zero selected events;
+                    # ak.unflatten(array, 1) rejects empty arrays in Awkward.
+                    gen_dijet_truth = ak.concatenate([genjet0[:, np.newaxis],  genjet1[:, np.newaxis]], axis=1)
                     gen_dijet_truth = ak.flatten(gen_dijet_truth, axis=1)
                     groomed_genjet0 = get_gen_sd_mass_jet(genjet0, events_corr[sel.all("genTot_seq")].SubGenJetAK8)
                     groomed_genjet1 = get_gen_sd_mass_jet(genjet1, events_corr[sel.all("genTot_seq")].SubGenJetAK8)
-                    groomed_gen_dijet_truth = ak.concatenate([ak.unflatten(groomed_genjet0, 1),  ak.unflatten(groomed_genjet1, 1)], axis=1)
+                    groomed_gen_dijet_truth = ak.concatenate([groomed_genjet0[:, np.newaxis],  groomed_genjet1[:, np.newaxis]], axis=1)
                     groomed_gen_dijet_truth = ak.flatten(groomed_gen_dijet_truth, axis=1)
                     #### Without the matched_gen requirement the groomed gen mass can be
                     #### None per jet (no SubGenJetAK8 near an unmatched jet) -- the
@@ -1109,8 +1088,7 @@ class DijetProcessor(HadronicProcessorBase):
                 else:
                     sel.add("final_seq", sel.all("recoTot_seq"))
                     #### Data event-display fill, the mirror of the MC one above.
-                    #### Placed here, before the `final_seq` early return, and the
-                    #### gen bits of `cutbits` simply stay 0 (no gen cut is in
+                    #### The gen bits of `cutbits` simply stay 0 (no gen cut is in
                     #### `sel.names` on this path).
                     if self._do_skim and jetsyst == "nominal":
                         self._fill_skim_event(out, dataset, weights, events_corr, sel)
@@ -1118,10 +1096,6 @@ class DijetProcessor(HadronicProcessorBase):
                 #######################
                 #### Apply final selections and jet veto maps
                 #######################
-                if len(events_corr[sel.all("final_seq")])<1:
-                        self.logging.debug("no more events after final selection")
-                        self._flush_cutflow(out, datastr, sel, jetsyst)
-                        return out
                 final_weights = weights_obj.weight()[sel.all("final_seq")]
                 self.logging.debug("Weights after all selections ", final_weights)
                 #### define final dijet object for filling
@@ -1184,9 +1158,9 @@ class DijetProcessor(HadronicProcessorBase):
                     # print("Number of jets j1 matched to j0", ak.sum(events_corr[sel.all("final_seq")].GenJetAK8[:,1].mass==genjet0.mass))
                     groomed_genjet0 = get_gen_sd_mass_jet(genjet0, events_corr[sel.all("final_seq")].SubGenJetAK8)
                     groomed_genjet1 = get_gen_sd_mass_jet(genjet1, events_corr[sel.all("final_seq")].SubGenJetAK8)
-                    groomed_gen_dijet = ak.concatenate([ak.unflatten(groomed_genjet0, 1),  ak.unflatten(groomed_genjet1, 1)], axis=1)
+                    groomed_gen_dijet = ak.concatenate([groomed_genjet0[:, np.newaxis],  groomed_genjet1[:, np.newaxis]], axis=1)
                     groomed_gen_dijet = ak.flatten(groomed_gen_dijet, axis=1)
-                    gen_dijet = ak.concatenate([ak.unflatten(genjet0, 1),  ak.unflatten(genjet1, 1)], axis=1)
+                    gen_dijet = ak.concatenate([genjet0[:, np.newaxis],  genjet1[:, np.newaxis]], axis=1)
                     gen_dijet = ak.flatten(gen_dijet, axis=1)
                     if self._do_skim and jetsyst == "nominal":
                         self._fill_skim(out, "matched", dataset, dijet_weights,
