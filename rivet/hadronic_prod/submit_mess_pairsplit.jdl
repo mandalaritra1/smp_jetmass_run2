@@ -1,0 +1,18 @@
+universe                = vanilla
+executable              = inner_mess_pairsplit.sh
+arguments               = $(campaign) $(phase) $(bin) $(seed) $(nevt)
+should_transfer_files   = YES
+when_to_transfer_output = ON_EXIT
+transfer_input_files    = py313/pythia_rivet_mess, py313/RivetCMS_HADRONIC_PAIR_SPLIT.so, py313/CMS_HADRONIC_PAIR_SPLIT.cc, py313/pythia_rivet_mess.cc, cp5.cmnd
+output                  = /dev/null
+error                   = /dev/null
+log                     = condor_logs/$(ClusterId).log
+MY.SendCredential       = True
++JobBatchName           = "$(campaign)-$(phase)"
++JobFlavour             = "workday"
+request_cpus            = 1
+request_memory          = 2000
+requirements            = (OpSysAndVer =?= "AlmaLinux9")
+periodic_release        = (NumJobStarts < 4) && (HoldReasonCode =!= 1)
+max_retries             = 4
+queue campaign,phase,bin,seed,nevt from joblist_mess_pairsplit.txt
