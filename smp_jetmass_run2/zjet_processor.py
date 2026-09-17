@@ -165,6 +165,10 @@ class QJetMassProcessor(processor.ProcessorABC):
         m_g_reco_cov_axis = binning.m_g_reco_cov_axis
         mpt_u_reco_cov_axis = binning.mpt_u_reco_cov_axis
         mpt_g_reco_cov_axis = binning.mpt_g_reco_cov_axis
+        ptz_balance_axis = binning.ptz_balance_axis
+        ptfrac_axis = binning.ptfrac_axis
+        ptasym_signed_axis = binning.ptasym_signed_axis
+        dphi_gen_axis = binning.dphi_gen_axis
         dr_axis = binning.dr_axis
         dr_fine_axis = binning.dr_fine_axis
         dphi_axis = binning.dphi_axis    
@@ -368,6 +372,21 @@ class QJetMassProcessor(processor.ProcessorABC):
 
             register_hist(self.hists, "ptasym_presel", [dataset_axis, frac_axis])
             register_hist(self.hists, "ptasym", [dataset_axis, frac_axis, syst_axis])
+
+            if self._do_gen:
+                # Gen-level Z/jet pT balance (2026-09-17): pT(jet)/pT(Z), the signed
+                # asymmetry and dphi(Z, jet), versus gen Z pT.  Filled TWICE: "_pre"
+                # after the kinematic gen selection only, and "_post" after the
+                # topology cuts (|asym| < 0.3, dphi > 1.57), which by construction
+                # sculpt the balance.  The pre-cut version is the honest generator
+                # comparison; the post-cut one shows what the analysis keeps.
+                for _stage in ("pre", "post"):
+                    register_hist(self.hists, f"ptfrac_gen_{_stage}",
+                                  [dataset_axis, ptz_balance_axis, ptfrac_axis, syst_axis])
+                    register_hist(self.hists, f"ptasym_gen_{_stage}",
+                                  [dataset_axis, ptz_balance_axis, ptasym_signed_axis, syst_axis])
+                    register_hist(self.hists, f"dphi_gen_{_stage}",
+                                  [dataset_axis, ptz_balance_axis, dphi_gen_axis, syst_axis])
             register_hist(self.hists, "dr", [dataset_axis, dr_axis, syst_axis])
             register_hist(self.hists, "dphi", [dataset_axis, dphi_axis, syst_axis])
 
@@ -2104,7 +2123,50 @@ class QJetMassProcessor(processor.ProcessorABC):
 
 
                 ######-----------_#############
-                
+
+                #### Gen-level Z/jet pT-balance diagnostic (2026-09-17).  Filled
+                #### once per event, outside the mm/ee channel loop and only for
+                #### the nominal jet systematic: this is a generator comparison
+                #### (HERWIG vs PYTHIA), not an analysis input.
+                ####
+                #### "_pre" applies the KINEMATIC gen selection only (two gen
+                #### leptons, one gen AK8 jet, Z pT > 90, 71 < mZ < 111); the
+                #### topology cuts |pT asym| < 0.3 and dphi > 1.57 are exactly
+                #### cuts ON the balance, so including them would hide the very
+                #### difference we are asked to look at.  "_post" adds them.
+                #### No dR gen/reco matching either: matching is a detector
+                #### requirement and would fold jet reconstruction back in.
+                if self._do_gen and jet_syst == "nominal" and "ptfrac_gen_pre" in self.hists:
+                    _bal_gen_include = [
+                        n for n in ['genWeight', 'isr', 'fsr', 'q2', 'pdf']
+                        if n in weights._weights
+                    ]
+                    _bal_w = weights.partial_weight(include=_bal_gen_include)
+                    _bal_ptz = ak.fill_none(z_gen.pt, -1.0)
+                    _bal_ptjet = ak.fill_none(gen_jet.pt, -1.0)
+                    _bal_finite = (_bal_ptz > 0.0) & (_bal_ptjet > 0.0)
+                    _bal_frac = ak.fill_none(z_pt_frac_gen, -1.0)
+                    _bal_asym_signed = ak.where(
+                        _bal_finite, (_bal_ptz - _bal_ptjet) / (_bal_ptz + _bal_ptjet), -99.0)
+                    _bal_dphi = ak.fill_none(z_jet_dphi_gen, -1.0)
+                    for _stage, _stage_mask in (
+                        ("pre", sel.require(kinsel_gen=True)),
+                        ("post", sel.all("kinsel_gen", "toposel_gen")),
+                    ):
+                        _m = ak.to_numpy(ak.fill_none(_stage_mask, False)) & ak.to_numpy(_bal_finite)
+                        if _m.sum() == 0:
+                            continue
+                        _kw = dict(dataset=dataset, ptz=ak.to_numpy(_bal_ptz)[_m],
+                                   weight=ak.to_numpy(_bal_w)[_m], systematic=jet_syst)
+                        fill_hist(self.hists, f"ptfrac_gen_{_stage}",
+                                  ptfrac=ak.to_numpy(_bal_frac)[_m], **_kw)
+                        fill_hist(self.hists, f"ptasym_gen_{_stage}",
+                                  ptasym=ak.to_numpy(_bal_asym_signed)[_m], **_kw)
+                        fill_hist(self.hists, f"dphi_gen_{_stage}",
+                                  dphi=ak.to_numpy(_bal_dphi)[_m], **_kw)
+                        self.logging.debug(
+                            f"pT-balance gen fill [{_stage}]: {int(_m.sum())} events")
+
                 # Fill histograms
                 # GEN level histograms
                 self.logging.debug(f"Total reco events passing all selection: {sel.require(allsel_reco = True).sum()}",  )

@@ -230,6 +230,18 @@ class util_binning :
         self.m_g_reco_cov_axis = hist.axis.Variable(_m_gen_cov_edges, name="m_g_reco", label=r"$m_{groomed,RECO}$ [GeV]")
         self.mpt_u_reco_cov_axis = hist.axis.Variable(_rho_gen_cov_edges, name="mpt_u_reco", label=r"$\log_{10}(\rho^2)_{ungroomed,RECO}$")
         self.mpt_g_reco_cov_axis = hist.axis.Variable(_rho_gen_cov_edges, name="mpt_g_reco", label=r"$\log_{10}(\rho^2)_{groomed,RECO}$")
+        # Gen-level Z/jet pT-balance diagnostic (2026-09-17, Garvita's HERWIG
+        # request): the ratio pT(jet)/pT(Z) and the signed asymmetry, versus a
+        # Z-pT axis that starts at the gen Z pT cut of 90 GeV.
+        self.ptz_balance_axis = hist.axis.Variable(
+            [90., 150., 200., 290., 400., 13000.], name="ptz", label=r"$p_{T,Z}^{GEN}$ (GeV)")
+        self.ptfrac_axis = hist.axis.Regular(
+            100, 0.0, 2.0, name="ptfrac", label=r"$p_{T}^{jet}/p_{T}^{Z}$ (GEN)")
+        self.ptasym_signed_axis = hist.axis.Regular(
+            100, -1.0, 1.0, name="ptasym",
+            label=r"$(p_{T}^{Z}-p_{T}^{jet})/(p_{T}^{Z}+p_{T}^{jet})$ (GEN)")
+        self.dphi_gen_axis = hist.axis.Regular(
+            64, 0.0, np.pi, name="dphi", label=r"$\Delta\phi(Z, jet)$ (GEN)")
         self.dr_axis = hist.axis.Regular(150, 0, 6.0, name="dr", label=r"$\Delta R$")
         self.dr_fine_axis = hist.axis.Regular(150, 0, 1.5, name="dr", label=r"$\Delta R$")
         self.dphi_axis = hist.axis.Regular(150, -2*np.pi, 2*np.pi, name="dphi", label=r"$\Delta \phi$")
