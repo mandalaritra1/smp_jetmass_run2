@@ -143,7 +143,12 @@ def main():
     for label, meds, color, marker, style, lw in series:
         meds = np.asarray(meds, float)
         rel = meds - meds[0]
-        ax.plot(X, rel, marker=marker, ls=style, lw=lw, ms=11 if lw > 3 else 9, color=color, label=label)
+        # Open markers for the unmerged "same LHE" pair so they read apart from
+        # the filled MLM production series of the same colour.
+        open_marker = "same LHE" in label
+        ax.plot(X, rel, marker=marker, ls=style, lw=lw, ms=11 if lw > 3 else 9, color=color,
+                mfc="white" if open_marker else color, mew=2.0, label=label,
+                zorder=6 if label.startswith("Data") else 3)
         print(f"{label:40s} {meds[0]:18.3f} {meds[1]:9.3f} {meds[2]:9.3f} {rel[2]:+7.3f}")
     ax.axhline(0.0, color="gray", ls=":", lw=1.2)
     hep.cms.label("Preliminary" if args.with_data else "", data=args.with_data, loc=2, ax=ax,
