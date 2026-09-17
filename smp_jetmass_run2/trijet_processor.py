@@ -431,6 +431,9 @@ class TrijetProcessor(HadronicProcessorBase):
         #### ONCE per chunk, pre-selection, outside the jackknife and
         #### jet-systematic loops below (both re-iterate these same events).
         self._accumulate_sumw(out, dataset, events)
+        #### flat-pT-hat samples only: veto the pT-hat weight outliers AFTER
+        #### sumw (all generated events) and BEFORE any selection
+        events = self._drop_flat_pthat_outliers(out, datastr, dataset, events)
         index_list = np.arange(len(events))
         ###### Choose number of slices to break data into for jackknife method
         if self._do_jk:

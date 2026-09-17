@@ -117,6 +117,32 @@ class HadronicProcessorBase(processor.ProcessorABC):
         #### no genWeight at all (data-like / GEN-less files): unit weights
         return np.ones(len(events))
 
+    #### Flat-pT-hat QCD samples (QCD_Pt-15to7000_*Flat*): genWeight is the
+    #### pT-hat weight, ten orders of magnitude of spread. A low-pT-hat event
+    #### that ends up with a high-pT jet carries a weight 1e4-1e6 times that of
+    #### the genuine jets in its pT bin and wipes out the bin's effective
+    #### statistics (measured 2026-09-17 on the UL18 Herwig7 flat sample: n_eff
+    #### of 4-36 events in three of nine gen pT bins out of 100M generated;
+    #### the Pythia8 flat sample has no jet above 3x pT-hat at all). Events
+    #### whose leading gen or reco AK8 jet exceeds FLAT_PTHAT_RATIO_MAX times
+    #### the pT-hat are vetoed pre-selection. sumw stays the sum over ALL
+    #### generated events (the cross-section denominator).
+    FLAT_PTHAT_RATIO_MAX = 3.0
+
+    def _drop_flat_pthat_outliers(self, out, datastr, dataset, events):
+        """Veto pT-hat weight outliers in flat samples; no-op otherwise."""
+        if (not self.do_gen or "Flat" not in dataset or "Generator" not in events.fields
+                or "binvar" not in events.Generator.fields):
+            return events
+        pthat = ak.to_numpy(events.Generator.binvar)
+        lead_gen = ak.to_numpy(ak.fill_none(ak.firsts(events.GenJetAK8.pt), 0.0))
+        lead_reco = ak.to_numpy(ak.fill_none(ak.firsts(events.FatJet.pt), 0.0))
+        cap = self.FLAT_PTHAT_RATIO_MAX * np.where(pthat > 0, pthat, np.inf)
+        keep = (lead_gen < cap) & (lead_reco < cap)
+        out['cutflow'][datastr]['nEvents flat pthat outlier veto'] += int((~keep).sum())
+        out['cutflow'][datastr]['nEvents after flat pthat outlier veto'] += int(keep.sum())
+        return events[keep]
+
     def _accumulate_sumw(self, out, dataset, events):
         """Add this chunk's sum of generator weights to out['sumw'][dataset].
 
