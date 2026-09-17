@@ -26,7 +26,7 @@ from pathlib import Path
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from matplotlib.ticker import MaxNLocator
+from matplotlib.ticker import FormatStrFormatter, MaxNLocator, MultipleLocator
 import mplhep as hep
 import numpy as np
 
@@ -36,10 +36,10 @@ HADRONIC_ERAS = ("2016APV", "2016", "2017", "2018")
 PT_LABELS = ["185–200", "200–290", "290–400", "400–480", "480–570", "570–680",
              "680–760", "760–820", "> 820"]
 STYLE = {  # key: (label, colour, marker, linestyle, linewidth)
-    "mlm_pythia":  ("MG5 MLM + Pythia8 CP5 (CMS)", "#5790fc", "o", ":", 3.0),
-    "mlm_herwig":  ("MG5 MLM + Herwig7 CH3 (CMS)", "#e42536", "s", "-.", 3.0),
-    "flat_pythia": ("Flat Pythia8 CP5, no merging (CMS)", "#1f4e9a", "D", "-", 2.5),
-    "flat_herwig": ("Flat Herwig7 CH3, no merging (CMS)", "#8b0000", "^", "-", 2.5),
+    "mlm_pythia":  ("MG5 MLM + Pythia8 CP5", "#5790fc", "o", ":", 3.0),
+    "mlm_herwig":  ("MG5 MLM + Herwig7 CH3", "#e42536", "s", "-.", 3.0),
+    "flat_pythia": ("Flat Pythia8 CP5, no merging", "#1f4e9a", "D", "-", 2.5),
+    "flat_herwig": ("Flat Herwig7 CH3, no merging", "#8b0000", "^", "-", 2.5),
 }
 MODE_KEY = {"groomed": ("ptjet_rhojet_g_gen", "soft-drop groomed"),
             "ungroomed": ("ptjet_rhojet_u_gen", "ungroomed")}
@@ -59,9 +59,9 @@ def stamp(fig, enabled=True):
     except Exception:
         pass
     # scale the stamp with the figure width so a 1x2 grid keeps it legible
-    fig.text(0.99, 0.006, f"{datetime.date.today().isoformat()}  |  smp_jetmass_run2 {ver}  |  "
+    fig.text(0.985, 0.012, f"{datetime.date.today().isoformat()}  |  smp_jetmass_run2 {ver}  |  "
              "inputs: dijet/rho/original gen (mc, herwig, flat_herwig, flat_pythia)",
-             ha="right", va="bottom", fontsize=7 * fig.get_figwidth() / 10.0,
+             ha="right", va="bottom", fontsize=8 * fig.get_figwidth() / 10.0,
              color="0.45", family="monospace")
 
 
@@ -183,16 +183,21 @@ def main():
     print("slope (median relative to 200-290, last bin):",
           {k: round(float(med[k][-1] - med[k][1]), 3) for k in data})
 
-    def finish(ax, ylabel, note, loc="upper right"):
+    def finish(ax, ylabel, note, loc="upper right", headroom=1.5):
         hep.cms.label("", data=False, loc=2, ax=ax, rlabel=rlabel)
         ax.set_xlabel(r"$p_{T}^{jet}$ (GeV)", fontsize=PUB_LABEL_FS)
         ax.set_ylabel(ylabel, fontsize=PUB_LABEL_FS - 4)
         ax.tick_params(labelsize=PUB_TICK_FS)
         ax.set_xlim(170, 950)
+        # Labelled ticks must bracket every curve (the region below unity in
+        # particular): a fixed step chosen from the data span, the bottom limit
+        # snapped to a tick below the lowest point, headroom above for the legend.
         lo, hi = ax.get_ylim()
-        ax.set_ylim(lo - 0.02 * (hi - lo), lo + (hi - lo) * 1.55)
-        # enough labelled ticks that the region below unity can be read off
-        ax.yaxis.set_major_locator(MaxNLocator(nbins=10))
+        step = next(st for st in (0.02, 0.05, 0.1, 0.2, 0.25, 0.5, 1.0) if (hi - lo) / st <= 9)
+        bottom = np.floor(lo / step) * step
+        ax.set_ylim(bottom, bottom + (hi - bottom) * headroom)
+        ax.yaxis.set_major_locator(MultipleLocator(step))
+        ax.yaxis.set_major_formatter(FormatStrFormatter("%.2f"))
         ax.text(cms_x(ax), 0.74, note, transform=ax.transAxes, ha="left", va="top", fontsize=PUB_ANNOT_FS)
         ax.legend(loc=loc, fontsize=PUB_LEGEND_FS - 2, frameon=False, borderaxespad=1.0)
 
@@ -224,7 +229,7 @@ def main():
                     capsize=3, label=label)
     ax.axhline(0.0, color="gray", ls=":", lw=1.2)
     finish(ax, r"median $\log_{10}(\rho^2)$ relative to 200–290 GeV",
-           f"Dijet, {mode_text}, GEN\nshape per bin; tune offsets removed")
+           f"Dijet, {mode_text}, GEN\nshape per bin; tune offsets removed", headroom=1.4)
     stamp(fig, enabled=not args.no_stamp)
     out = args.outdir / f"dijet_{args.mode}_slope_flat_vs_mlm.png"
     fig.savefig(out, dpi=150); fig.savefig(out.with_suffix(".pdf")); plt.close(fig)
