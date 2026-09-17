@@ -35,7 +35,7 @@ STYLE = {
     "pythia": ("Pythia8 (CP5)", "#5790fc", ":"),
     "herwig": ("Herwig7 (CH3)", "#e42536", "-."),
 }
-MASS_MAX = {"zjet": 200.0, "dijet": 300.0, "trijet": 300.0}
+MASS_MAX = {"zjet": 200.0, "dijet": 400.0, "trijet": 400.0}
 
 
 def stamp(fig, inputs, enabled=True):
@@ -127,7 +127,10 @@ def main():
         ax, rax = axes[0, col], axes[1, col]
         edges_full = data[mode]["pythia"][2]
         keep = edges_full[1:] <= MASS_MAX[args.channel] + 1e-9
-        edges = edges_full[: int(keep.sum()) + 1]
+        if mode == "ungroomed":
+            keep &= edges_full[:-1] >= 5.0 - 1e-9   # m < 5 GeV is unphysical here
+        first = int(np.argmax(keep))
+        edges = edges_full[first: first + int(keep.sum()) + 1]
         centers = 0.5 * (edges[:-1] + edges[1:])
         curves, ymax, medians = {}, 0.0, {}
         for source, (label, color, style) in STYLE.items():
@@ -147,19 +150,28 @@ def main():
             ymax = max(ymax, float((dens + err).max()))
         print(f"  {mode:10s} " + "  ".join(f"{s}={m:6.1f}" for s, m in medians.items()))
         hep.cms.label("Preliminary", data=True, loc=2, ax=ax, rlabel=f"{args.lumi} (13 TeV)")
-        ax.set_ylabel("Normalized / GeV", fontsize=PUB_LABEL_FS)
+        ax.set_ylabel(r"$(1/N)\,dN/dm$ (GeV$^{-1}$)", fontsize=PUB_LABEL_FS)
         ax.tick_params(labelsize=PUB_TICK_FS)
-        ax.set_ylim(0, ymax * 1.6)
-        cms_x = next((t.get_position()[0] for t in ax.texts if t.get_text() == "CMS"), 0.045)
-        ax.text(cms_x, 0.66, f"{CHANNEL_LABEL[args.channel]}, {mode}, RECO\n$p_T > 200$ GeV",
-                transform=ax.transAxes, ha="left", va="top", fontsize=PUB_ANNOT_FS, zorder=6,
-                bbox=dict(facecolor="white", edgecolor="none", pad=2.0))
+        # Log axis: the tail is the point.  Floor just under the smallest
+        # drawn density; two decades of headroom keep the peak clear of the
+        # CMS block (top-left) and the legend (top-right).
+        positive = np.concatenate([d[d > 0] for d, _ in curves.values()])
+        ax.set_yscale("log")
+        ax.set_ylim(positive.min() / 3.0, ymax * 100.0)
+        # Channel/mode text under the legend, on the right, where the falling
+        # spectrum leaves the frame empty; the left is the peak.
+        ax.text(0.97, 0.70, f"{CHANNEL_LABEL[args.channel]}, {mode}, RECO\n$p_T > 200$ GeV",
+                transform=ax.transAxes, ha="right", va="top", fontsize=PUB_ANNOT_FS)
         handles, labels = ax.get_legend_handles_labels()
         order = sorted(range(len(labels)), key=lambda i: labels[i] != "Data")
         ax.legend([handles[i] for i in order], [labels[i] for i in order],
                   loc="upper right", fontsize=PUB_LEGEND_FS, frameon=False)
 
-        drawn = []
+        # Fixed [0, 3] on both panels so they read side by side; bins where
+        # either input carries > 30% error are dropped (the tail is
+        # statistics-starved); a point beyond the range is marked with a
+        # triangle at the frame in the series colour rather than silently cut.
+        top, bottom = 3.0, 0.0
         dd, ed = curves["data"]
         rel_d = np.divide(ed, dd, out=np.zeros_like(dd), where=dd > 0)
         for source in ("pythia", "herwig"):
@@ -167,18 +179,24 @@ def main():
             ratio = np.divide(dd, ds, out=np.full_like(dd, np.nan), where=ds > 0)
             rel_s = np.divide(es, ds, out=np.zeros_like(ds), where=ds > 0)
             err = np.abs(ratio) * np.sqrt(rel_d ** 2 + rel_s ** 2)
-            usable = np.isfinite(ratio) & (rel_s < 0.5) & (rel_d < 0.5) & (dd > 0)
-            rax.stairs(np.where(usable, ratio, np.nan), edges, color=STYLE[source][1], lw=2.5,
-                       ls=STYLE[source][2], baseline=None)
-            rax.errorbar(centers[usable], ratio[usable], yerr=err[usable], fmt="none",
-                         ecolor=STYLE[source][1], elinewidth=1.2, capsize=2)
-            drawn.extend([(ratio + err)[usable], (ratio - err)[usable]])
+            usable = np.isfinite(ratio) & (rel_s < 0.3) & (rel_d < 0.3) & (dd > 0)
+            inside = usable & (ratio - err >= bottom) & (ratio + err <= top)
+            color, style = STYLE[source][1], STYLE[source][2]
+            rax.stairs(np.where(usable, np.clip(ratio, bottom, top), np.nan), edges,
+                       color=color, lw=2.5, ls=style, baseline=None)
+            rax.errorbar(centers[inside], ratio[inside], yerr=err[inside], fmt="none",
+                         ecolor=color, elinewidth=1.2, capsize=2)
+            over = usable & ~inside
+            if over.any():
+                high = over & (ratio + err > top)
+                low = over & (ratio - err < bottom)
+                rax.plot(centers[high], np.full(high.sum(), top - 0.05 * (top - bottom)),
+                         marker="^", ls="none", color=color, ms=7, clip_on=True)
+                rax.plot(centers[low], np.full(low.sum(), bottom + 0.05 * (top - bottom)),
+                         marker="v", ls="none", color=color, ms=7, clip_on=True)
         rax.axhline(1.0, color="gray", ls="--", lw=1)
-        flat = np.concatenate(drawn)
-        flat = flat[np.isfinite(flat)]
-        if flat.size:
-            pad = 0.18 * max(flat.max() - flat.min(), 0.2)
-            rax.set_ylim(max(0.0, flat.min() - pad), min(flat.max() + pad, 3.0))
+        rax.set_ylim(bottom, top)
+        rax.set_yticks([0.5, 1.0, 1.5, 2.0, 2.5])
         rax.set_ylabel("Data / MC", fontsize=PUB_LABEL_FS - 4)
         rax.set_xlabel(("Soft-drop " if mode == "groomed" else "Ungroomed ") + "jet mass (GeV)",
                        fontsize=PUB_LABEL_FS)
