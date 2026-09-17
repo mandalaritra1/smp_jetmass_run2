@@ -88,8 +88,10 @@ def rebin(edges, values, variances, target):
             np.array([var[a:b].sum() for a, b in zip(idx[:-1], idx[1:])]))
 
 
-def production(inputs_root, gen):
-    h = pickle.load(open(Path(inputs_root) / "zjet/rho/original" / f"{gen}_all.pkl", "rb"))["ptjet_rhojet_g_gen"]
+def production(inputs_root, gen, fine=False):
+    path = (Path(inputs_root) / "zjet/model/finebins" / f"minimal_rho_fine_{gen}_2018.pkl" if fine
+            else Path(inputs_root) / "zjet/rho/original" / f"{gen}_all.pkl")
+    h = pickle.load(open(path, "rb"))["ptjet_rhojet_g_gen"]
     names = [a.name for a in h.axes]
     index = {}
     if "dataset" in names:
@@ -97,11 +99,16 @@ def production(inputs_root, gen):
     if "systematic" in names:
         index["systematic"] = "nominal" if "nominal" in list(h.axes["systematic"]) else sum
     h = h[index]
-    edges = h.axes["mpt_gen"].edges
+    edges = np.asarray(h.axes["mpt_gen"].edges, float)
     out = {}
     for key, i, _ in PT_BINS:
         v, var = np.asarray(h.values())[i], np.asarray(h.variances())[i]
-        out[key] = rebin(edges, v, var, COMMON_EDGES)
+        if fine:
+            # keep the fine lattice from -5 up; below it use the coarse buffer bins
+            target = np.concatenate((COMMON_EDGES[COMMON_EDGES < -5.0], edges[edges >= -5.0 - 1e-9]))
+            out[key] = (target,) + rebin(edges, v, var, target)
+        else:
+            out[key] = (COMMON_EDGES,) + rebin(edges, v, var, COMMON_EDGES)
     return out
 
 
@@ -112,7 +119,7 @@ def rivet(path):
         edges, v, e = y[f"/CMS_ZJET_JETMASS/rho_g_{key}"]
         widths = np.diff(edges)
         # yoda estimates are dsigma/dx: convert to per-bin content before summing
-        out[key] = rebin(edges, v * widths, (e * widths) ** 2, COMMON_EDGES)
+        out[key] = (COMMON_EDGES,) + rebin(edges, v * widths, (e * widths) ** 2, COMMON_EDGES)
     return out
 
 
@@ -123,36 +130,47 @@ def main():
     ap.add_argument("--outdir", type=Path, default=Path("outputs/plots/gen_rho_generators"))
     ap.add_argument("--rho-floor", type=float, default=-5.0)
     ap.add_argument("--with-lo", action="store_true")
+    ap.add_argument("--fine", action="store_true",
+                    help="CMS MLM curves from the 0.125-wide 2018 fine pickles; the standalone Herwig stays at 0.5")
     ap.add_argument("--no-stamp", action="store_true")
     args = ap.parse_args()
     args.outdir.mkdir(parents=True, exist_ok=True)
 
-    data = {"mlm_pythia": production(args.inputs, "pythia"),
-            "mlm_herwig": production(args.inputs, "herwig"),
+    data = {"mlm_pythia": production(args.inputs, "pythia", fine=args.fine),
+            "mlm_herwig": production(args.inputs, "herwig", fine=args.fine),
             "sa_herwig": rivet(args.rivet_out / "herwig_ch3.yoda")}
     if args.with_lo:
         data["lo_pythia"] = rivet(args.rivet_out / "_norm/mglo_pythia_sliced.yoda")
-    keep = 0.5 * (COMMON_EDGES[:-1] + COMMON_EDGES[1:]) > args.rho_floor
-    first = int(np.argmax(keep))
-    edges = COMMON_EDGES[first:]
-    widths = np.diff(edges)
-    centers = 0.5 * (edges[:-1] + edges[1:])
+
+    def shown(all_edges, v, var):
+        """Drop the bins below the floor; return (edges, values, variances)."""
+        keep = 0.5 * (all_edges[:-1] + all_edges[1:]) > args.rho_floor
+        first = int(np.argmax(keep))
+        return all_edges[first:], v[keep], var[keep]
+
+    def to_edges(edges_src, dens_src, target):
+        """Piecewise-constant density resampled onto a finer `target` grid (for the ratio)."""
+        c = 0.5 * (target[:-1] + target[1:])
+        idx = np.clip(np.searchsorted(edges_src, c) - 1, 0, len(dens_src) - 1)
+        return dens_src[idx]
 
     fig, axes = plt.subplots(2, 3, sharex="col", layout="constrained", figsize=(31, 11.5),
                              gridspec_kw={"height_ratios": [3, 1], "hspace": 0.07})
     print(f"{'pT bin':12s} {'series':38s} {'median rho':>11s}")
     for col, (key, _, label) in enumerate(PT_BINS):
         ax, rax = axes[0, col], axes[1, col]
-        dens, errs = {}, {}
+        dens, errs, grids, raw = {}, {}, {}, {}
         for series, (name, color, style, lw) in STYLE.items():
             if series not in data:
                 continue
-            v, var = data[series][key]
-            v, var = v[keep], var[keep]
+            all_edges, v_all, var_all = data[series][key]
+            edges, v, var = shown(np.asarray(all_edges, float), v_all, var_all)
+            widths = np.diff(edges)
+            centers = 0.5 * (edges[:-1] + edges[1:])
             total = v.sum()
             d = v / widths / total
             e = np.sqrt(np.clip(var, 0, None)) / widths / total
-            dens[series], errs[series] = d, e
+            dens[series], errs[series], grids[series], raw[series] = d, e, edges, (v, var)
             ax.stairs(d, edges, color=color, ls=style, lw=lw, label=name, baseline=None)
             ax.errorbar(centers, d, yerr=e, fmt="none", ecolor=color, elinewidth=1.0, capsize=2)
             med = float(np.interp(0.5, np.cumsum(v) / total, centers))
@@ -163,20 +181,36 @@ def main():
         ymax = max(float((d + e).max()) for d, e in zip(dens.values(), errs.values()))
         ax.set_ylim(0, ymax * 1.75)
         cms_x = next((t.get_position()[0] for t in ax.texts if t.get_text() == "CMS"), 0.045)
-        ax.text(cms_x, 0.70, f"Z+jet, groomed, particle level\n{label}", transform=ax.transAxes,
-                ha="left", va="top", fontsize=PUB_ANNOT_FS - 2)
+        note = f"Z+jet, groomed, particle level\n{label}"
+        if args.fine:
+            note += "\nCMS curves: 2018, 0.125-wide bins"
+        ax.text(cms_x, 0.70, note, transform=ax.transAxes, ha="left", va="top",
+                fontsize=PUB_ANNOT_FS - 2)
         ax.legend(loc="upper right", fontsize=PUB_LEGEND_FS - 3, frameon=False)
-        ref, ref_err = dens["mlm_pythia"], errs["mlm_pythia"]
-        rel_ref = np.divide(ref_err, ref, out=np.zeros_like(ref), where=ref > 0)
+        # Each ratio on the numerator's own grid: a coarser series gets the
+        # reference rebinned onto its bins, so a wide bin is compared with the
+        # reference summed over the same interval rather than with a fine slice.
+        ref_edges_full = grids["mlm_pythia"]
+        ref_v, ref_var = raw["mlm_pythia"]
         for series in dens:
             if series == "mlm_pythia":
                 continue
+            g = grids[series]
+            if len(g) == len(ref_edges_full) and np.allclose(g, ref_edges_full):
+                rv, rvar = ref_v, ref_var
+            else:
+                rv, rvar = rebin(ref_edges_full, ref_v, ref_var, g)
+            w = np.diff(g)
+            rd = rv / w / rv.sum()
+            re_ = np.sqrt(np.clip(rvar, 0, None)) / w / rv.sum()
             d, e = dens[series], errs[series]
-            ratio = np.divide(d, ref, out=np.full_like(d, np.nan), where=ref > 0)
+            ratio = np.divide(d, rd, out=np.full_like(d, np.nan), where=rd > 0)
             rel = np.divide(e, d, out=np.zeros_like(d), where=d > 0)
+            rel_ref = np.divide(re_, rd, out=np.zeros_like(rd), where=rd > 0)
             color, style, lw = STYLE[series][1], STYLE[series][2], STYLE[series][3]
-            rax.stairs(ratio, edges, color=color, ls=style, lw=lw, baseline=None)
-            rax.errorbar(centers, ratio, yerr=np.abs(ratio) * np.sqrt(rel ** 2 + rel_ref ** 2),
+            rax.stairs(ratio, g, color=color, ls=style, lw=lw, baseline=None)
+            rax.errorbar(0.5 * (g[:-1] + g[1:]), ratio,
+                         yerr=np.abs(ratio) * np.sqrt(rel ** 2 + rel_ref ** 2),
                          fmt="none", ecolor=color, elinewidth=1.0, capsize=2)
         rax.axhline(1.0, color="gray", ls="--", lw=1)
         rax.set_ylim(0.0, 2.5)
@@ -185,7 +219,7 @@ def main():
         rax.set_xlabel(r"$\log_{10}(\rho^{2}) = 2\log_{10}(m/(p_{T}R))$", fontsize=PUB_LABEL_FS)
         rax.tick_params(labelsize=PUB_TICK_FS)
     stamp(fig, enabled=not args.no_stamp)
-    out = args.outdir / f"gen_rho_merged_vs_unmerged{'_with_lo' if args.with_lo else ''}.png"
+    out = args.outdir / f"gen_rho_merged_vs_unmerged{'_with_lo' if args.with_lo else ''}{'_fine' if args.fine else ''}.png"
     fig.savefig(out, dpi=150)
     fig.savefig(out.with_suffix(".pdf"))
     print(f"\nwrote {out}")
