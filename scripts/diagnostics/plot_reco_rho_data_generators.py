@@ -106,11 +106,21 @@ def pt_label(lo, hi):
             else rf"$p_{{T}}^{{jet}} > {lo:.0f}$ GeV")
 
 
-def panel(data, mode, pt_index, lo, hi, edges, outdir, channel, lumi, no_stamp):
+JET_R = 0.8
+
+
+def panel(data, mode, pt_index, lo, hi, edges, outdir, channel, lumi, no_stamp,
+          mass_axis=False):
+    """One pT bin.  With ``mass_axis`` the rho edges are mapped to the
+    soft-drop mass in GeV at the bin's central pT, m = pT R 10^(rho/2): the
+    same histogram on a log mass axis, density per GeV."""
     fig, (ax, rax) = plt.subplots(
         2, 1, sharex=True, layout="constrained",
         gridspec_kw={"height_ratios": [3, 1], "hspace": 0.07})
-    centers = 0.5 * (edges[:-1] + edges[1:])
+    pt_ref = 0.5 * (lo + min(hi, 1000.0))
+    if mass_axis:
+        edges = pt_ref * JET_R * 10 ** (np.asarray(edges, dtype=float) / 2)
+    centers = np.sqrt(edges[:-1] * edges[1:]) if mass_axis else 0.5 * (edges[:-1] + edges[1:])
     curves, ymax = {}, 0.0
     for source, (label, color, style, marker) in STYLE.items():
         values, variances = data[source]
@@ -129,13 +139,28 @@ def panel(data, mode, pt_index, lo, hi, edges, outdir, channel, lumi, no_stamp):
         ymax = max(ymax, float((dens + err).max()))
 
     hep.cms.label("Preliminary", data=True, loc=2, ax=ax, rlabel=f"{lumi} (13 TeV)")
-    ax.set_ylabel("Normalized", fontsize=PUB_LABEL_FS)
     ax.tick_params(labelsize=PUB_TICK_FS)
-    ax.set_ylim(0, ymax * 1.55)
-    cms_x = next((t.get_position()[0] for t in ax.texts if t.get_text() == "CMS"), 0.045)
-    ax.text(cms_x, 0.66, f"{CHANNEL_LABEL[channel]}, {mode}, RECO\n{pt_label(lo, hi)}",
-            transform=ax.transAxes, ha="left", va="top", fontsize=PUB_ANNOT_FS,
-            zorder=6, bbox=dict(facecolor="white", edgecolor="none", pad=2.0))
+    if mass_axis:
+        ax.set_xscale("log")
+        ax.set_yscale("log")
+        ax.set_ylabel(r"$(1/N)\,dN/dm$ (GeV$^{-1}$)", fontsize=PUB_LABEL_FS)
+        positive = np.concatenate([d[d > 0] for d, _ in curves.values()])
+        ax.set_ylim(positive.min() / 3.0, ymax * 100.0)
+        ax.set_xlim(edges[0], edges[-1])
+        ticks = [t for t in (2, 5, 10, 20, 50, 100, 200, 500) if edges[0] <= t <= edges[-1]]
+        ax.set_xticks(ticks)
+        ax.set_xticklabels([str(t) for t in ticks])
+        note = (f"{CHANNEL_LABEL[channel]}, {mode}, RECO\n{pt_label(lo, hi)}\n"
+                rf"$m = p_T R\,10^{{\rho/2}}$ at $p_T$ = {pt_ref:.0f} GeV")
+        ax.text(0.97, 0.70, note, transform=ax.transAxes, ha="right", va="top",
+                fontsize=PUB_ANNOT_FS - 2)
+    else:
+        ax.set_ylabel("Normalized", fontsize=PUB_LABEL_FS)
+        ax.set_ylim(0, ymax * 1.55)
+        cms_x = next((t.get_position()[0] for t in ax.texts if t.get_text() == "CMS"), 0.045)
+        ax.text(cms_x, 0.66, f"{CHANNEL_LABEL[channel]}, {mode}, RECO\n{pt_label(lo, hi)}",
+                transform=ax.transAxes, ha="left", va="top", fontsize=PUB_ANNOT_FS,
+                zorder=6, bbox=dict(facecolor="white", edgecolor="none", pad=2.0))
     handles, labels = ax.get_legend_handles_labels()
     order = sorted(range(len(labels)), key=lambda i: labels[i] != "Data")
     ax.legend([handles[i] for i in order], [labels[i] for i in order],
@@ -167,12 +192,19 @@ def panel(data, mode, pt_index, lo, hi, edges, outdir, channel, lumi, no_stamp):
             pad = 0.18 * max(flat.max() - flat.min(), 0.2)
             rax.set_ylim(max(0.0, flat.min() - pad), flat.max() + pad)
     rax.set_ylabel("Data / MC", fontsize=PUB_LABEL_FS - 4)
-    rax.set_xlabel(r"$\log_{10}(\rho^{2}) = 2\log_{10}(m/(p_{T}R))$, RECO",
-                   fontsize=PUB_LABEL_FS)
+    if mass_axis:
+        rax.set_xlabel(("Soft-drop" if mode == "groomed" else "Ungroomed") + " jet mass (GeV)",
+                       fontsize=PUB_LABEL_FS)
+        rax.set_xscale("log")
+        rax.set_xticks(ticks)
+        rax.set_xticklabels([str(t) for t in ticks])
+    else:
+        rax.set_xlabel(r"$\log_{10}(\rho^{2}) = 2\log_{10}(m/(p_{T}R))$, RECO",
+                       fontsize=PUB_LABEL_FS)
     rax.tick_params(labelsize=PUB_TICK_FS)
 
     stamp(fig, f"{channel}/rho/original reco", enabled=not no_stamp)
-    out = Path(outdir) / f"reco_rho_{channel}_{mode}_pt{pt_index}.png"
+    out = Path(outdir) / f"reco_{'mass' if mass_axis else 'rho'}_{channel}_{mode}_pt{pt_index}.png"
     fig.savefig(out, dpi=150)
     fig.savefig(out.with_suffix(".pdf"))
     plt.close(fig)
@@ -187,6 +219,8 @@ def main():
     ap.add_argument("--modes", default="groomed")
     ap.add_argument("--rho-floor", type=float, default=-5.0)
     ap.add_argument("--lumi", default=r"138 fb$^{-1}$")
+    ap.add_argument("--mass-axis", action="store_true",
+                    help="draw each pT bin on a log mass axis in GeV (m = pT R 10^(rho/2) at the bin centre)")
     ap.add_argument("--no-stamp", action="store_true")
     args = ap.parse_args()
     args.outdir.mkdir(parents=True, exist_ok=True)
@@ -203,7 +237,7 @@ def main():
         centers = 0.5 * (edges[:-1] + edges[1:])
         for i, (lo, hi) in enumerate(zip(pt_edges[:-1], pt_edges[1:])):
             made.append(panel(sliced, mode, i, lo, hi, edges, args.outdir,
-                              args.channel, args.lumi, args.no_stamp))
+                              args.channel, args.lumi, args.no_stamp, mass_axis=args.mass_axis))
             med = {}
             for source in ("data", "pythia", "herwig"):
                 v = np.clip(sliced[source][0][i], 0.0, None)
