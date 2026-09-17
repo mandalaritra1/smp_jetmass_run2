@@ -1,0 +1,21 @@
+{
+  "_comment": "Central flat-pT Pythia8 CP5 QCD (pT-hat 15-7000, STANDALONE shower, no MadGraph, no MLM merging), 2018, dijet minimal_rho on LPC condor (2026-09-17). Purpose: test whether the pT drift of the soft-drop groomed mass in the MLM+Herwig7 samples is made by the merging (compare Flat-Herwig7/Flat-Pythia8 against MLM-Herwig7/MLM-Pythia8 per pT bin). Nominal only (no_syst). genWeight is the pT-hat weight, normalized by the on-the-fly sumw. Everything else mirrors dijet_herwig_2018_minimal_rho_lpc.json so the axes match the production pickles: processor-default pair_split selection, the 2026-08-27 aligned groomed rho lattice and the 185 GeV pT sink. The fileset URLs are fully qualified root://cmsxrootd.fnal.gov. Output stages as unfold_inputs/dijet/rho/original/2018/dijet_flat_pythia/.",
+  "channel": "dijet",
+  "dataset": "pythia_flat",
+  "era": "2018",
+  "mode": "minimal_rho",
+  "systematic_profile": "no_syst",
+  "executor_mode": "dask-lpc",
+  "casa": false,
+  "test": false,
+  "useDefault": false,
+  "chunksize": 25000,
+  "chunksize_test": 50000,
+  "group_mode": "all_in_one",
+  "redirector": "lpc",
+  "prependstr": "root://cmsxrootd.fnal.gov/",
+  "worker_memory": "4 GiB",
+  "n_workers": 100,
+  "worker_merge": 4,
+  "treereduce": false
+}

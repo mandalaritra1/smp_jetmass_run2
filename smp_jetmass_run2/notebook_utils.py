@@ -62,6 +62,10 @@ DATASET_OPTIONS = [
     "st",
     "powheg",
     "backgrounds",
+    # hadronic only: the central flat-pT QCD samples showered STANDALONE (no
+    # MadGraph, no MLM merging) -- the merging-vs-shower test (2026-09-17)
+    "herwig_flat",
+    "pythia_flat",
 ]
 
 ERA_OPTIONS = ["2016", "2016APV", "2017", "2018", "all"]
@@ -473,6 +477,11 @@ HADRONIC_FILESETS = {
     "pythia": {"default": "fileset_QCD_wRedirs.json", "casa": "fileset_QCD.json"},
     "mg_pythia8": {"default": "fileset_MG_pythia8_wRedirs.json", "casa": "fileset_MG_pythia8.json"},
     "herwig": {"default": "fileset_HERWIG_wRedirs.json"},
+    # Flat-pT (pT-hat 15-7000) QCD, standalone shower, no MLM: 2018 only so far.
+    # genWeight carries the pT-hat weight, so the on-the-fly sumw normalization
+    # applies unchanged; the URLs are fully qualified root://cmsxrootd.fnal.gov.
+    "herwig_flat": {"default": "fileset_HERWIG_FLAT_wRedirs.json"},
+    "pythia_flat": {"default": "fileset_PYTHIA_FLAT_wRedirs.json"},
     "data": {"default": "fileset_JetHT_wRedirs.json", "casa": "fileset_JetHT.json"},
 }
 HADRONIC_MODE_ALIASES = {

@@ -1424,6 +1424,10 @@ xsdb = {
     'QCD_HT1500to2000_TuneCP5_13TeV-madgraphMLM-pythia8': 109.4,
     'QCD_HT2000toInf_TuneCP5_13TeV-madgraphMLM-pythia8': 21.74,
     'QCD_Pt-15to7000_TuneCH3_Flat_13TeV_herwig7': 1329000000.0,
+    #### flat-pT pythia8 (pT-hat 15-7000, standalone shower, no MLM); XSDB
+    #### total for the pT-hat > 15 GeV slice. Added 2026-09-17 for the
+    #### merging-vs-shower test, where only per-pT-bin SHAPES are used.
+    'QCD_Pt-15to7000_TuneCP5_Flat2018_13TeV_pythia8': 1370000000.0,
     'WJetsToLNu_TuneCP5_13TeV-madgraphMLM-pythia8': 53940.0,
     'ZJetsToNuNu_HT-100To200_TuneCP5_13TeV-madgraphMLM-pythia8': 271.3,
     'ZJetsToNuNu_HT-200To400_TuneCP5_13TeV-madgraphMLM-pythia8': 72.69,
