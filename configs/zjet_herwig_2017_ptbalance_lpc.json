@@ -1,0 +1,22 @@
+{
+  "_comment": "Gen-level Z/jet pT-balance diagnostic (2026-09-17, Garvita's HERWIG request). Validation mode, nominal only: fills ptfrac_gen_{pre,post}, ptasym_gen_{pre,post}, dphi_gen_{pre,post}. LPC condor (casa down). Output stages as unfold_inputs/zjet/validation/ptbalance_gen_20260917/herwig_2017.pkl.",
+  "channel": "zjet",
+  "dataset": "herwig",
+  "era": "2017",
+  "mode": "validation",
+  "systematic_profile": "no_syst",
+  "executor_mode": "dask-lpc",
+  "casa": false,
+  "test": false,
+  "useDefault": false,
+  "chunksize": 50000,
+  "chunksize_test": 200000,
+  "group_mode": "all_in_one",
+  "redirector": "lpc",
+  "prependstr": "root://cmsxrootd.fnal.gov/",
+  "rho_refine": 1,
+  "worker_memory": "4 GiB",
+  "worker_merge": 4,
+  "n_workers": 250,
+  "treereduce": false
+}
