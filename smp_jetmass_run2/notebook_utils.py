@@ -565,12 +565,13 @@ def build_hadronic_fileset(
             urls = []
             for path in files:
                 if path.startswith("root://"):
-                    # Some legacy filesets (currently Herwig) contain fully
-                    # qualified global-redirector URLs and have no separate
-                    # Casa JSON. Route their /store paths through the Casa
-                    # xcache instead of preserving the remote redirector.
+                    # Some filesets (HERWIG, the flat-pT samples) carry fully
+                    # qualified root://cmsxrootd.fnal.gov URLs and have no
+                    # separate Casa JSON. Re-route their /store paths through
+                    # the Casa xcache or the CERN global redirector; at LPC
+                    # (or any other redirector) they are preserved as-is.
                     store_marker = path.find("/store/")
-                    if redirector == "casa" and store_marker >= 0:
+                    if redirector in ("casa", "lxplus") and store_marker >= 0:
                         urls.append(
                             prepend.rstrip("/") + "/" + path[store_marker:]
                         )

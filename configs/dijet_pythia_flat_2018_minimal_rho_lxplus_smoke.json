@@ -1,0 +1,18 @@
+{
+  "_comment": "Smoke test of dijet_pythia_flat_2018_minimal_rho_lpc.json: first file of the Pythia8 CP5 sample, one chunk, local futures executor in the LCG_110 view on an lxplus node (no condor). Confirms the flat-sample code paths (pT-hat genWeight, no LHE branches, dummy/4-entry PSWeight) and that the output axes match unfold_inputs/dijet/rho/original/2018/dijet_mc/minimal_rho_dijet_mg_pythia8_2018.pkl bin for bin. Not a physics output.",
+  "channel": "dijet",
+  "dataset": "pythia_flat",
+  "era": "2018",
+  "mode": "minimal_rho",
+  "systematic_profile": "no_syst",
+  "executor_mode": "futures",
+  "casa": false,
+  "test": true,
+  "useDefault": false,
+  "chunksize": 25000,
+  "chunksize_test": 50000,
+  "group_mode": "all_in_one",
+  "redirector": "lxplus",
+  "prependstr": "root://cms-xrd-global.cern.ch/",
+  "treereduce": false
+}
