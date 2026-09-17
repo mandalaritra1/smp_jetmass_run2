@@ -154,9 +154,10 @@ def main():
     ax.set_xlim(200, 800)
     lo, hi = ax.get_ylim()
     ax.set_ylim(lo - 0.05, hi + 0.55 * (hi - lo))
+    # Lower left is empty: every curve starts at 0 and falls to the right.
     cms_x = next((t.get_position()[0] for t in ax.texts if t.get_text() == "CMS"), 0.045)
-    ax.text(cms_x, 0.80, "Z+jet, soft-drop groomed, particle level\nshape per bin; tune offsets removed",
-            transform=ax.transAxes, ha="left", va="top", fontsize=PUB_ANNOT_FS - 2)
+    ax.text(cms_x, 0.04, "Z+jet, soft-drop groomed, particle level\nshape per bin; tune offsets removed",
+            transform=ax.transAxes, ha="left", va="bottom", fontsize=PUB_ANNOT_FS - 2)
     ax.legend(loc="upper right", fontsize=PUB_LEGEND_FS - 3, frameon=False, ncol=1)
     stamp(fig, enabled=not args.no_stamp)
     out = args.outdir / f"gen_groomed_slope_generators{'_with_data' if args.with_data else ''}.png"
