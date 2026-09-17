@@ -29,6 +29,15 @@ Paths: `smp` = `~/Projects/smp_jetmass_run2`, `docs` = `~/Projects/smp25010-docs
 | Uncertainty budgets with the JES curve added (era-correlated propagation) | `smp/outputs/figs/hadronic_rho_pairsplit_run2/jes_update/` |
 | Numbers behind the plots (per-bin tables, check register, config comparison, per-era chi2, JES per-source shifts) | `smp/outputs/pairsplit_unfold/phaseA_summary.md`, `phaseB_summary.md`, `*.json` |
 
+## Herwig7 groomed-mass pT drift: merging vs shower (2026-09-17)
+
+| Description | Location |
+|---|---|
+| Dijet gen-level flat-vs-MLM figure set, groomed and ungroomed: median mass ratio Herwig7/Pythia8 for the flat (unmerged) and the MLM pair plus flat/MLM per shower (`dijet_<mode>_mass_ratio_flat_vs_mlm`), median slope per sample relative to 200-290 GeV (`dijet_<mode>_slope_flat_vs_mlm`), per-pT-bin shapes with ratio to MLM+Pythia8 (`dijet_<mode>_shape_pt<i>`, nine panels) | `smp/outputs/plots/dijet_flat_vs_mlm/` (PNG + PDF), copies in `~/Projects/research-notes/attachments/herwig_groomed_mass_2026-09-17/` |
+| Producer | `smp/scripts/diagnostics/plot_dijet_groomed_flat_vs_mlm.py --mode groomed|ungroomed [--mlm-eras all]`; prints the per-bin median/n_eff/ratio table |
+| Inputs: the flat-pT standalone-shower pickles (2018, no MLM), with manifest | `~/cernbox/unfold_inputs/dijet/rho/original/2018/dijet_flat_{herwig,pythia}/`, `.../dijet/rho/original/flat_manifest.json` |
+| Z+jet counterpart (Rivet unmerged runs) | `smp/scripts/diagnostics/plot_zjet_groomed_slope_generators.py`, `plot_zjet_gen_rho_merged_vs_unmerged.py` -> `smp/outputs/plots/gen_rho_generators/` |
+
 ## Superseded but kept
 
 | Description | Location |
