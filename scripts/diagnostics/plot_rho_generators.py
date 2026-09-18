@@ -495,7 +495,7 @@ def main():
             pt_ref = 0.5 * (k[0] + min(k[1], 1000.0))
             to_x = (lambda e: pt_ref * JET_R * 10 ** (np.asarray(e, float) / 2)) if args.mass_axis else (lambda e: np.asarray(e, float))
             ref_e, ref_v, ref_var = above(*data[args.reference][k], args.rho_floor)
-            ymax, tops, drawn = 0.0, [], False
+            ymax, tops, drawn, omitted = 0.0, [], False, False
             for n in names:
                 if k not in data[n]:
                     continue
@@ -529,7 +529,15 @@ def main():
                 ry, rye = rv / rtot / w, np.sqrt(np.clip(rvar, 0, None)) / rtot / w
                 with np.errstate(divide="ignore", invalid="ignore"):
                     r = np.where(ry > 0, y / ry, np.nan)
-                    re_ = np.where(ry > 0, np.abs(r) * np.sqrt((ye / np.where(y > 0, y, 1)) ** 2 + (rye / ry) ** 2), np.nan)
+                    rel_n = np.where(y > 0, ye / np.where(y > 0, y, 1), np.inf)
+                    rel_r = np.where(ry > 0, rye / np.where(ry > 0, ry, 1), np.inf)
+                    re_ = np.where(ry > 0, np.abs(r) * np.sqrt(rel_n ** 2 + rel_r ** 2), np.nan)
+                # a bin where either side carries more than 50% MC error says nothing
+                # about the shape and would set the panel range for everything else
+                usable = np.isfinite(r) & (rel_n < 0.5) & (rel_r < 0.5)
+                if (~usable & np.isfinite(r)).any():
+                    omitted = True
+                r, re_ = np.where(usable, r, np.nan), np.where(usable, re_, np.nan)
                 if pts:
                     rax.errorbar(c, r, yerr=re_, fmt="o", color=color, ms=7, capsize=2, zorder=6)
                 else:
@@ -557,6 +565,10 @@ def main():
             ax.tick_params(labelsize=PUB_TICK_FS, labelbottom=False)
             ax.legend(loc="upper right", **{**legend_kw, "fontsize": PUB_LEGEND_FS - (6 if many else 3)})
             rax.axhline(1.0, color="gray", ls=":", lw=1.2)
+            if omitted:
+                rax.text(0.02, 0.94, "bins with >50% MC error omitted", transform=rax.transAxes, ha="left", va="top",
+                         fontsize=PUB_LEGEND_FS - 4, color="0.45",
+                         bbox=dict(facecolor="white", edgecolor="none", alpha=0.85, pad=1.5))
             rax.set_ylabel(f"ratio to {SERIES[args.reference]['label'].split(',')[0]}", fontsize=PUB_LABEL_FS - 8)
             rax.tick_params(labelsize=PUB_TICK_FS - 4)
             rlo, rhi = rax.get_ylim()
