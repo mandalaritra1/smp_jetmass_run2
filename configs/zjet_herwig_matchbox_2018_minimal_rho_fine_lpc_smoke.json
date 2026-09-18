@@ -1,0 +1,18 @@
+{
+  "_comment": "Smoke test of zjet_herwig_matchbox_2018_minimal_rho_fine_lpc.json: first file, local futures in the LPC container.",
+  "dataset": "herwig_matchbox",
+  "channel": "zjet",
+  "era": "2018",
+  "mode": "minimal_rho_fine",
+  "systematic_profile": "no_syst",
+  "executor_mode": "futures",
+  "casa": false,
+  "test": true,
+  "useDefault": false,
+  "chunksize": 50000,
+  "chunksize_test": 200000,
+  "group_mode": "all_in_one",
+  "redirector": "lpc",
+  "prependstr": "root://cmsxrootd.fnal.gov/",
+  "treereduce": false
+}

@@ -1,0 +1,21 @@
+{
+  "_comment": "Fine-rho version (minimal_rho_fine: 4x rho bins, 48 gen / 96 reco, same pT axes and selection as minimal_rho) of the 2018 Z+jet generator comparison for the Herwig7 groomed-mass pT drift (2026-09-18): Pythia8 MLM, Herwig7 MLM and the NLO Matchbox Herwig7 sample produced together on LPC condor with the same code so the three pickles are directly comparable. Nominal only. Output stages as unfold_inputs/zjet/rho/fine/2018/ with a manifest.",
+  "dataset": "pythia",
+  "channel": "zjet",
+  "era": "2018",
+  "mode": "minimal_rho_fine",
+  "systematic_profile": "no_syst",
+  "executor_mode": "dask-lpc",
+  "casa": false,
+  "test": false,
+  "useDefault": false,
+  "chunksize": 50000,
+  "chunksize_test": 200000,
+  "group_mode": "all_in_one",
+  "redirector": "lpc",
+  "prependstr": "root://cmsxrootd.fnal.gov/",
+  "worker_memory": "4 GiB",
+  "worker_merge": 4,
+  "treereduce": false,
+  "n_workers": 200
+}
