@@ -60,31 +60,31 @@ LUMI = {"2018": r"59.8 fb$^{-1}$", "all": r"138 fb$^{-1}$"}
 #   kind "yoda": a Rivet yoda under --rivet-out with the CMS_ZJET_JETMASS rho_{g,u}_<bin> objects
 #   kind "unfolded": the unfold repo's unfolded 2D result (groomed only)
 SERIES = {
-    "mlm_pythia": dict(label="MG5 MLM + Pythia8 CP5", color="#5790fc", marker="o", ls=":", lw=3.0, kind="prod", gen="pythia"),
-    "mlm_herwig": dict(label="MG5 MLM + Herwig7 CH3", color="#e42536", marker="s", ls="-.", lw=3.0, kind="prod", gen="herwig"),
-    "data": dict(label="Data", color="black", marker="o", ls="-", lw=0.0, kind="prod", gen="data", points=True),
-    "flat_pythia": dict(label="Flat Pythia8 CP5, no merging", color="#1f4e9a", marker="D", ls="-", lw=2.5, kind="pickle",
+    "mlm_pythia": dict(short="MLM Pythia8", label="MG5 MLM + Pythia8 CP5", color="#5790fc", marker="o", ls=":", lw=3.0, kind="prod", gen="pythia"),
+    "mlm_herwig": dict(short="MLM Herwig7", label="MG5 MLM + Herwig7 CH3", color="#e42536", marker="s", ls="-.", lw=3.0, kind="prod", gen="herwig"),
+    "data": dict(short="Data", label="Data", color="black", marker="o", ls="-", lw=0.0, kind="prod", gen="data", points=True),
+    "flat_pythia": dict(short="Flat Pythia8", label="Flat Pythia8 CP5, no merging", color="#1f4e9a", marker="D", ls="-", lw=2.5, kind="pickle",
                         path="dijet/rho/original/2018/dijet_flat_pythia/minimal_rho_dijet_flat_pythia8_2018.pkl", open=True),
-    "flat_herwig": dict(label="Flat Herwig7 CH3, no merging", color="#8b0000", marker="^", ls="-", lw=2.5, kind="pickle",
+    "flat_herwig": dict(short="Flat Herwig7", label="Flat Herwig7 CH3, no merging", color="#8b0000", marker="^", ls="-", lw=2.5, kind="pickle",
                         path="dijet/rho/original/2018/dijet_flat_herwig/minimal_rho_dijet_flat_herwig_2018.pkl", open=True),
-    "matchbox": dict(label="Matchbox NLO + Herwig7 CH3, no MLM", color="#8b0000", marker="^", ls="-", lw=2.5, kind="pickle",
+    "matchbox": dict(short="Matchbox Herwig7", label="Matchbox NLO + Herwig7 CH3, no MLM", color="#8b0000", marker="^", ls="-", lw=2.5, kind="pickle",
                      path="zjet/rho/original/2018/herwig_matchbox/minimal_rho_zjet_herwig_matchbox_2018.pkl", open=True),
     # the fine-rho 2018 set produced together on 2026-09-18 (4x rho bins)
-    "pythia_fine": dict(label="MG5 MLM + Pythia8 CP5", color="#5790fc", marker="o", ls=":", lw=3.0, kind="pickle",
+    "pythia_fine": dict(short="MLM Pythia8", label="MG5 MLM + Pythia8 CP5", color="#5790fc", marker="o", ls=":", lw=3.0, kind="pickle",
                         path="zjet/rho/fine/2018/minimal_rho_fine_pythia_2018.pkl"),
-    "herwig_fine": dict(label="MG5 MLM + Herwig7 CH3", color="#e42536", marker="s", ls="-.", lw=3.0, kind="pickle",
+    "herwig_fine": dict(short="MLM Herwig7", label="MG5 MLM + Herwig7 CH3", color="#e42536", marker="s", ls="-.", lw=3.0, kind="pickle",
                         path="zjet/rho/fine/2018/minimal_rho_fine_herwig_2018.pkl"),
-    "matchbox_fine": dict(label="Matchbox NLO + Herwig7 CH3, no MLM", color="#8b0000", marker="^", ls="-", lw=2.5, kind="pickle",
+    "matchbox_fine": dict(short="Matchbox Herwig7", label="Matchbox NLO + Herwig7 CH3, no MLM", color="#8b0000", marker="^", ls="-", lw=2.5, kind="pickle",
                           path="zjet/rho/fine/2018/minimal_rho_fine_herwig_matchbox_2018.pkl", open=True),
     # Rivet runs (rivet/out), gen level, Z+jet, three analysis pT bins
-    "sa_herwig": dict(label="Herwig 7.3 CH3, own ME, no merging", color="#8b0000", marker="D", ls=":", lw=2.5, kind="yoda", file="herwig_ch3.yoda", open=True),
-    "lo_herwig_lhe": dict(label="MG5 LO + Herwig7 (same LHE)", color="#e42536", marker="s", ls="-", lw=2.0, kind="yoda", file="_norm/mglo_herwig_sliced.yoda", open=True),
-    "lo_pythia_lhe": dict(label="MG5 LO + Pythia8 (same LHE)", color="#5790fc", marker="o", ls="-", lw=2.0, kind="yoda", file="_norm/mglo_pythia_sliced.yoda", open=True),
-    "cp5_pythia": dict(label="MG5 LO + Pythia8 CP5", color="#5790fc", marker="D", ls=":", lw=2.0, kind="yoda", file="cp5_pythia.yoda"),
-    "pythia_internal": dict(label="Pythia8 internal", color="#9c9ca1", marker="v", ls=":", lw=2.0, kind="yoda", file="_norm/pythia_sliced.yoda"),
-    "vincia": dict(label="Vincia", color="#964a8b", marker="^", ls=":", lw=2.0, kind="yoda", file="_norm/vincia_sliced.yoda"),
-    "sherpa3": dict(label="Sherpa 3", color="#f89c20", marker="<", ls=":", lw=2.0, kind="yoda", file="_norm/sherpa_sliced.yoda"),
-    "data_unfolded": dict(label="Data, unfolded (Pythia response)", color="black", marker="*", ls="--", lw=3.0, kind="unfolded",
+    "sa_herwig": dict(short="Herwig 7.3 own ME", label="Herwig 7.3 CH3, own ME, no merging", color="#8b0000", marker="D", ls=":", lw=2.5, kind="yoda", file="herwig_ch3.yoda", open=True),
+    "lo_herwig_lhe": dict(short="LO + Herwig7", label="MG5 LO + Herwig7 (same LHE)", color="#e42536", marker="s", ls="-", lw=2.0, kind="yoda", file="_norm/mglo_herwig_sliced.yoda", open=True),
+    "lo_pythia_lhe": dict(short="LO + Pythia8", label="MG5 LO + Pythia8 (same LHE)", color="#5790fc", marker="o", ls="-", lw=2.0, kind="yoda", file="_norm/mglo_pythia_sliced.yoda", open=True),
+    "cp5_pythia": dict(short="LO + Pythia8 CP5", label="MG5 LO + Pythia8 CP5", color="#5790fc", marker="D", ls=":", lw=2.0, kind="yoda", file="cp5_pythia.yoda"),
+    "pythia_internal": dict(short="Pythia8 internal", label="Pythia8 internal", color="#9c9ca1", marker="v", ls=":", lw=2.0, kind="yoda", file="_norm/pythia_sliced.yoda"),
+    "vincia": dict(short="Vincia", label="Vincia", color="#964a8b", marker="^", ls=":", lw=2.0, kind="yoda", file="_norm/vincia_sliced.yoda"),
+    "sherpa3": dict(short="Sherpa 3", label="Sherpa 3", color="#f89c20", marker="<", ls=":", lw=2.0, kind="yoda", file="_norm/sherpa_sliced.yoda"),
+    "data_unfolded": dict(short="Data unfolded", label="Data, unfolded (Pythia response)", color="black", marker="*", ls="--", lw=3.0, kind="unfolded",
                           path="outputs/zjet/rho/original/data/unfolded_2d_groomed.pkl", points=True),
 }
 PROD_ZJET = {  # gen -> (file, dataset categories) per --mlm-eras
@@ -414,6 +414,10 @@ def main():
     x = np.array([0.5 * (lo + min(hi, 600.0 if args.channel == "zjet" else 1000.0)) for lo, hi in pt_bins])
     xlim = (170, 540) if args.channel == "zjet" else (170, 950)
     figures = [f.strip() for f in args.figures.split(",") if f.strip()]
+    many = len(names) > 5      # crowded legend: two columns, smaller type, more headroom
+    legend_kw = dict(ncol=2 if many else 1, fontsize=PUB_LEGEND_FS - (5 if many else 2), frameon=False)
+    if many:   # a two-column legend spans the top: start it below the CMS block
+        legend_kw["bbox_to_anchor"] = (0.99, 0.87)
 
     def finish(ax, ylabel, note, loc="upper right", headroom=1.5, note_at="top"):
         hep.cms.label(ax=ax, **cms_kw)
@@ -433,7 +437,7 @@ def main():
         y = 0.74 if note_at == "top" else 0.04
         ax.text(cms_x(ax), y, note, transform=ax.transAxes, ha="left", va="top" if note_at == "top" else "bottom",
                 fontsize=PUB_ANNOT_FS)
-        ax.legend(loc=loc, fontsize=PUB_LEGEND_FS - 2, frameon=False, borderaxespad=1.0)
+        ax.legend(loc=loc, borderaxespad=1.0, **legend_kw)
 
     def style(n):
         s = SERIES[n]
@@ -451,7 +455,7 @@ def main():
                 ok = np.isfinite(rr[:, 0])
                 ax.errorbar(x[ok], rr[ok, 0], yerr=rr[ok, 1], marker=marker, ls="none" if pts else ls, lw=2.5, ms=11,
                             color=color, mfc="white" if is_open else color, mew=2.0, capsize=4,
-                            label=f"{la} / {SERIES[b]['label']}")
+                            label=f"{SERIES[a]['short']} / {SERIES[b]['short']}")
             ax.axhline(1.0, color="gray", ls=":", lw=1.5)
             finish(ax, "median mass ratio", f"{CHANNEL_LABEL[args.channel]}, {mode_text}, {level_text}")
         stamp(fig, inputs_text, enabled=not args.no_stamp)
@@ -474,7 +478,7 @@ def main():
         ax.axhline(0.0, color="gray", ls=":", lw=1.2)
         finish(ax, r"median $\log_{10}(\rho^2)$ relative to %s GeV" % pt_text(*ref_bin),
                f"{CHANNEL_LABEL[args.channel]}, {mode_text}, {level_text}\nshape per bin; tune offsets removed",
-               headroom=1.4, note_at="bottom")
+               headroom=1.9 if many else 1.4, note_at="bottom")
         stamp(fig, inputs_text, enabled=not args.no_stamp)
         out = args.outdir / f"{tag}_slope.png"
         fig.savefig(out, dpi=150); fig.savefig(out.with_suffix(".pdf")); plt.close(fig)
@@ -536,19 +540,22 @@ def main():
                 plt.close(fig)
                 continue
             hep.cms.label(ax=ax, **cms_kw)
-            ax.text(cms_x(ax), 0.74, f"{CHANNEL_LABEL[args.channel]}, {mode_text}, {level_text}\n{pt_text(*k)} GeV",
-                    transform=ax.transAxes, ha="left", va="top", fontsize=PUB_ANNOT_FS)
+            # with a crowded two-column legend (anchored at 0.87, five rows) the note goes below it
+            ax.text(cms_x(ax), 0.50 if many else 0.74,
+                    f"{CHANNEL_LABEL[args.channel]}, {mode_text}, {level_text}\n{pt_text(*k)} GeV",
+                    transform=ax.transAxes, ha="left", va="top", fontsize=PUB_ANNOT_FS, zorder=6,
+                    bbox=dict(facecolor="white", edgecolor="none", alpha=0.85, pad=2.0) if many else None)
             if args.mass_axis:
                 ax.set_xscale("log"); ax.set_yscale("log"); rax.set_xscale("log")
                 ax.set_ylabel(r"$(1/N)\,dN/dm$ (GeV$^{-1}$)", fontsize=PUB_LABEL_FS - 4)
                 ax.set_ylim(ymax * 1e-4, ymax * 100.0)
                 rax.set_xlabel(("Soft-drop" if args.mode == "groomed" else "Ungroomed") + " jet mass (GeV)", fontsize=PUB_LABEL_FS - 4)
             else:
-                ax.set_ylim(0, ymax * 1.6)
+                ax.set_ylim(0, ymax * (2.2 if many else 1.6))
                 ax.set_ylabel(r"$1/N\; dN/d\log_{10}(\rho^2)$", fontsize=PUB_LABEL_FS - 4)
                 rax.set_xlabel(r"$\log_{10}(\rho^2)$, " + mode_text, fontsize=PUB_LABEL_FS - 4)
             ax.tick_params(labelsize=PUB_TICK_FS, labelbottom=False)
-            ax.legend(loc="upper right", fontsize=PUB_LEGEND_FS - 3, frameon=False)
+            ax.legend(loc="upper right", **{**legend_kw, "fontsize": PUB_LEGEND_FS - (6 if many else 3)})
             rax.axhline(1.0, color="gray", ls=":", lw=1.2)
             rax.set_ylabel(f"ratio to {SERIES[args.reference]['label'].split(',')[0]}", fontsize=PUB_LABEL_FS - 8)
             rax.tick_params(labelsize=PUB_TICK_FS - 4)

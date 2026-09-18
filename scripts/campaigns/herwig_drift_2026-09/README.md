@@ -13,6 +13,18 @@ Physics record: research-notes `topics/herwig_groomed_jet_mass_pt_drift.md`
 | `stage_flat_pickles.py` | copy the two flat dijet pickles into `~/cernbox/unfold_inputs/dijet/rho/original/2018/dijet_flat_*/` and write `flat_manifest.json` (sha256, events, sumw, veto counts, n_eff per bin, axis check vs the MLM production) | Mac |
 | `stage_matchbox_pickle.py` | same for the zjet Matchbox pickle -> `zjet/rho/original/2018/herwig_matchbox/` + `herwig_matchbox_manifest.json` | Mac |
 
-The comparison figures come from `scripts/diagnostics/plot_dijet_groomed_flat_vs_mlm.py`
-and `scripts/diagnostics/plot_zjet_groomed_matchbox_vs_mlm.py` (`--level gen|reco`,
-`--rho-floor`); rows in `PLOT_MAP.md`.
+The comparison figures come from `scripts/diagnostics/plot_rho_generators.py`
+(one script with a sample registry, since 2026-09-18; `--list` prints the
+registry, `--channel`, `--level gen|reco`, `--mode`, `--samples`, `--pairs`,
+`--grid`, `--rho-floor`); the exact commands per figure set are in
+`PLOT_MAP.md`.
+
+Regression record (2026-09-18): the consolidated script was run against every
+one of the six scripts it replaces (zjet gen rho generators, reco rho with
+data, merged vs unmerged, slope generators, dijet flat vs MLM, zjet Matchbox
+vs MLM) on their own inputs; medians, errors, effective statistics, mass
+ratios and slopes agreed to the last printed digit in every table. The one
+behavioural unification: negative bin contents are clipped to zero in the
+median for every sample (the data scripts already did this; the MC tables are
+unchanged by it). Layout change: the merged-vs-unmerged 2x3 grid became one
+panel per pT bin.
