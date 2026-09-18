@@ -565,10 +565,9 @@ def main():
             ax.tick_params(labelsize=PUB_TICK_FS, labelbottom=False)
             ax.legend(loc="upper right", **{**legend_kw, "fontsize": PUB_LEGEND_FS - (6 if many else 3)})
             rax.axhline(1.0, color="gray", ls=":", lw=1.2)
-            if omitted:
-                rax.text(0.02, 0.94, "bins with >50% MC error omitted", transform=rax.transAxes, ha="left", va="top",
-                         fontsize=PUB_LEGEND_FS - 4, color="0.45",
-                         bbox=dict(facecolor="white", edgecolor="none", alpha=0.85, pad=1.5))
+            if omitted:   # in the gap above the ratio panel, where nothing is drawn
+                rax.text(1.0, 1.02, "bins with >50% MC error omitted", transform=rax.transAxes, ha="right", va="bottom",
+                         fontsize=PUB_LEGEND_FS - 4, color="0.45")
             rax.set_ylabel(f"ratio to {SERIES[args.reference]['label'].split(',')[0]}", fontsize=PUB_LABEL_FS - 8)
             rax.tick_params(labelsize=PUB_TICK_FS - 4)
             rlo, rhi = rax.get_ylim()
