@@ -708,6 +708,13 @@ class QJetMassProcessor(processor.ProcessorABC):
                 return None
             return scale * 1.1297638966
 
+        if dataset.startswith("herwig_matchbox"):
+            # NLO 5FS Matchbox Herwig7 DY (UL18 only). Inclusive NLO DY M-50
+            # cross section as for the amcatnloFXFX path; the sample's own mass
+            # window was not verified, shape-only use (2026-09-18).
+            iov = dataset.split("_")[-2]
+            return scale_from(6404.0, iov)
+
         if "herwig" in dataset:
             iov = dataset.split("_")[-2]
             return scale_from(5.036, iov)
@@ -3395,7 +3402,9 @@ class QJetMassProcessor(processor.ProcessorABC):
 
                     
                 elif 'herwig' in ds:
-                    xs = 5.036
+                    # NLO Matchbox Herwig7 DY: inclusive NLO xs (shape-only use);
+                    # MLM+Herwig7 keeps its legacy value.
+                    xs = 6404.0 if ds.startswith('herwig_matchbox') else 5.036
                     lumi_db = {'UL16NanoAODv9':16.81 , 'UL16NanoAODAPVv9': 19.52 ,'UL17NanoAODv9': 41.48 , 'UL18NanoAODv9': 59.83}
                     iov = ds.split('_')[-2]
                     lumi_fb = lumi_db[iov]

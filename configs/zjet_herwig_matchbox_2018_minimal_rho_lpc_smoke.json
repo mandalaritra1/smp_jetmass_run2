@@ -1,0 +1,21 @@
+{
+  "_comment": "Smoke test of zjet_herwig_matchbox_2018_minimal_rho_lpc.json: first file of the Matchbox sample, local futures executor inside the LPC container (no condor). Confirms the code paths without LHE branches and with the signed NLO genWeight, and that the output axes match unfold_inputs/zjet/rho/original/pythia_2018.pkl bin for bin. Not a physics output.",
+  "channel": "zjet",
+  "dataset": "herwig_matchbox",
+  "era": "2018",
+  "mode": "minimal_rho",
+  "systematic_profile": "no_syst",
+  "casa": false,
+  "useDefault": false,
+  "chunksize": 50000,
+  "chunksize_test": 200000,
+  "group_mode": "all_in_one",
+  "rho_refine": 2,
+  "worker_memory": "4 GiB",
+  "worker_merge": 4,
+  "treereduce": false,
+  "executor_mode": "futures",
+  "test": true,
+  "redirector": "lpc",
+  "prependstr": "root://cmsxrootd.fnal.gov/"
+}

@@ -1,0 +1,22 @@
+{
+  "_comment": "NLO 5FS Matchbox Herwig7 CH3 DY (DYToLL_NLO_5FS_TuneCH3_13TeV_matchbox_herwig7, UL18 NanoAODv9 ext1-v2, 116.4M events, 620 files on FNAL disk; MG5 ME inside Herwig's Matchbox, no external LHE, no MLM merging), zjet minimal_rho on LPC condor (2026-09-18). Purpose: the sample CMS GEN (Kostas) proposes as the MG+Herwig7 replacement; under the merging hypothesis of research-notes herwig_groomed_jet_mass_pt_drift.md it should show NO groomed-mass pT drift against MLM+Pythia8. Nominal only (no_syst); genWeight is a signed NLO weight normalized by the on-the-fly sumw; no LHE branches (PDF/Q2 helpers return unity), dummy nPSWeight=1. Everything else mirrors zjet_herwig_all_minimal_rho_r2_jmsjmr_unity.json (rho_refine 2) so the axes match unfold_inputs/zjet/rho/original/{pythia_2018,herwig_all}.pkl. Output stages as unfold_inputs/zjet/rho/original/2018/herwig_matchbox/.",
+  "channel": "zjet",
+  "dataset": "herwig_matchbox",
+  "era": "2018",
+  "mode": "minimal_rho",
+  "systematic_profile": "no_syst",
+  "casa": false,
+  "useDefault": false,
+  "chunksize": 50000,
+  "chunksize_test": 200000,
+  "group_mode": "all_in_one",
+  "rho_refine": 2,
+  "worker_memory": "4 GiB",
+  "worker_merge": 4,
+  "treereduce": false,
+  "executor_mode": "dask-lpc",
+  "test": false,
+  "redirector": "lpc",
+  "prependstr": "root://cmsxrootd.fnal.gov/",
+  "n_workers": 200
+}

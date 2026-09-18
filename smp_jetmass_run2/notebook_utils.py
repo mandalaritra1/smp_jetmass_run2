@@ -66,6 +66,10 @@ DATASET_OPTIONS = [
     # MadGraph, no MLM merging) -- the merging-vs-shower test (2026-09-17)
     "herwig_flat",
     "pythia_flat",
+    # zjet only: the NLO 5FS Matchbox Herwig7 CH3 DY sample (MG5 ME inside
+    # Herwig's Matchbox, no external LHE, no MLM), UL18 only -- the sample CMS
+    # GEN proposes as the MG+Herwig7 replacement (2026-09-18)
+    "herwig_matchbox",
 ]
 
 ERA_OPTIONS = ["2016", "2016APV", "2017", "2018", "all"]
@@ -300,12 +304,15 @@ class SamplePath:
                 _nlo_ptz_lists("UL17NanoAODv9"),
                 _nlo_ptz_lists("UL18NanoAODv9"),
             ]
+            # NLO Matchbox Herwig7 DY exists for UL18 only (DAS 2026-09-18).
+            self.herwig_matchbox = [["herwig_matchbox_UL18NanoAODv9_inclusive.txt"]]
         elif era == "2018":
             self.data = [["SingleMuon_UL2018.txt", "EGamma_UL2018.txt"]]
             self.pythia = [["pythia_UL18NanoAODv9.txt"]]
             self.herwig = [["herwig7_UL18NanoAODv9_inclusive.txt"]]
             self.nlo = [["inclusive_UL18NanoAODv9.txt"]]
             self.nlo_ptz = [_nlo_ptz_lists("UL18NanoAODv9")]
+            self.herwig_matchbox = [["herwig_matchbox_UL18NanoAODv9_inclusive.txt"]]
         elif era == "2017":
             self.data = [["SingleMuon_UL2017.txt", "SingleElectron_UL2017.txt"]]
             self.pythia = [["pythia_UL17NanoAODv9.txt"]]
@@ -1372,6 +1379,15 @@ def run_from_config(cfg, *, client=None, repo_root=None, log=print):
                     group, paths.samples_mc_dir, prependstr, split_ht=False), i)
         elif dataset == "herwig":
             for i, group in enumerate(iter_groups(samplePath.herwig, group_mode)):
+                _run_and_save(build_fileset_from_txts(
+                    group, paths.samples_mc_dir, prependstr, split_ht=False), i)
+        elif dataset == "herwig_matchbox":
+            groups = getattr(samplePath, "herwig_matchbox", None)
+            if not groups:
+                raise ValueError(
+                    "herwig_matchbox (DYToLL_NLO_5FS_TuneCH3_13TeV_matchbox_herwig7) "
+                    f"exists for UL18 only; era={cfg['era']!r} has no fileset")
+            for i, group in enumerate(iter_groups(groups, group_mode)):
                 _run_and_save(build_fileset_from_txts(
                     group, paths.samples_mc_dir, prependstr, split_ht=False), i)
         elif dataset == "powheg":

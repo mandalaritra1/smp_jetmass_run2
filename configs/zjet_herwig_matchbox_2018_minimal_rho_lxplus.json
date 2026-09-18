@@ -1,0 +1,22 @@
+{
+  "_comment": "lxplus HTCondor (dask-lxplus) fallback of zjet_herwig_matchbox_2018_minimal_rho_lpc.json for when the LPC pool is saturated: same sample, same axes; files read through cms-xrd-global (the sample sits at FNAL/NCBJ/CSCS/CIEMAT/IPHC/Nebraska). Fixed pool from n_workers via the launcher.",
+  "channel": "zjet",
+  "dataset": "herwig_matchbox",
+  "era": "2018",
+  "mode": "minimal_rho",
+  "systematic_profile": "no_syst",
+  "casa": false,
+  "useDefault": false,
+  "chunksize": 50000,
+  "chunksize_test": 200000,
+  "group_mode": "all_in_one",
+  "rho_refine": 2,
+  "worker_memory": "4 GiB",
+  "worker_merge": 4,
+  "treereduce": false,
+  "executor_mode": "dask-lxplus",
+  "test": false,
+  "redirector": "lxplus",
+  "prependstr": "root://cms-xrd-global.cern.ch/",
+  "n_workers": 150
+}

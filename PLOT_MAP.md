@@ -37,6 +37,9 @@ Paths: `smp` = `~/Projects/smp_jetmass_run2`, `docs` = `~/Projects/smp25010-docs
 | Producer | `smp/scripts/diagnostics/plot_dijet_groomed_flat_vs_mlm.py --mode groomed|ungroomed [--mlm-eras all]`; prints the per-bin median/n_eff/ratio table |
 | Inputs: the flat-pT standalone-shower pickles (2018, no MLM), with manifest | `~/cernbox/unfold_inputs/dijet/rho/original/2018/dijet_flat_{herwig,pythia}/`, `.../dijet/rho/original/flat_manifest.json` |
 | Z+jet counterpart (Rivet unmerged runs) | `smp/scripts/diagnostics/plot_zjet_groomed_slope_generators.py`, `plot_zjet_gen_rho_merged_vs_unmerged.py` -> `smp/outputs/plots/gen_rho_generators/` |
+| Z+jet gen-level Matchbox-vs-MLM figure set (2026-09-18), groomed and ungroomed: median mass ratio against MLM+Pythia8 for the NLO Matchbox Herwig7 (no MLM) and the MLM Herwig7 sample plus Matchbox/MLM Herwig7 (`zjet_<mode>_mass_ratio_matchbox_vs_mlm`), median slope per sample (`zjet_<mode>_slope_matchbox_vs_mlm`), per-pT-bin shapes with ratio (`zjet_<mode>_shape_pt<i>`, four panels). Result: Matchbox drifts like MLM+Herwig7 (1.09 -> 0.63 vs 1.41 -> 0.77) | `smp/outputs/plots/zjet_matchbox_vs_mlm/` (PNG + PDF), copies in `~/Projects/research-notes/attachments/herwig_groomed_mass_2026-09-17/` |
+| Producer | `smp/scripts/diagnostics/plot_zjet_groomed_matchbox_vs_mlm.py --mode groomed|ungroomed [--mlm-eras 2018|all]`; rebins the 2x-refined Matchbox rho axis onto the production edges; prints the per-bin table |
+| Inputs: the Matchbox pickle (2018, `herwig_matchbox` dataset, LPC condor) with manifest | `~/cernbox/unfold_inputs/zjet/rho/original/2018/herwig_matchbox/minimal_rho_zjet_herwig_matchbox_2018.pkl`, `.../zjet/rho/original/herwig_matchbox_manifest.json` |
 
 ## Superseded but kept
 
