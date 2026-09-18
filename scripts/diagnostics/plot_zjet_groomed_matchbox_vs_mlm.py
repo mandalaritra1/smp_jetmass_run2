@@ -46,9 +46,11 @@ STYLE = {  # key: (label, colour, marker, linestyle, linewidth)
     "mlm_pythia": ("MG5 MLM + Pythia8 CP5", "#5790fc", "o", ":", 3.0),
     "mlm_herwig": ("MG5 MLM + Herwig7 CH3", "#e42536", "s", "-.", 3.0),
     "matchbox":   ("Matchbox NLO + Herwig7 CH3, no MLM", "#8b0000", "^", "-", 2.5),
+    "data":       ("Data", "black", "o", "-", 0.0),   # reco level only, drawn as points
 }
-MODE_KEY = {"groomed": ("ptjet_rhojet_g_gen", "soft-drop groomed"),
-            "ungroomed": ("ptjet_rhojet_u_gen", "ungroomed")}
+MODE_TEXT = {"groomed": "soft-drop groomed", "ungroomed": "ungroomed"}
+LEVEL = {"gen": ("gen", "ptgen", "mpt_gen", "GEN"), "reco": ("reco", "ptreco", "mpt_reco", "RECO")}
+DATA_CATS = {"2018": ["SingleMuon_UL2018", "EGamma_UL2018"]}
 
 
 def stamp(fig, enabled=True):
@@ -94,11 +96,11 @@ def select(h, dataset_cats):
     return h
 
 
-def load(path, key, dataset_cats=None):
+def load(path, key, dataset_cats=None, pt_axis="ptgen", rho_axis="mpt_gen"):
     """(values[pt, rho], variances, rho_edges, pt_edges)."""
     h = select(pickle.load(open(path, "rb"))[key], dataset_cats)
     return (np.asarray(h.values(), float), np.asarray(h.variances(), float),
-            np.asarray(h.axes["mpt_gen"].edges), np.asarray(h.axes["ptgen"].edges))
+            np.asarray(h.axes[rho_axis].edges), np.asarray(h.axes[pt_axis].edges))
 
 
 def rebin_rho(values, variances, edges, target_edges):
@@ -120,16 +122,25 @@ def main():
     ap.add_argument("--mlm-eras", default="2018", choices=("2018", "all"),
                     help="MLM pickles: the 2018 category of the merged files, or their Run-2 sum")
     ap.add_argument("--matchbox", type=Path, default=None, help="override the Matchbox pickle path")
-    ap.add_argument("--mode", default="groomed", choices=tuple(MODE_KEY))
+    ap.add_argument("--mode", default="groomed", choices=tuple(MODE_TEXT))
+    ap.add_argument("--level", default="gen", choices=tuple(LEVEL),
+                    help="gen (default) or reco; reco adds the 2018 data (data_all.pkl) as a fourth curve")
     ap.add_argument("--rho-floor", type=float, default=-5.0)
     ap.add_argument("--outdir", type=Path, default=Path("outputs/plots/zjet_matchbox_vs_mlm"))
     ap.add_argument("--no-stamp", action="store_true")
     args = ap.parse_args()
     args.outdir.mkdir(parents=True, exist_ok=True)
-    key, mode_text = MODE_KEY[args.mode]
+    mode_text = MODE_TEXT[args.mode]
+    lvl, pt_axis, rho_axis, level_text = LEVEL[args.level]
+    key = f"ptjet_rhojet_{'g' if args.mode == 'groomed' else 'u'}_{lvl}"
+    is_reco = args.level == "reco"
     root = args.inputs / "zjet/rho/original"
     era_text = "2018" if args.mlm_eras == "2018" else "Run 2"
-    rlabel = "2018 (13 TeV)" if args.mlm_eras == "2018" else "2018 Matchbox, Run 2 MLM (13 TeV)"
+    if is_reco:
+        rlabel = "59.8 fb$^{-1}$ (13 TeV)" if args.mlm_eras == "2018" else "138 fb$^{-1}$ (13 TeV)"
+    else:
+        rlabel = "2018 (13 TeV)" if args.mlm_eras == "2018" else "2018 Matchbox, Run 2 MLM (13 TeV)"
+    tag = f"{args.mode}_{lvl}" if is_reco else args.mode
 
     if args.mlm_eras == "2018":
         herwig_cats, pythia_cats = [[c] for c in ZJET_ERA_CATS["2018"]]
@@ -139,15 +150,20 @@ def main():
         pythia_path = root / "pythia_all.pkl"
     matchbox_path = args.matchbox or (
         root / "2018/herwig_matchbox/minimal_rho_zjet_herwig_matchbox_2018.pkl")
+    ax_kw = dict(pt_axis=pt_axis, rho_axis=rho_axis)
     data = {
-        "mlm_pythia": load(pythia_path, key, pythia_cats),
-        "mlm_herwig": load(root / "herwig_all.pkl", key, herwig_cats),
-        "matchbox": load(matchbox_path, key, None),
+        "mlm_pythia": load(pythia_path, key, pythia_cats, **ax_kw),
+        "mlm_herwig": load(root / "herwig_all.pkl", key, herwig_cats, **ax_kw),
+        "matchbox": load(matchbox_path, key, None, **ax_kw),
     }
+    if is_reco:
+        data["data"] = load(root / "data_all.pkl", key,
+                            DATA_CATS["2018"] if args.mlm_eras == "2018" else None, **ax_kw)
     _, _, rho_edges, pt_edges = data["mlm_pythia"]
     v, var, e_rho, e_pt = data["matchbox"]
     if not np.allclose(e_pt, pt_edges):
         raise SystemExit("matchbox: pT axis differs from the production")
+    # the Matchbox pickle also carries a 2x refined reco rho axis; rebin it too
     if len(e_rho) != len(rho_edges) or not np.allclose(e_rho, rho_edges):
         v, var = rebin_rho(v, var, e_rho, rho_edges)
         data["matchbox"] = (v, var, rho_edges, pt_edges)
@@ -180,10 +196,12 @@ def main():
         "mlm":      ("MLM Herwig7 / MLM Pythia8 (CMS central)", "mlm_herwig", "mlm_pythia", "#e42536", "s", "-."),
         "herwig":   ("Matchbox Herwig7 / MLM Herwig7", "matchbox", "mlm_herwig", "#e42536", "^", "-"),
     }
+    if is_reco:
+        pairs["data"] = ("Data / MLM Pythia8", "data", "mlm_pythia", "black", "o", "-")
     rat = {k: ratio(a, b) for k, (_, a, b, *_r) in pairs.items()}
 
     #### the table
-    print(f"\n{mode_text} mass, gen level, Z+jet, MLM eras = {era_text}, rho floor {args.rho_floor}")
+    print(f"\n{mode_text} mass, {lvl} level, Z+jet, MLM eras = {era_text}, rho floor {args.rho_floor}")
     print(f"{'pT bin':>9s} | " + " ".join(f"{STYLE[k][0][:24]:>24s}" for k in data)
           + " | " + " ".join(f"{pairs[p][0].split(' (')[0][:30]:>30s}" for p in pairs))
     print(f"{'':>9s} | " + " ".join(f"{'median  (n_eff)':>24s}" for _ in data) + " | " + " ".join(f"{'mass ratio':>30s}" for _ in pairs))
@@ -196,7 +214,7 @@ def main():
           {k: round(float(med[k][-1] - med[k][1]), 3) for k in data})
 
     def finish(ax, ylabel, note, loc="upper right", headroom=1.5, note_at="top"):
-        hep.cms.label("", data=False, loc=2, ax=ax, rlabel=rlabel)
+        hep.cms.label("Preliminary" if is_reco else "", data=is_reco, loc=2, ax=ax, rlabel=rlabel)
         ax.set_xlabel(r"$p_{T}^{jet}$ (GeV)", fontsize=PUB_LABEL_FS)
         ax.set_ylabel(ylabel, fontsize=PUB_LABEL_FS - 4)
         ax.tick_params(labelsize=PUB_TICK_FS)
@@ -218,35 +236,35 @@ def main():
     #### figure 1: median mass ratio Herwig7/Pythia8, Matchbox next to the MLM pair,
     #### and Matchbox / MLM Herwig7
     fig, axes = plt.subplots(1, 2, layout="constrained", figsize=(21, 10.6))
-    for ax, keys in zip(axes, (("matchbox", "mlm"), ("herwig",))):
+    for ax, keys in zip(axes, (("matchbox", "mlm") + (("data",) if is_reco else ()), ("herwig",))):
         for p in keys:
             label, _, _, color, marker, ls = pairs[p]
             r, e = rat[p]
             ax.errorbar(x, r, yerr=e, marker=marker, ls=ls, lw=2.5, ms=11, color=color,
-                        mfc="white" if p != "mlm" else color, mew=2.0, capsize=4, label=label)
+                        mfc="white" if p not in ("mlm", "data") else color, mew=2.0, capsize=4, label=label)
         ax.axhline(1.0, color="gray", ls=":", lw=1.5)
-    finish(axes[0], "median mass ratio Herwig7 / Pythia8",
-           f"Z+jet, {mode_text}, GEN\nHerwig7 with and without MLM")
+    finish(axes[0], "median mass ratio to MLM + Pythia8" if is_reco else "median mass ratio Herwig7 / Pythia8",
+           f"Z+jet, {mode_text}, {level_text}\nHerwig7 with and without MLM" + (", and data" if is_reco else ""))
     finish(axes[1], "median mass ratio Matchbox / MLM",
-           f"Z+jet, {mode_text}, GEN\nwhat the merging does to Herwig7")
+           f"Z+jet, {mode_text}, {level_text}\nwhat the merging does to Herwig7")
     stamp(fig, enabled=not args.no_stamp)
-    out = args.outdir / f"zjet_{args.mode}_mass_ratio_matchbox_vs_mlm.png"
+    out = args.outdir / f"zjet_{tag}_mass_ratio_matchbox_vs_mlm.png"
     fig.savefig(out, dpi=150); fig.savefig(out.with_suffix(".pdf")); plt.close(fig)
     print(f"wrote {out}")
 
     #### figure 2: the slope of every sample relative to its own 200-290 bin
     fig, ax = plt.subplots(layout="constrained")
-    for k in ("mlm_pythia", "mlm_herwig", "matchbox"):
+    for k in data:
         label, color, marker, ls, lw = STYLE[k]
         rel = med[k] - med[k][1]
-        ax.errorbar(x, rel, yerr=np.sqrt(err[k] ** 2 + err[k][1] ** 2), marker=marker, ls=ls, lw=lw,
-                    ms=11, color=color, mfc="white" if k == "matchbox" else color, mew=2.0,
-                    capsize=3, label=label)
+        ax.errorbar(x, rel, yerr=np.sqrt(err[k] ** 2 + err[k][1] ** 2), marker=marker, ls=ls if k != "data" else "none",
+                    lw=lw if k != "data" else 2.0, ms=11, color=color, mfc="white" if k == "matchbox" else color,
+                    mew=2.0, capsize=3, label=label)
     ax.axhline(0.0, color="gray", ls=":", lw=1.2)
     finish(ax, r"median $\log_{10}(\rho^2)$ relative to 200–290 GeV",
-           f"Z+jet, {mode_text}, GEN\nshape per bin; tune offsets removed", headroom=1.4, note_at="bottom")
+           f"Z+jet, {mode_text}, {level_text}\nshape per bin; tune offsets removed", headroom=1.4, note_at="bottom")
     stamp(fig, enabled=not args.no_stamp)
-    out = args.outdir / f"zjet_{args.mode}_slope_matchbox_vs_mlm.png"
+    out = args.outdir / f"zjet_{tag}_slope_matchbox_vs_mlm.png"
     fig.savefig(out, dpi=150); fig.savefig(out.with_suffix(".pdf")); plt.close(fig)
     print(f"wrote {out}")
 
@@ -269,19 +287,25 @@ def main():
         ratio_tops = []
         for k, (y, ye) in shapes.items():
             label, color, marker, ls, lw = STYLE[k]
-            hep.histplot(y, e_keep, ax=ax, histtype="step", color=color, ls=ls, lw=lw, label=label)
-            ax.errorbar(centers, y, yerr=ye, fmt="none", ecolor=color, elinewidth=1.2, capsize=2)
+            if k == "data":
+                ax.errorbar(centers, y, yerr=ye, fmt="o", color="black", ms=8, capsize=2, label=label)
+            else:
+                hep.histplot(y, e_keep, ax=ax, histtype="step", color=color, ls=ls, lw=lw, label=label)
+                ax.errorbar(centers, y, yerr=ye, fmt="none", ecolor=color, elinewidth=1.2, capsize=2)
             ymax = max(ymax, float(np.nanmax(y + ye)))
             if ref is not None and k != "mlm_pythia":
                 with np.errstate(divide="ignore", invalid="ignore"):
                     r = np.where(ref[0] > 0, y / ref[0], np.nan)
                     re = np.where(ref[0] > 0, r * np.sqrt((ye / np.where(y > 0, y, 1)) ** 2
                                                           + (ref[1] / ref[0]) ** 2), np.nan)
-                hep.histplot(r, e_keep, ax=rax, histtype="step", color=color, ls=ls, lw=lw)
-                rax.errorbar(centers, r, yerr=re, fmt="none", ecolor=color, elinewidth=1.2, capsize=2)
+                if k == "data":
+                    rax.errorbar(centers, r, yerr=re, fmt="o", color="black", ms=7, capsize=2)
+                else:
+                    hep.histplot(r, e_keep, ax=rax, histtype="step", color=color, ls=ls, lw=lw)
+                    rax.errorbar(centers, r, yerr=re, fmt="none", ecolor=color, elinewidth=1.2, capsize=2)
                 ratio_tops.append((r, re))
-        hep.cms.label("", data=False, loc=2, ax=ax, rlabel=rlabel)
-        ax.text(cms_x(ax), 0.74, f"Z+jet, {mode_text}, GEN\n{PT_LABELS[i]} GeV",
+        hep.cms.label("Preliminary" if is_reco else "", data=is_reco, loc=2, ax=ax, rlabel=rlabel)
+        ax.text(cms_x(ax), 0.74, f"Z+jet, {mode_text}, {level_text}\n{PT_LABELS[i]} GeV",
                 transform=ax.transAxes, ha="left", va="top", fontsize=PUB_ANNOT_FS)
         ax.set_ylim(0, ymax * 1.6)
         ax.set_ylabel(r"$1/N\; dN/d\log_{10}(\rho^2)$", fontsize=PUB_LABEL_FS - 4)
@@ -301,7 +325,7 @@ def main():
             a.set_xlim(e_keep[0], e_keep[-1])
         fig.align_ylabels([ax, rax])
         stamp(fig, enabled=not args.no_stamp)
-        out = args.outdir / f"zjet_{args.mode}_shape_pt{i}.png"
+        out = args.outdir / f"zjet_{tag}_shape_pt{i}.png"
         fig.savefig(out, dpi=150); fig.savefig(out.with_suffix(".pdf")); plt.close(fig)
         print(f"wrote {out}")
 
