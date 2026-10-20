@@ -92,6 +92,73 @@ class HadronicProcessorBase(processor.ProcessorABC):
         return self.hists
 
     #############################################################
+    #### event-group jackknife (jk_groups > 0)
+    #############################################################
+    #### A separate nominal-only run (never next to all_syst: its outputs are
+    #### already the large ones; the processor forces nominal weights and jets).
+    #### The rho unfolding inputs are filled a second time into
+    #### "<name>_jkgroups" copies with a fixed axis of N event groups and no
+    #### systematic axis. Each event lands in exactly ONE group, so the
+    #### unfolding forms a delete-one replica offline as total - group, and the
+    #### sum over groups equals the nominal hist of the same run, at ~1 fill
+    #### per entry whatever N is. This replaces the *_jk modes, which rerun the
+    #### whole selection once per replica. No flow bins (the unfolding reads
+    #### values() only); that cuts the 4D response copies by ~45%.
+    JK_GROUP_HISTS = ("ptjet_rhojet_u_reco", "ptjet_rhojet_g_reco",
+                      "ptjet_rhojet_u_gen", "ptjet_rhojet_g_gen",
+                      "response_matrix_rho_u", "response_matrix_rho_g")
+    JK_GROUP_SUFFIX = "_jkgroups"
+
+    @staticmethod
+    def jk_group_of(run, lumi, event, n_groups):
+        """Event group in [0, n_groups) from a splitmix64 hash of (run, lumi, event).
+
+        Depends on the event identity only -- not on chunking, file order or
+        selection -- so every reprocessing reproduces the same groups, data and
+        MC alike, and all measured jets of one event share one group.
+        """
+        with np.errstate(over="ignore"):
+            x = ((np.asarray(run, dtype=np.uint64) << np.uint64(42))
+                 ^ (np.asarray(lumi, dtype=np.uint64) << np.uint64(21))
+                 ^ np.asarray(event, dtype=np.uint64))
+            z = x + np.uint64(0x9E3779B97F4A7C15)
+            z = (z ^ (z >> np.uint64(30))) * np.uint64(0xBF58476D1CE4E5B9)
+            z = (z ^ (z >> np.uint64(27))) * np.uint64(0x94D049BB133111EB)
+            z = z ^ (z >> np.uint64(31))
+        return (z % np.uint64(n_groups)).astype(np.int64)
+
+    def _jk_labels(self, evts, per_event=1):
+        """Group label per filled entry for the events `evts` (already masked
+        exactly like the arrays being filled); per_event=2 for the dijet pair."""
+        groups = self.jk_group_of(ak.to_numpy(evts.run), ak.to_numpy(evts.luminosityBlock),
+                                  ak.to_numpy(evts.event), self.jk_groups)
+        return np.repeat(groups, per_event) if per_event > 1 else groups
+
+    def _register_jk_group_hists(self, register, dataset_axis, physics_axes):
+        """physics_axes: base hist name -> its axes without systematic/jk."""
+        from .hist_utils import jk_group_axis, noflow_axis
+        if not self.jk_groups:
+            return
+        group_axis = jk_group_axis(self.jk_groups)
+        for name, axes in physics_axes.items():
+            register(self.hists, name + self.JK_GROUP_SUFFIX,
+                     [dataset_axis, group_axis, *[noflow_axis(a) for a in axes]])
+
+    def _fill_jk(self, out, name, dataset, labels, weight, **axes):
+        """Group copy of a nominal fill; no-op unless jk_groups is set."""
+        if self.jk_groups:
+            fill_hist(out, name + self.JK_GROUP_SUFFIX, dataset=dataset, jk=labels,
+                      weight=weight, **axes)
+
+    def _check_jk_groups(self, jk_groups):
+        jk_groups = int(jk_groups or 0)
+        if jk_groups < 0 or jk_groups == 1:
+            raise ValueError(f"jk_groups must be 0 (off) or >= 2, got {jk_groups}")
+        if jk_groups and self._do_jk:
+            raise ValueError("jk_groups replaces the delete-one *_jk modes; use one or the other")
+        return jk_groups
+
+    #############################################################
     #### generator weight + on-the-fly sumw (zjet-style)
     #############################################################
 

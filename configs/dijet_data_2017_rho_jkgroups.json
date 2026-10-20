@@ -1,0 +1,22 @@
+{
+  "channel": "dijet",
+  "dataset": "data",
+  "era": "2017",
+  "mode": "minimal_rho",
+  "systematic_profile": "no_syst",
+  "executor_mode": "dask-casa",
+  "casa": true,
+  "test": false,
+  "useDefault": false,
+  "chunksize": 100000,
+  "chunksize_test": 50000,
+  "group_mode": "all_in_one",
+  "redirector": "casa",
+  "prependstr": "root://xcache/",
+  "worker_memory": "6 GiB",
+  "n_workers": 400,
+  "worker_merge": 4,
+  "treereduce": true,
+  "jk_groups": 100,
+  "_comment": "Event-group jackknife input for the dijet rho unfolding statistics: a separate nominal-only minimal_rho run on the pair_split fiducial (same files and running conditions as dijet_data_2017_minimal_rho_pairsplit.json, never run together with all_syst). jk_groups=100 fills the six rho unfolding hists once more into <name>_jkgroups copies, each event in one of 100 groups (splitmix64 hash of run, lumi, event); the unfolding forms the delete-one replicas as total - group. The processor forces nominal weights and jets whenever jk_groups is set. Output minimal_rho_dijet_data_jkg100_2017.pkl; copy it to the unfold inputs under inputs/dijet/rho/<tag>/jackknife/data/."
+}

@@ -1117,6 +1117,7 @@ def run_once(
     rho_refine: int | None = None,
     worker_merge: int = 1,
     treereduce: bool = False,
+    jk_groups: int = 0,
 ):
     print("Running over:", list(fileset.keys())[:10], "..." if len(fileset) > 10 else "")
     mode = normalize_mode_for_channel(mode, channel)
@@ -1163,6 +1164,11 @@ def run_once(
         jet_systematics=jet_systematics,
         mode=mode,
     )
+    #### one-pass event-group jackknife (hadronic only; see HadronicProcessorBase)
+    if jk_groups:
+        if channel not in ("dijet", "trijet"):
+            raise ValueError("jk_groups is implemented for the hadronic channels only")
+        proc_kwargs["jk_groups"] = int(jk_groups)
     # reweight_source / rho_refine are only zjet knobs
     if channel == "zjet":
         proc_kwargs["reweight_source"] = reweight_source
@@ -1203,6 +1209,7 @@ def make_output_filename(
     output_dir: str | os.PathLike[str] | None = None,
     reweight_source: str = "herwig",
     rho_refine: int | None = None,
+    jk_groups: int = 0,
 ) -> str:
     base = "data" if data else dataset
     if channel and channel != "zjet":
@@ -1213,6 +1220,9 @@ def make_output_filename(
     # distinct file per rho-axis refinement (2x -> _r2, 4x -> _r4)
     if rho_refine and rho_refine != 1:
         base = f"{base}_r{rho_refine}"
+    # the nominal-only event-group jackknife run never overwrites the nominal
+    if jk_groups:
+        base = f"{base}_jkg{int(jk_groups)}"
     mode_token = ""
     if mode:
         output_mode = OUTPUT_MODE_TAGS.get(mode, mode)
@@ -1296,6 +1306,7 @@ def run_from_config(cfg, *, client=None, repo_root=None, log=print):
             rho_refine=cfg.get("rho_refine", None),
             worker_merge=cfg.get("worker_merge", 1),
             treereduce=cfg.get("treereduce", False),
+            jk_groups=cfg.get("jk_groups", 0),
         )
         tag = get_group_tag(index, cfg["era"], group_mode)
         fout = make_output_filename(
@@ -1304,6 +1315,7 @@ def run_from_config(cfg, *, client=None, repo_root=None, log=print):
             output_dir=paths.repo_root / "outputs",
             reweight_source=cfg.get("reweight_source", "herwig"),
             rho_refine=cfg.get("rho_refine", None),
+            jk_groups=cfg.get("jk_groups", 0),
         )
         save_output(out, fout)
         log(f"[{index + 1}] Saved: {fout}")
