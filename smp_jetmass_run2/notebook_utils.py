@@ -780,35 +780,43 @@ def normalize_worker_memory(worker_memory):
 #### the graph on one or two workers and throughput drops to serial.
 POOL_CHUNKS_PER_WORKER = 2
 POOL_MIN_WORKERS = 4
+#### Header reads are xrootd round trips, so threads overlap them: serially,
+#### 640 files took ~4 min from the casa notebook pod.
+POOL_SCAN_THREADS = 32
+
+
+def _fileset_files(fileset):
+    return [f for files in fileset.values()
+            for f in (list(files) if isinstance(files, dict) else files)]
 
 
 def estimate_nchunks(fileset, chunksize, treename="Events", log=print):
     """Coffea chunk count for a fileset: sum of ceil(nevents / chunksize).
 
     Metadata-only -- uproot reads each file's header for num_entries, no
-    branches. Cheap enough to do on the driver before every submit. A file
-    that cannot be opened counts as one chunk rather than aborting the run;
-    the estimate only sets the pool size, so being a little off is harmless.
+    branches, POOL_SCAN_THREADS files at a time. A file that cannot be opened
+    counts as one chunk rather than aborting the run; the estimate only sets
+    the pool size, so being a little off is harmless.
     """
     import math
+    from concurrent.futures import ThreadPoolExecutor
 
     import uproot
 
-    total, nfiles, bad = 0, 0, 0
-    for _ds, files in fileset.items():
-        if isinstance(files, dict):
-            files = list(files)
-        for f in files:
-            try:
-                with uproot.open(f) as handle:
-                    total += math.ceil(handle[treename].num_entries / chunksize)
-                nfiles += 1
-            except Exception:
-                total += 1
-                bad += 1
+    def nchunks_of(f):
+        try:
+            with uproot.open(f) as handle:
+                return math.ceil(handle[treename].num_entries / chunksize)
+        except Exception:
+            return None
+
+    files = _fileset_files(fileset)
+    with ThreadPoolExecutor(max_workers=max(1, min(POOL_SCAN_THREADS, len(files)))) as pool:
+        counts = list(pool.map(nchunks_of, files))
+    bad = sum(c is None for c in counts)
     if bad:
         log(f"[pool] {bad} file(s) unreadable for num_entries; counted as 1 chunk each")
-    return total, nfiles
+    return sum(1 if c is None else c for c in counts), len(files) - bad
 
 
 def size_pool_for_fileset(client, fileset, chunksize, cap=None, label="", log=print):
@@ -822,13 +830,19 @@ def size_pool_for_fileset(client, fileset, chunksize, cap=None, label="", log=pr
     cluster = getattr(client, "cluster", None) if client is not None else None
     if cluster is None or not hasattr(cluster, "adapt"):
         return None
-    nchunks, nfiles = estimate_nchunks(fileset, chunksize, log=log)
-    n_req = max(POOL_MIN_WORKERS, nchunks // POOL_CHUNKS_PER_WORKER)
-    if cap:
-        n_req = min(cap, n_req)
+    nfiles = len(_fileset_files(fileset))
+    if cap and nfiles // POOL_CHUNKS_PER_WORKER >= cap:
+        #### every non-empty file is at least one chunk, so the cap binds anyway
+        n_req, chunks_msg = cap, f">= {nfiles} chunks (cap binds, no header scan)"
+    else:
+        nchunks, nfiles = estimate_nchunks(fileset, chunksize, log=log)
+        n_req = max(POOL_MIN_WORKERS, nchunks // POOL_CHUNKS_PER_WORKER)
+        if cap:
+            n_req = min(cap, n_req)
+        chunks_msg = f"~{nchunks} chunks"
     before = len(getattr(cluster, "scheduler_info", {}).get("workers", {}) or {})
     cluster.adapt(minimum=n_req, maximum=n_req)
-    log(f"[pool] {label}: {nfiles} files, ~{nchunks} chunks @ chunksize={chunksize} "
+    log(f"[pool] {label}: {nfiles} files, {chunks_msg} @ chunksize={chunksize} "
         f"-> adapt({n_req}, {n_req})  [pool was {before}]")
     return n_req
 
