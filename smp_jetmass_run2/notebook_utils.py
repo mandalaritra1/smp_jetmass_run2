@@ -195,6 +195,8 @@ ANALYSIS_CONFIG_DEFAULTS = {
     # optional DAS-name substring filter (hadronic): e.g. "HT1000to1500" to point a
     # quick test at a high-HT bin (low-HT bins select nothing in dijet/trijet).
     "dataset_filter": "",
+    # optional DAS-name substrings to drop (hadronic), e.g. ["QCD_HT100to200"]
+    "exclude_datasets": [],
 }
 
 
@@ -521,13 +523,15 @@ def build_hadronic_fileset(
     redirector: str = "casa",
     prepend: str = "root://xcache/",
     name_filter: str | None = None,
+    exclude: list[str] | tuple[str, ...] = (),
 ) -> dict[str, list[str]]:
     """Build a hadronic fileset from samples/hadronic/*.json.
 
     `name_filter`, if given, keeps only datasets whose DAS name contains that
     substring (e.g. "HT1000to1500") — useful to point a quick test at a high-HT
     bin, since the low-HT bins (HT200to300, ...) yield no events passing the
-    dijet/trijet pt>200 / 3-jet selection.
+    dijet/trijet pt>200 / 3-jet selection. `exclude` drops every dataset whose
+    DAS name contains one of its substrings.
     """
     if dataset not in HADRONIC_FILESETS:
         raise ValueError(
@@ -559,6 +563,8 @@ def build_hadronic_fileset(
             if qualifier and qualifier not in das:
                 continue
             if name_filter and name_filter not in das:
+                continue
+            if any(part in das for part in exclude):
                 continue
             urls = []
             for path in files:
@@ -1342,6 +1348,7 @@ def run_from_config(cfg, *, client=None, repo_root=None, log=print):
                 paths.samples_hadronic_dir, dataset=dataset, era=cfg["era"],
                 redirector=cfg["redirector"], prepend=prependstr,
                 name_filter=(cfg.get("dataset_filter") or None),
+                exclude=cfg.get("exclude_datasets", ()),
             )
             _run_and_save(fileset, 0)
         elif dataset == "data":
