@@ -62,31 +62,7 @@ class util_binning :
         self.channel = channel
         self.rho_refine = int(rho_refine)
         self.jetR = 0.8  # AK8 radius, used in rho = 2*log10(m/(pt*R))
-        #self.ptreco_axis = hist.axis.Variable([200,260,350,460,550,650,760,13000], name="ptreco", label=r"p_{T,RECO} (GeV)")
         
-        #self.mgen_axis = hist.axis.Variable([0, 10, 20, 40, 60, 80, 100, 13000], name="mgen", label=r"Mass (GeV)")
-
-        ### Original version
-        #self.mgen_axis = hist.axis.Variable([0, 10, 20, 40, 60, 80, 100, 150, 200, 13000], name="mgen", label=r"Mass (GeV)")
-        
-        #self.mreco_axis = hist.axis.Variable([0, 5, 10, 15, 20, 30, 40, 50, 60, 70, 80, 90, 100, 125, 150, 175, 200, 6200, 13000], name="mreco", label=r"$m_{RECO}$ (GeV)")
-        ############
-
-        #self.mgen_axis = hist.axis.Variable([0, 10, 20, 40, 60, 80, 100, 120, 140, 160, 200, 13000], name="mgen", label=r"Mass (GeV)")
-        #self.mreco_axis = hist.axis.Variable([0, 5, 10, 15, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130 , 140, 150, 160, 180, 200, 250, 300, 350, 400, 500, 1000, 13000], name="mreco", label=r"$m_{RECO}$ (GeV)")
-
-        #self.mgen_axis = hist.axis.Regular(100,0,200, name="mgen", label=r"Mass (GeV)")
-        #self.mreco_axis = hist.axis.Regular(100,0,200, name="mreco", label=r"$m_{RECO}$")
-
-        ### Only for making the response matrix for Herwig TOY MC
-        #self.mgen_axis = hist.axis.Variable([0, 5, 10, 15, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 13000], name="mgen", label=r"Mass (GeV)")
-
-        
-        #self.mreco_axis = hist.axis.Variable([0, 5, 10, 15, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 13000] , name="mreco", label=r"$m_{RECO}$ (GeV)")
-        # Original bins
-        # self.mgen_axis = hist.axis.Variable([0, 5, 10, 20, 40, 60, 80, 100, 120, 140,160, 180, 200, 13000], name="mgen", label=r"Mass (GeV)")
-        # self.mreco_axis = hist.axis.Variable([0, 2.5, 5, 7.5, 10, 15, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200, 500, 13000] , name="mreco", label=r"$m_{RECO}$ (GeV)")
-
         self.mgen_axis = hist.axis.Variable([0.0, 10.0, 20.0, 30.0, 50.0, 70.0, 90.0, 110.0, 130.0, 150.0, 170.0, 200.0, 1000.0], name="mgen", label=r"Mass (GeV)")
         self.mreco_axis = hist.axis.Variable([0.0, 5.0, 10.0, 15.0, 20.0, 25.0,  30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0, 110.0, 120.0, 130.0, 140.0, 150.0, 160.0, 170.0, 185.0, 200.0, 215.0, 1000.0] , name="mreco", label=r"$m_{RECO}$ (GeV)")
 

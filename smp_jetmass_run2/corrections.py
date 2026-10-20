@@ -464,46 +464,21 @@ def GetEleTrigEff(IOV, lep0pT, lep0eta):
         ak.unflatten(sf_down, counts),
     )
     
-# def getRapidity(p4):
-#     return 0.5 * np.log(( p4.energy + p4.pz ) / ( p4.energy - p4.pz ))
 def getRapidity(obj, eps=1e-12):
     pt, eta, m = obj.pt, obj.eta, obj.mass
     pz = pt * np.sinh(eta)
     E  = np.sqrt((pt * np.cosh(eta))**2 + m**2)
-    # print("[IN FUNCTION] Computing rapidity")
-    # print("[IN FUNCTION] Energy ", E)
-    # print("[IN FUNCTION] pz", pz)
 
     num = E + pz
     den = E - pz
-    # print("[IN FUNCTION] num ", num)
-    # print("[IN FUNCTION] den ", den)
     den = ak.where(den > eps, den, np.nan)
     num = ak.where(num > eps, num, np.nan)
     rapidity = 0.5 * np.log(num / den)
-    # print("[IN FUNCTION] Rapidity ", rapidity)
-    # print("[IN FUNCTION] Eta ", eta)
     return rapidity
     
 
 
 
-
-# def compute_rapidity(obj):
-#     """
-#     Compute rapidity for NanoAOD objects with pt, eta, phi, mass
-#     Works with awkward arrays (coffea NanoEvents).
-#     """
-
-#     pt = obj.pt
-#     eta = obj.eta
-#     mass = obj.mass
-
-#     pz = pt * np.sinh(eta)
-#     energy = np.sqrt((pt * np.cosh(eta))**2 + mass**2)
-
-#     y = 0.5 * np.log((energy + pz) / (energy - pz))
-#     return y
 def compute_rapidity(obj, eps=1e-12):
     pt = obj.pt
     eta = obj.eta
@@ -611,23 +586,6 @@ def resource_path(package: str, *parts: str) -> str:
     ref = _resource_root(package).joinpath(*parts)
     path = _resource_stack.enter_context(as_file(ref))
     return str(path)
-
-# def getLumiMaskRun2():
-
-
-#     golden_json_dir = _resource_root() / "corrections" / "goldenJsons"
-#     golden_json_path_2016 = golden_json_dir / "Cert_271036-284044_13TeV_Legacy2016_Collisions16_JSON.txt"
-#     golden_json_path_2017 = golden_json_dir / "Cert_294927-306462_13TeV_UL2017_Collisions17_GoldenJSON.txt"
-#     golden_json_path_2018 = golden_json_dir / "Cert_314472-325175_13TeV_Legacy2018_Collisions18_JSON.txt"
-
-#     masks = {
-#         "2016APV": LumiMask(str(golden_json_path_2016)),
-#         "2016": LumiMask(str(golden_json_path_2016)),
-#         "2017": LumiMask(str(golden_json_path_2017)),
-#         "2018": LumiMask(str(golden_json_path_2018)),
-#     }
-
-#     return masks
 
 def getLumiMaskRun2():
     pkg = "smp_jetmass_run2"  # package root
@@ -797,8 +755,6 @@ def _get_jet_factory(IOV, isData, mode, era, uncertainties_key):
     corrections_root = pkg_root.joinpath("corrections")
     jec_dir = corrections_root.joinpath("JEC", jec_tag)
     data_file = jec_dir.joinpath(f"{jec_tag}_L1FastJet_{AK_str}.jec.txt")
-    #print("File exists check for JEC: ", str(data_file))
-    #print(data_file.is_file())
 
     with ExitStack() as stack:
         tmp_dir = Path(stack.enter_context(tempfile.TemporaryDirectory()))
@@ -1015,10 +971,6 @@ def HEMVeto(FatJets, runs, iov):
     
     runid = (runs >= 319077)
     print(runid)
-    # print("Fat jet phi ", FatJets.phi)
-    # print("Fat jet phi length ", len(FatJets.phi))
-    # print("Fat jet eta ", FatJets.eta)
-    # print("Fat jet eta length ", len(FatJets.eta))
     detector_region1 = ((FatJets.phi < -0.87) & (FatJets.phi > -1.57) &
                        (FatJets.eta < -1.3) & (FatJets.eta > -2.5))
     detector_region2 = ((FatJets.phi < -0.87) & (FatJets.phi > -1.57) &

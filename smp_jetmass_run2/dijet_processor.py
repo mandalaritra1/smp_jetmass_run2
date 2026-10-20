@@ -695,8 +695,6 @@ class DijetProcessor(HadronicProcessorBase):
                     #### Select events with at least 2 jets
                     if not self.do_minimal:
                         HT = ak.sum(events_corr.GenJetAK8.pt, axis=-1)
-                        # fill_hist(out, "njet_gen", dataset=dataset, syst = jetsyst, n=ak.num(events_corr.GenJetAK8), 
-                        #                  weight = weights )
                         self.logging.debug("Len of HT ", len(HT))
                         self.logging.debug("HT (sum of jet pts) ", HT)
                         self.logging.debug("len of events ", len(events_jk))
@@ -710,9 +708,6 @@ class DijetProcessor(HadronicProcessorBase):
                     rap_sel = ak.where(sel.all("twoGenJet"), rap_cut_gen, False)
                     sel.add("genRap2p5", rap_sel)
                     sel.add("genRap_seq", sel.all("twoGenJet", "genRap2p5"))
-                    # if not self.jk:
-                    #     fill_hist(out, "jet_rap_gen", dataset=dataset, syst = jetsyst, rapidity=ak.flatten(getRapidity(GenJetAK8[sel.all("twoGenJet")][:,:2].p4), axis=1), weight=np.repeat(weights[sel.all("twoGenJet")], 2))
-                    #     fill_hist(out, "jet_phi_gen", dataset=dataset, systematic=jetsyst, phi=ak.flatten(GenJetAK8[sel.all("twoGenJet")][:,:2].phi, axis=1), weight=np.repeat(weights[sel.all("twoGenJet")], 2))  
                     
                     if jetsyst == "nominal": out['cutflow'][datastr]['nEvents after gen rapidity selection '] += (len(events_corr[sel.all("genRap_seq")].FatJet))
                     #### get dphi selection -- require two jets in addition to cuts to prevent breaking anything
@@ -877,8 +872,6 @@ class DijetProcessor(HadronicProcessorBase):
                     misses = ~matches | sel.require(genTot_seq=True, recoTot_seq=False)
                     sel.add("misses", misses )
                     miss_sel = misses & sel.all("genTot_seq")
-                    # print("Nevents after removing misses ", ak.sum(sel.all("recoTot_seq", "removeMisses")))
-                    # print("Number of misses ", ak.sum(miss_sel))
                     if len(weights[miss_sel])>0 and not self.do_minimal:
                         if jetsyst == "nominal": out['cutflow'][datastr]['misses_u'] += (len(events_corr[miss_sel].GenJetAK8))
                         ###### Applying misses selection to gen jets and getting sd mass
@@ -896,9 +889,6 @@ class DijetProcessor(HadronicProcessorBase):
                     #### Fakes include events missing a gen level mass or sdmass value, events failing index dr matching, and events passing reco cut but failing the gen cut
                     matches = ~ak.any(ak.is_none(events_corr.FatJet[:,:2].matched_gen.pt, axis=-1), axis=1)
                     sel.add("matched_reco", matches)
-                    # print("Matches ", matches)
-                    # print("Number of nones (fakes) ", ak.sum(~matches))
-                    # print("matched_gen nones ", ak.sum(ak.is_none(events_corr.FatJet[:,:2].matched_gen.pt, axis=-1)))
                     fakes = ~matches | sel.require(genTot_seq=False, recoTot_seq=True)
                     fakes = ak.where(sel.all("recoTot_seq"), fakes, False)
                     sel.add("fakes", fakes)
@@ -1074,10 +1064,6 @@ class DijetProcessor(HadronicProcessorBase):
                                         reco=reco_dijet)
                     genjet0 = events_corr[sel.all("final_seq")].FatJet[:,0].matched_gen
                     genjet1 = events_corr[sel.all("final_seq")].FatJet[:,1].matched_gen
-                    # print("Number of mismatched leading dijets", ak.sum(events_corr[sel.all("final_seq")].GenJetAK8[:,0].pt!=genjet0.pt))
-                    # print("Number of jets j0 matched to j1", ak.sum(events_corr[sel.all("final_seq")].GenJetAK8[:,0].mass==genjet1.mass))
-                    # print("Number of mismatched subleading dijets", ak.sum(events_corr[sel.all("final_seq")].GenJetAK8[:,1].pt!=genjet1.pt))
-                    # print("Number of jets j1 matched to j0", ak.sum(events_corr[sel.all("final_seq")].GenJetAK8[:,1].mass==genjet0.mass))
                     groomed_genjet0 = get_gen_sd_mass_jet(genjet0, events_corr[sel.all("final_seq")].SubGenJetAK8)
                     groomed_genjet1 = get_gen_sd_mass_jet(genjet1, events_corr[sel.all("final_seq")].SubGenJetAK8)
                     groomed_gen_dijet = ak.concatenate([groomed_genjet0[:, np.newaxis],  groomed_genjet1[:, np.newaxis]], axis=1)
@@ -1269,10 +1255,6 @@ class DijetProcessor(HadronicProcessorBase):
                         #### plots for checking whether jet veto is needed
                         fill_hist(out, "jet_pt_eta_phi", dataset=dataset,systematic=jetsyst, ptreco=dijet.pt, phi=dijet.phi, eta=dijet.eta, weight=dijet_weights)
                         fill_hist(out, "HT_aftercuts", dataset=dataset, systematic=jetsyst, pt=HT, weight=final_weights)
-                        # fill_hist(out, "ptreco_mreco_fine_u", dataset=dataset,systematic=jetsyst, **jkkw, pt=dijet.pt, mass=dijet.mass, 
-                        #                             weight=dijet_weights )
-                        # fill_hist(out, "ptreco_mreco_fine_g", dataset=dataset,systematic=jetsyst, **jkkw, pt=dijet.pt, mass=dijet.msoftdrop, 
-                        #                             weight=dijet_weights )
                 if (jetsyst == "nominal"): 
                     for name in sel.names:
                         out["cutflow"][datastr][name] += sel.all(name).sum()

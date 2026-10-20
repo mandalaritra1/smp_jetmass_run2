@@ -450,13 +450,6 @@ class TrijetProcessor(HadronicProcessorBase):
                 corrected_subjets = self._empty_jet_variations(events_jk.SubJet)
             corrected_fatjets['msoftdrop'] =   (corrected_subjets[corrected_fatjets.subJetIdx1] + corrected_subjets[corrected_fatjets.subJetIdx2]).mass 
 
-            # if not self.do_minimal:
-            #     fill_hist(out, "sdmass_orig", dataset=dataset, **jkkw, ptreco=events_jk[(ak.num(events_jk.FatJet) > 2)].FatJet[:,2].pt, mreco=events_jk[(ak.num(events_jk.FatJet) > 2)].FatJet[:,2].msoftdrop)
-            #     fill_hist(out, "sdmass_ak4corr", dataset=dataset, **jkkw, ptreco=corrected_fatjets[(ak.num(corrected_fatjets) > 2)][:,2].pt, mreco=corrected_fatjets[(ak.num(corrected_fatjets) > 2)][:,2].msoftdrop)
-                # corrected_fatjets_ak8 = corrected_fatjets
-                # corrected_fatjets_ak8 = GetCorrectedSDMass(corrected_fatjets, events_jk, era, IOV, isData=not self.do_gen, useSubjets = False)
-                # fill_hist(out, "sdmass_ak8corr", dataset=dataset, **jkkw, ptreco=corrected_fatjets_ak8[(ak.num(corrected_fatjets_ak8) > 2)][:,2].pt, mreco=corrected_fatjets_ak8[(ak.num(corrected_fatjets_ak8) > 2)][:,2].msoftdrop)
-
             for jetsyst in self.jet_systematics:
                 #####################################
                 #### For each jet correction, we need to add JMR and JMS corrections on top (except if we're doing data).
@@ -608,11 +601,6 @@ class TrijetProcessor(HadronicProcessorBase):
                 #################################### 
                 if self.do_gen:
                     self.logging.debug("DOING GEN")
-                    # if not self.do_minimal:
-                    #     HT = ak.sum(events_corr.GenJetAK8.pt, axis=-1)
-                        # fill_hist(out, "HT_nocuts", dataset=dataset, systematic=jetsyst, pt=HT)
-                        # fill_hist(out, "HT_wXS", dataset=dataset, systematic=jetsyst, pt=HT, weight=weights)
-                    # pt_cut_gen = genjet.pt > 200. #### removing
                     sel.add("triGenJet", (ak.num(events_corr.GenJetAK8) > 2)) # & pt_cut_gen ) ####removing to be consistent w/ aritra
                     GenJetAK8 = events_corr.GenJetAK8
                     GenJetAK8['p4']= ak.with_name(events_corr.GenJetAK8[["pt", "eta", "phi", "mass"]],"PtEtaPhiMLorentzVector")
@@ -649,9 +637,6 @@ class TrijetProcessor(HadronicProcessorBase):
                         sel.all("triGenJet"),
                         dphi12_gen < np.pi - 200. / ptavg_gen, False))
                     self.logging.debug("Finding min dphi done")
-                    # if not self.do_minimal and jetsyst=='nominal':
-                    #     fill_hist(out, "asymm_gen", dataset=dataset, systematic=jetsyst, ptgen=events_corr[sel.all("triGenJet")].GenJetAK8[:,2].pt, frac = asymm_gen[sel.all("triGenJet")], weight=weights[sel.all("triGenJet")])
-                        # fill_hist(out, "dphimin_gen", dataset=dataset, systematic=jetsyst, dphi = dphimin_gen[sel.all("triGenJet")], weight = weights[sel.all("triGenJet")])
                     gensubjets = events_corr.SubGenJetAK8
                     groomed_genjet = get_gen_sd_mass_jet(ak.firsts(GenJetAK8[:,2:]), gensubjets)
                     if self._pair_split:
@@ -665,9 +650,6 @@ class TrijetProcessor(HadronicProcessorBase):
                 #### Reco Jet Selection
                 ####################################
             
-                # if not self.do_minimal and jetsyst=='nominal':
-                #     fill_hist(out, "njet_reco", dataset=dataset, syst = jetsyst, n=ak.to_numpy(ak.num(events_corr[sel.all("npv")].FatJet), allow_missing=True), 
-                #                          weight = ak.to_numpy(weights[sel.all("npv")], allow_missing=True) )
                 FatJet = events_corr.FatJet
                 FatJet["p4"] = ak.with_name(events_corr.FatJet[["pt", "eta", "phi", "mass"]],"PtEtaPhiMLorentzVector")
                 jet = ak.firsts(FatJet[:,2:])
@@ -679,11 +661,8 @@ class TrijetProcessor(HadronicProcessorBase):
                 sel.add("recoRap2p5", rap_sel)
                 sel.add("recoRap_seq", sel.all("triRecoJet_seq", "recoRap2p5")) 
                 self.logging.debug("nevents after rap cut ", ak.sum(sel.all("recoRap_seq")))
-                # if not self.do_minimal and jetsyst=='nominal':
-                #     fill_hist(out, "jet_rap_reco", dataset=dataset, syst = jetsyst, rapidity=ak.to_numpy(getRapidity(FatJet[sel.all("triRecoJet_seq")][:,2].p4), allow_missing=True), weight=weights[sel.all("triRecoJet_seq")])
-                #     fill_hist(out, "jet_phi_reco", dataset=dataset, systematic=jetsyst, phi=FatJet[sel.all("triRecoJet_seq")][:,2].phi, weight=weights[sel.all("triRecoJet_seq")]) 
 
-                #### ak.first fills empty values with none --> ak.singletons 
+                #### ak.first fills empty values with none --> ak.singletons
                 jet1 = ak.firsts(events_corr.FatJet[:,0:])
                 jet2 = ak.firsts(events_corr.FatJet[:,1:])
                 jet3 = ak.firsts(events_corr.FatJet[:,2:])
@@ -914,8 +893,6 @@ class TrijetProcessor(HadronicProcessorBase):
                         #### plots for checking whether jet veto map is needed
                         HT = ak.sum(events_corr[sel.all("final_seq")].GenJetAK8.pt, axis=-1)
                         fill_hist(out, "HT_aftercuts", dataset=dataset, systematic=jetsyst, pt=HT, weight=final_weights)
-                        # fill_hist(out, "ptreco_mreco_fine_u", dataset=dataset,systematic=jetsyst, **jkkw, pt=jet.pt, mass=jet.mass, weight=reco_weights )
-                        # fill_hist(out, "ptreco_mreco_fine_g", dataset=dataset,systematic=jetsyst, **jkkw, pt=jet.pt, mass=jet.msoftdrop, weight=reco_weights )
                         
                     fill_hist(out, "response_matrix_u", dataset=dataset, systematic=jetsyst, **jkkw, ptreco=jet.pt, ptgen=genjet.pt, 
                                                   mreco=jet.mass, mgen=genjet.mass, weight = final_weights)
@@ -1042,8 +1019,6 @@ class TrijetProcessor(HadronicProcessorBase):
                                   mpt_reco=self._rho(jet.msoftdrop[floor_reco_g], jet.pt[floor_reco_g]),
                                   weight=final_weights[floor_reco_g])
                     if not self.do_minimal:
-                        # fill_hist(out, "ptreco_mreco_fine_u", dataset=dataset,systematic=jetsyst, **jkkw, pt=jet.pt, mass=jet.mass, weight=reco_weights  )
-                        # fill_hist(out, "ptreco_mreco_fine_g", dataset=dataset,systematic=jetsyst, **jkkw, pt=jet.pt, mass=jet.msoftdrop, weight=reco_weights  )
                         fill_hist(out, "MET_over_sumET_pt_reco", dataset=dataset,systematic=jetsyst, frac=events_corr[sel.all("final_seq")].MET.pt/events_corr[sel.all("final_seq")].MET.sumEt, ptreco=jet.pt, weight=final_weights  )
                         fill_hist(out, "MET_pt_reco", dataset=dataset,systematic=jetsyst, pt=events_corr[sel.all("final_seq")].MET.pt, ptreco=jet.pt, weight=final_weights )
                         fill_hist(out, "jet_pt_eta_phi", dataset=dataset, systematic=jetsyst, ptreco=jet.pt, phi=jet.phi, eta=jet.eta, weight=final_weights )
