@@ -134,13 +134,10 @@ class util_binning :
             name='mpt_gen', label=r'$\log(\rho^2)$'
         )
 
-        # Groomed truth rho binning.  Its detector-level counterpart below has
-        # exactly two bins per truth bin; ungroomed rho retains the axis above.
-        # The shown region (-3..-1.5) stays 0.5-wide: finer bins there tripled the
-        # unfolded stat error at ~35% purity.  Instead the tail below -3.5 is
-        # resolved at 0.25 down to -5 -- a hidden buffer that absorbs low-rho
-        # migrations so they do not leak into the last shown bin.  The deep tail
-        # (< -5) stays a coarse sink; it is too sparse to bin finely.
+        # Groomed truth rho binning; the detector axis has two bins per truth bin.
+        # The shown region stays 0.5 wide (finer bins tripled the unfolded stat
+        # error), and the tail below -3.5 is a hidden 0.25-wide buffer down to -5
+        # that keeps low-rho migrations out of the last shown bin.
         self.mgen_over_pt_g_axis = hist.axis.Variable(
             _refine_edges(
                 [-10, -6, -5, -4.75, -4.5, -4.25, -4, -3.75, -3.5,
@@ -171,19 +168,10 @@ class util_binning :
         )
  
         
-        # ARC round-2: the low pt sink bin is [185,200], not [0,200]. The old
-        # [0,200] bin was populated down to the storage floors (FatJet reco floor
-        # ~170 GeV, GenJetAK8 gen floor ~100 GeV) -- a wide, data/MC-mismodelled,
-        # gen/reco-asymmetric region. Narrowing it to [185,200] keeps the near-200
-        # resolution migration inside the response matrix and routes everything
-        # further from 200 GeV into the pt underflow, to be handled as a fake
-        # (reco<185) or miss (gen<185).
-        # NB: this cut creates pt-underflow content for the first time, so the
-        # unfold-side fake/miss derivation must sum the matched matrix over the
-        # IN-RANGE pt bins only (exclude pt flow); the flow-inclusive projection
-        # would otherwise fold cross-boundary events back into "matched" and leak
-        # them out of both the matrix and the fakes/misses. See the unfold repo
-        # arc_round2 branch (_make_inputs_numpy).
+        # The low pt sink bin is [185, 200]: it keeps the near-200 GeV migration
+        # inside the response, and anything further below goes to the pt underflow
+        # as a fake (reco < 185) or miss (gen < 185). The unfolding must therefore
+        # build fakes and misses from the in-range pt bins only.
         self.ptgen_axis = hist.axis.Variable([185.,  200.,   290.,   400.,    13000.], name="ptgen", label=r"$p_{T,GEN}$ (GeV)")
         self.ptreco_axis = hist.axis.Variable([185., 200.,   290.,   400.,    13000.], name="ptreco", label=r"$p_{T,RECO}$ (GeV)")
 
@@ -230,9 +218,8 @@ class util_binning :
         self.m_g_reco_cov_axis = hist.axis.Variable(_m_gen_cov_edges, name="m_g_reco", label=r"$m_{groomed,RECO}$ [GeV]")
         self.mpt_u_reco_cov_axis = hist.axis.Variable(_rho_gen_cov_edges, name="mpt_u_reco", label=r"$\log_{10}(\rho^2)_{ungroomed,RECO}$")
         self.mpt_g_reco_cov_axis = hist.axis.Variable(_rho_gen_cov_edges, name="mpt_g_reco", label=r"$\log_{10}(\rho^2)_{groomed,RECO}$")
-        # Gen-level Z/jet pT-balance diagnostic (2026-09-17, Garvita's HERWIG
-        # request): the ratio pT(jet)/pT(Z) and the signed asymmetry, versus a
-        # Z-pT axis that starts at the gen Z pT cut of 90 GeV.
+        # Gen-level Z/jet pT-balance diagnostic for the HERWIG comparison:
+        # pT(jet)/pT(Z) and the signed asymmetry, versus gen Z pT from the 90 GeV cut.
         self.ptz_balance_axis = hist.axis.Variable(
             [90., 150., 200., 290., 400., 13000.], name="ptz", label=r"$p_{T,Z}^{GEN}$ (GeV)")
         self.ptfrac_axis = hist.axis.Regular(
@@ -264,18 +251,9 @@ class util_binning :
         #            with extra low-rho bins (-8,-7) for the gluon tail.
         # -----------------------------------------------------------------
         if channel in ("dijet", "trijet"):
-            # Low-pt sink is [185,200] as in zjet (ARC round-2 rationale above:
-            # keep the near-200 resolution migration inside the response, route
-            # everything further below into the pt underflow as fake/miss); the
-            # additional high-pt bins beyond zjet's 400 are kept (hadronic
-            # triggers reach much higher).  Same unfold-side caveat as zjet:
-            # fake/miss-by-subtraction must sum the matched matrix over the
-            # IN-RANGE pt bins only (exclude pt flow).
-            # Both binning-study results are SUBSETS of these edges (dijet
-            # 200/290/400/480/570/inf, trijet 200/290/400/inf), so the pt
-            # binning is an unfold-time merge and this axis stays as-is --
-            # merge pt on BOTH axes, never gen-only (see the study's chi2_A
-            # jump when only the gen pt binning was merged).
+            # Same [185, 200] sink as zjet above, plus high-pt bins for the hadronic
+            # triggers. The binning-study pt edges are subsets of these, so pt merging
+            # happens at unfold time, on gen and reco together.
             self.ptgen_axis  = hist.axis.Variable(
                 [185., 200., 290., 400., 480., 570., 680., 760., 820., 13000.],
                 name="ptgen",  label=r"$p_{T,GEN}$ (GeV)")
@@ -296,25 +274,11 @@ class util_binning :
                 [-10, -8, -7, -6, -5.5, -5, -4.75, -4.5, -4.25, -4, -3.75, -3.5, -3.25,
                  -3, -2.75, -2.5, -2.25, -2, -1.75, -1.5, -1.25, -1, -0.75, -0.5, -0.25, 0],
                 name="mpt_reco", label=r"$\log(\rho^2)$ (Detector)")
-            # Groomed rho: the Z+jet-ALIGNED lattice (2026-08-27), replacing the
-            # 2026-07-25 free-edge study grid.  Every edge above the -3.5 shown
-            # floor sits on the quarter-integer grid, so any nested regrouping
-            # shares edges with the Z+jet gen binning (unfold/src/unfold/tools/
-            # binning.py) and the three channels rebin exactly onto the common
-            # [-3.5,-2.5,-2,-1.5,-1,0] axis for combined plots.  The approved
-            # reported groupings (unfold outputs/studies/aligned_binning/):
-            # dijet "aligned_seven" [-3.5,-2.5,-2,-1.5,-1.25,-1,-0.75,0]
-            # (purity 0.36-0.85, matching the legacy coarse_tail grid), trijet
-            # "wide_tail_deep" [-3.5,-2.5,-2,-1.5,-1,0].  Edges at -0.5/-0.25
-            # are carried for freedom but rejected as reported gen edges (the
-            # near-empty kinematic-edge bin above -0.5 has purity ~0.26).
-            # Below the -3.5 floor three coarse sink bins keep low-rho
-            # migrations inside the response instead of subtracting them as
-            # fakes; they merge to one [-10,-3.5] buffer at unfold time and are
-            # never reported.  The reported binning stays an unfold-time merge
-            # because every candidate is nested in this axis.
-            # The detector axis is the exact 2:1 refinement of the truth axis,
-            # same as zjet (mreco_over_pt_g_axis == gen edges halved).
+            # Groomed rho on the quarter-integer grid shared with the Z+jet gen binning,
+            # so any nested regrouping lines up across channels; the reported binning
+            # is an unfold-time merge of this axis. Below -3.5, coarse sink bins keep
+            # low-rho migrations inside the response and are never reported. The
+            # detector axis halves every gen bin, as in zjet.
             _had_rho_gen_g = [-10, -5, -4, -3.5, -3.25, -3.0, -2.75, -2.5,
                               -2.25, -2.0, -1.75, -1.5, -1.25, -1.0, -0.75,
                               -0.5, -0.25, 0]

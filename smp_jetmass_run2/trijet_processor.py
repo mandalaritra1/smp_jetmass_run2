@@ -26,16 +26,14 @@ class TrijetProcessor(HadronicProcessorBase):
     '''
     Processor to run a trijet jet mass cross section analysis.
     Ported from GluonJetMass python/trijetProcessor.py to the zjet QJetMassProcessor
-    coding conventions. The event selection is byte-for-byte identical to the
-    original; the only intentional change is HEM handling (weight-based for 2018
-    MC, hard veto for 2018 data) and canonical systematic-axis names
-    (PUSF->pu, L1prefiring->l1prefiring, PDF->pdf, ISR->isr, FSR->fsr).
+    coding conventions. selection_mode="legacy" reproduces the GluonJetMass
+    selection; the default "pair_split" takes the complement of the dijet
+    balanced-pair cut (see __init__). The port also changes HEM handling
+    (weight-based for 2018 MC, hard veto for 2018 data) and the systematic-axis
+    names (PUSF->pu, L1prefiring->l1prefiring, PDF->pdf, ISR->isr, FSR->fsr).
     '''
-    #### Weight systematics that genuinely change the gen-level prediction
-    #### (theory reweightings, nominal weight 1.0). Under these the gen truth,
-    #### the response and the misses must move consistently; every other weight
-    #### systematic is detector-side and leaves the gen truth nominal
-    #### (mirrors dijet/zjet).
+    #### Theory weights (nominal 1.0) that move the gen truth; all other weight
+    #### systematics leave it nominal. Same rule as dijet and zjet.
     _THEORY_GEN_SYSTS = frozenset({
         "isrUp", "isrDown", "fsrUp", "fsrDown", "pdfUp", "pdfDown",
         "Q2muFUp", "Q2muFDown", "Q2muRUp", "Q2muRDown",
@@ -58,30 +56,21 @@ class TrijetProcessor(HadronicProcessorBase):
 
         self.do_gen = do_gen
         self._mode = mode
-        #### Selection variant (group decision 2026-08-06).
-        ####   "pair_split" (default): the adopted fiducial -- >=3 AK8 jets with
-        ####      |y| < ycut (2.4) on the three leading jets, pt > ptcut on the
-        ####      two leading and pt > ptcut3 on the measured jet 3, min pairwise
-        ####      dphi of the three leading > 1.0 (unchanged), AND the EXACT
-        ####      COMPLEMENT of the dijet azimuthal-decorrelation cut evaluated
-        ####      on the same two leading jets: dphi12 < pi - (200 GeV)/ptavg.
-        ####      That complement is what makes dijet and trijet orthogonal by
-        ####      construction, with no priority veto in either channel.
-        ####   "legacy": the GluonJetMass-inherited selection (|y(jet3)| < 2.5,
-        ####      dphimin > 1.0, no explicit pt floors). Reproduces the
-        ####      pre-2026-08-06 behavior bit-for-bit; the cutflow regression
-        ####      runs in this mode.
+        #### Selection variant.
+        ####   "pair_split" (default): >=3 AK8 jets with |y| < ycut on the three
+        ####      leading, pt > ptcut on the two leading and pt > ptcut3 on jet 3,
+        ####      min pairwise dphi > 1.0, and dphi12 < pi - (200 GeV)/ptavg, the
+        ####      complement of the dijet cut, so the channels never share an event.
+        ####   "legacy": the GluonJetMass selection (|y(jet3)| < 2.5, dphimin > 1.0,
+        ####      no pt floors), used by the cutflow regression.
         if selection_mode not in ("pair_split", "legacy"):
             raise ValueError(f"Bad selection_mode '{selection_mode}': expected "
                              "'pair_split' or 'legacy'")
         self.selection_mode = selection_mode
         self._pair_split = selection_mode == "pair_split"
         self.do_minimal = self._mode not in ("validation", "full")
-        #### ASYMMETRIC pt floors (amendment to the 2026-08-06 spec): the two
-        #### leading jets get the full 200 GeV, the MEASURED jet 3 keeps 185 so
-        #### the 185-200 sink bin of the measured-jet pt axis stays populated
-        #### (it holds the near-threshold resolution migration inside the
-        #### response instead of routing it to fakes/misses). gen mirrors reco.
+        #### The leading jets need ptcut (200); the measured jet 3 needs ptcut3
+        #### (185) so its 185-200 sink bin fills (see util_binning). Gen mirrors reco.
         self.ptcut = ptcut
         self.ptcut3 = ptcut3
         #### |y| < 2.4 in pair_split: matches the de-facto acceptance already
@@ -97,12 +86,8 @@ class TrijetProcessor(HadronicProcessorBase):
         #### (chunk index % 2) carried on the jk axis in one pass, for the
         #### split-sample closure test. Nominal jets/weights only, like rho_jk.
         self._split2 = self._mode == "rho_split"
-        #### Flat per-jet ntuple for binning studies, ported from
-        #### dijet_processor. Nominal jet systematic only; selections untouched --
-        #### this is a pure extra output. "rho_skim" keeps every event,
-        #### "rho_skimN" keeps 1 event in N (deterministic on the event number,
-        #### so the tables stay consistent across chunks/reruns) and scales the
-        #### stored weight by N so normalization is preserved.
+        #### Flat per-jet tables for binning studies, as in dijet_processor.
+        #### "rho_skimN" keeps 1 event in N by event number and scales the weight by N.
         self._do_skim = self._mode.startswith("rho_skim")
         self._skim_prescale = 1
         if self._do_skim and self._mode != "rho_skim":
@@ -113,13 +98,9 @@ class TrijetProcessor(HadronicProcessorBase):
                                  "'rho_skim' or 'rho_skim<N>', e.g. rho_skim20")
             if self._skim_prescale < 1:
                 raise ValueError(f"Skim prescale must be >= 1, got {self._skim_prescale}")
-        #### None == "all_syst": nominal + JER/JMS/JMR up/down AND both
-        #### directions of every split JES source, the same set zjet_processor
-        #### builds. GetJetCorrections already bakes all 27 sources into the
-        #### corrected jets, and the JES branch of the jetsyst loop below reads
-        #### them; only this default used to leave them unused, so a hadronic
-        #### all_syst run was silently JES-free. minimal_syst/no_syst pass an
-        #### explicit list and are unaffected.
+        #### None == "all_syst": nominal, JER/JMS/JMR up/down and both directions
+        #### of every split JES source, the same set zjet_processor builds.
+        #### minimal_syst/no_syst pass an explicit list.
         if jet_systematics is None:
             jet_systematics = list(FULL_JET_SYSTEMATICS)
         if self._do_jk:
@@ -161,11 +142,9 @@ class TrijetProcessor(HadronicProcessorBase):
         phi_axis = hist.axis.Regular(25, -np.pi, np.pi, name="phi", label=r"$\phi$")
         jk_axes = [jk_axis] if self._do_jk else []
 
-        # NOTE: keep this a PLAIN dict (not processor.dict_accumulator). coffea
-        # reduces a plain-dict accumulator with recursive MutableMapping merging,
-        # which correctly handles the nested plain `cutflow` dict; a dict_accumulator
-        # would instead do `cutflow += cutflow` and crash on multi-chunk reduction.
-        # Hist / column_accumulator / defaultdict_accumulator leaves are Addable.
+        # Keep this a plain dict, not processor.dict_accumulator: coffea merges a
+        # plain dict recursively, which handles the nested `cutflow` dict, while a
+        # dict_accumulator does `cutflow += cutflow` and crashes on reduction.
         self.hists = {}
         self.hists['cutflow'] = {}
         self.hists['jkflow'] = processor.defaultdict_accumulator(int)
@@ -183,20 +162,10 @@ class TrijetProcessor(HadronicProcessorBase):
                 'event': processor.column_accumulator(np.array([], dtype=np.int64)),
             })
 
-        #### Binning-study ntuple: three flat per-jet tables mirroring the three
-        #### unfolding-hist families, so purity/stability/fakes/misses can be
-        #### recomputed at ANY bin edges (the hists can only ever be merged).
-        ####   matched -> final_seq    (response matrix)
-        ####   reco    -> recoTot_seq  (reco spectrum, fakes included)
-        ####   gen     -> genTot_seq   (gen spectrum, misses included)
-        #### The reco/gen TABLES and HISTS both use the full (fakes/misses
-        #### included) definitions. Fakes and misses are derived downstream by
-        #### subtracting the matched response projections, so both marginals must
-        #### be inclusive. This changes only histogram filling, not the selections
-        #### or cutflow inherited from GluonJetMass.
-        #### DATA fills only `reco` (and the event-display tables); `matched` and
-        #### `gen` are still BOOKED so a data pkl and an MC pkl have an identical
-        #### accumulator schema and merge/read back without special-casing.
+        #### Binning-study tables, one per unfolding-hist family (see dijet_processor).
+        #### reco and gen include fakes and misses, which are derived downstream by
+        #### subtracting the matched projections. Data fills only `reco`; all three
+        #### are booked so data and MC outputs share one schema.
         if self._do_skim:
             tables = {
                 t: processor.dict_accumulator(
@@ -225,15 +194,9 @@ class TrijetProcessor(HadronicProcessorBase):
                 )
             self.hists['skim'] = processor.dict_accumulator(tables)
 
-        #### Per-jet reco kinematics of the MEASURED jet (jet 3), ALWAYS
-        #### registered (every mode, rho_skim/minimal_rho included): cheap 1D
-        #### hists the production must carry so the adopted pair_split fiducial
-        #### can be validated against data. Naming follows zjet's
-        #### pt_jet0/eta_jet0/phi_jet0/mass_jet0; "jet3" is the third-leading
-        #### AK8 jet, the same 1-based label the jetNumb axis uses. Filled over
-        #### the full reco selection for every jet systematic and, under
-        #### nominal jets, every weight variation -- the systematic axis is
-        #### what carries the bands on the kinematic data/MC ratios.
+        #### Per-jet reco kinematics of the measured jet 3, registered in every mode
+        #### so each production can validate the selection against data. Names
+        #### follow zjet's pt_jet0 etc.; jet3 matches the jetNumb label.
         for _j in ("jet3",):
             register_hist(self.hists, f'pt_{_j}',        [dataset_axis, syst_cat, kin_pt_axis])
             register_hist(self.hists, f'eta_{_j}',       [dataset_axis, syst_cat, kin_eta_axis])
@@ -296,13 +259,9 @@ class TrijetProcessor(HadronicProcessorBase):
     #############################################################
     #### Binning-study skim ("rho_skim" mode)
     #############################################################
-    #### One row per JET. Unlike dijet this channel measures exactly ONE jet per
-    #### event -- the third-leading FatJet -- so there is one row per event and
-    #### `jetidx` is always 2. That also means the event-clustered input
-    #### covariance is exactly diagonal here, with no two-jet correlation to
-    #### recover. Column sets are otherwise identical to dijet's so the same
-    #### loaders and scripts/rho_*.py work unchanged; `weight` is raw
-    #### genWeight*SF and gets the xs*lumi/sumw scale in postprocess.
+    #### One row per event: trijet measures only jet 3, so `jetidx` is always 2
+    #### and the input covariance is diagonal. Columns match dijet's; `weight`
+    #### is raw genWeight*SF and postprocess applies xs*lumi/sumw.
     _SKIM_RECO_COLS = (
         ("ptreco",  np.float32), ("etareco", np.float32), ("phireco", np.float32),
         ("mreco_u", np.float32), ("mreco_g", np.float32),
@@ -360,13 +319,9 @@ class TrijetProcessor(HadronicProcessorBase):
         "recoPtFloor3", "rapLead3", "recodphiPairInv",
         "genPtFloor3", "rapGenLead3", "dphiGenPairInv",
     )
-    #### The event tables are for LOOKING at events, not for statistics, so they
-    #### are prescaled this much harder than the physics tables on top of the
-    #### mode's own prescale. 1000 rather than dijet's 100 because trijet runs
-    #### the physics tables UNPRESCALED (three-AK8-jet + one measured jet per
-    #### event already thins reco ~30x, so every reco row is wanted) -- this
-    #### keeps the event tables at the same 1-in-1000 the dijet rho_skim10 run
-    #### ended up with instead of letting them dominate the output by 10x.
+    #### Extra prescale for the event-display tables, which are for looking at
+    #### events. 1000 because the trijet physics tables run unprescaled; this
+    #### matches the 1-in-1000 of the dijet rho_skim10 run.
     _SKIM_EVENT_FACTOR = 1000
 
     def process(self, events):
@@ -560,12 +515,8 @@ class TrijetProcessor(HadronicProcessorBase):
                 ######### INITIALIZE WEIGHTS AND SELECTION
                 ##################################
                 sel = PackedSelection()
-                #### GluonJetMass-inherited double count: 'nEvents initial' is
-                #### already accumulated once per chunk at the top of process(),
-                #### and this line adds the full chunk AGAIN per nominal
-                #### iteration (2x in a plain run, (1+n_slices)x in jackknife).
-                #### Kept in legacy mode only, where the cutflow regression
-                #### requires byte-identical accumulation to GluonJetMass.
+                #### GluonJetMass double count: 'nEvents initial' is already filled at the
+                #### top of process(). Kept in legacy only, for the cutflow regression.
                 if jetsyst == "nominal" and not self._pair_split:
                     out['cutflow'][datastr]['nEvents initial'] += (len(events.FatJet))
                 self.logging.debug("mctype ", mctype, " gen? ", self.do_gen)
@@ -683,17 +634,7 @@ class TrijetProcessor(HadronicProcessorBase):
                     dphimin_gen_sel = ak.where(sel.all("triGenJet"), dphimin_gen > 1.0, False)
                     asymm_gen  = np.abs(genjet1.pt - genjet2.pt)/(genjet1.pt + genjet2.pt)
                     sel.add("dphiGen", dphimin_gen_sel)
-                    #### pair_split gen fiducial, mirroring reco exactly:
-                    ####  - |y| < ycut on the THREE leading gen jets (legacy cut
-                    ####    only the measured jet 3),
-                    ####  - pt > ptcut on the two leading, pt > ptcut3 (185) on
-                    ####    the measured jet 3 -- the asymmetric floor keeps the
-                    ####    185-200 sink bin of the measured pt axis alive. This
-                    ####    also supersedes the old unfloored-gen concern
-                    ####    (GenJetAK8 is stored far below the reco threshold).
-                    ####  - dphi12 < pi - (200 GeV)/ptavg: the exact COMPLEMENT
-                    ####    of the dijet balanced-pair cut, on the SAME two
-                    ####    leading jets, so the channels never share an event.
+                    #### pair_split gen fiducial: the reco cuts below, on gen jets.
                     ptavg_gen = 0.5 * (genjet1.pt + genjet2.pt)
                     sel.add("rapGenLead3", ak.where(
                         sel.all("triGenJet"),
@@ -753,14 +694,9 @@ class TrijetProcessor(HadronicProcessorBase):
                 dphi_sel = ak.where(sel.all("triRecoJet_seq"), (dphimin > 1.0), False)
                 sel.add("recodphimin", dphi_sel)
                 sel.add("recodphi_seq", sel.all("recodphimin", "recoRap_seq"))
-                #### pair_split reco fiducial (mirrored exactly at gen above):
-                ####  - |y| < ycut on the THREE leading jets (legacy cut only
-                ####    the measured jet 3),
-                ####  - pt > ptcut on the two leading, pt > ptcut3 (185) on the
-                ####    measured jet 3 -- the asymmetric floor deliberately keeps
-                ####    the 185-200 sink bin of the measured-jet pt axis alive,
-                ####  - dphi12 < pi - (200 GeV)/ptavg, the exact complement of
-                ####    the dijet balanced-pair cut on the SAME two leading jets.
+                #### pair_split reco fiducial (same cuts at gen above): |y| < ycut on the
+                #### three leading jets, pt > ptcut on the two leading and pt > ptcut3 on
+                #### jet 3, and the complement of the dijet dphi cut.
                 ptavg = 0.5 * (jet1.pt + jet2.pt)
                 sel.add("rapLead3", ak.where(
                     sel.all("triRecoJet_seq"),
@@ -809,13 +745,9 @@ class TrijetProcessor(HadronicProcessorBase):
                 else:
                     reco_kin_seq = sel.all("recodphi_seq", "jetId", "muonIso0p4", "hemveto")
                 sel.add("recoTot_seq", reco_kin_seq & ~ak.is_none(jet3.mass) & ~ak.is_none(jet3.msoftdrop))
-                #### Per-jet reco kinematics of the measured jet, filled over the
-                #### FULL reco selection (fakes included, the same set the reco
-                #### spectra use, so data and MC are comparable). Placed here
-                #### rather than after the fakes/misses guards so a chunk with no
-                #### matched event still contributes. Filled for every jet
-                #### systematic, plus every weight variation under nominal jets
-                #### -- see _fill_jet_kinematics.
+                #### Per-jet kinematics over the full reco selection (fakes included, like
+                #### the reco spectra). Filled before the fakes/misses guards so a chunk with
+                #### no matched event still contributes.
                 _kin_sel = sel.all("recoTot_seq")
                 self._fill_jet_kinematics(
                     out, dataset, jetsyst,
@@ -872,17 +804,10 @@ class TrijetProcessor(HadronicProcessorBase):
                     ###############
                     sel.add("final_seq", sel.all("genTot_seq", "recoTot_seq", "matched_reco", "matched_gen"))
 
-                    #### Skim fills. Placed here, where every cut in _SKIM_CUTS
-                    #### exists, so `cutbits` records exactly where each event
-                    #### died. `genjet`/`groomed_genjet` still hold the EVENT-WIDE
-                    #### arrays from the gen-selection block above, which is what
-                    #### the inclusive gen table needs: all gen-selected events,
-                    #### misses included.
-                    ####
-                    # Empty gen/reco/matched selections must reach all fills.
-                    # Each marginal uses its own mask; response arrays use only
-                    # final_seq. Empty arrays contribute nothing without dropping
-                    # fakes, misses, or subsequent jet/weight variations.
+                    #### Skim fills, placed after every cut in _SKIM_CUTS exists so cutbits
+                    #### records where each event died. genjet still holds the event-wide gen
+                    #### selection, misses included. Never skip on an empty selection: an early
+                    #### exit would drop fakes, misses and later variations.
                     if self._do_skim and jetsyst == "nominal":
                         self._fill_skim_event(out, dataset, weights, events_corr, sel)
                         _gsel = sel.all("genTot_seq")
@@ -1052,11 +977,8 @@ class TrijetProcessor(HadronicProcessorBase):
                             fill_hist(out, "ptjet_rhojet_g_reco", dataset=dataset, systematic=syst, **jkkw, ptreco=recojet.pt,mpt_reco=self._rho(recojet.msoftdrop, recojet.pt), weight=reco_weights )
                             if not self.do_minimal:
                                 fill_hist(out, "jet_pt_eta_phi", dataset=dataset, systematic=syst, ptreco=jet.pt, phi=jet.phi, eta=jet.eta, weight=final_weights)
-                            #### GEN truth per weight systematic (dijet/zjet parity):
-                            #### only the theory weights enter (nominal 1.0, so the
-                            #### nominal gen spectrum is unchanged) and only theory
-                            #### variations shift it; detector systematics pass
-                            #### modifier=None.
+                            #### Gen truth per weight systematic: only theory variations shift it
+                            #### (see _THEORY_GEN_SYSTS).
                             _gen_modifier = syst if syst in self._THEORY_GEN_SYSTS else None
                             _gen_include = [n for n in ('initWeight', 'isr', 'fsr', 'pdf', 'Q2muF', 'Q2muR')
                                             if n in weights_obj._weights]

@@ -332,11 +332,9 @@ class QJetMassProcessor(processor.ProcessorABC):
             register_hist(self.hists, "y_jet0", [dataset_axis, y_axis, syst_axis])
             register_hist(self.hists, "eta_phi_jet_reco", [dataset_axis, eta_axis, phi_axis])
 
-            #### MET pt / phi (reco) -- data vs MC cross-check that the 2018 HEM
-            #### treatment (flat lumi-fraction weight for MC, hard veto for data)
-            #### is applied correctly: without it, lost energy in the HEM sector
-            #### (phi in [-1.57, -0.87]) shows up as an excess of fake MET pointing
-            #### opposite the hole. Filled from events_j_meas.MET (PF Type-1 MET).
+            #### MET pt/phi (PF Type-1) checks the 2018 HEM treatment: energy lost in
+            #### the HEM sector (phi in [-1.57, -0.87]) shows up as fake MET pointing
+            #### away from the hole.
             register_hist(self.hists, "met_pt",  [dataset_axis, met_pt_axis, syst_axis])
             register_hist(self.hists, "met_phi", [dataset_axis, phi_axis, syst_axis])
             #### same MET after the UL MET-xy (phi) correction -- removes the
@@ -352,20 +350,15 @@ class QJetMassProcessor(processor.ProcessorABC):
             ak4_phi_axis = hist.axis.Regular(50, -np.pi, np.pi, name="phi", label=r"AK4 jet $\phi$")
             register_hist(self.hists, "ak4_eta_phi_reco", [dataset_axis, ak4_eta_axis, ak4_phi_axis])
             register_hist(self.hists, "ak4_phi_hemeta",   [dataset_axis, ak4_phi_axis])
-            #### "after" distributions with the AK4-in-HEM event veto applied
-            #### (data: hard veto; 2018 MC: flat lumi-fraction weight, mirroring
-            #### the AK8 HEMVeto). Paired with met_pt/met_phi/mass_jet0 ("before")
-            #### to size how much the veto improves data/MC and whether it biases
+            #### The same distributions after the AK4-in-HEM veto (hard veto in data,
+            #### lumi-fraction weight in 2018 MC), to size its effect on data/MC and on
             #### the jet mass.
             register_hist(self.hists, "met_pt_ak4veto",    [dataset_axis, met_pt_axis, syst_axis])
             register_hist(self.hists, "met_phi_ak4veto",   [dataset_axis, phi_axis, syst_axis])
             register_hist(self.hists, "mass_jet0_ak4veto", [dataset_axis, mass_axis, syst_axis])
-            #### joint MET x (leading-jet pt) and MET x (jet mass): keep the
-            #### per-event correlation the 1D hists throw away, so the MET tail
-            #### can be shown to be jet-resolution-driven (rises with jet pt) and
-            #### the jet mass shown insensitive to a MET<50/>50 split (offline).
-            #### fine jet-pt axis (NOT the coarse analysis ptreco binning, whose
-            #### last bin is [400, 13000] and makes the MET-vs-jetpt 2D unreadable)
+            #### MET vs leading-jet pt and MET vs jet mass, to show the MET tail is jet
+            #### resolution driven. Fine jet-pt axis, because the analysis binning ends
+            #### in [400, 13000] and makes these unreadable.
             ak_jetpt_axis = hist.axis.Regular(65, 200, 1500, name="ptreco", label=r"Leading jet $p_T$ [GeV]")
             register_hist(self.hists, "met_ptjet_reco", [dataset_axis, met_pt_axis, ak_jetpt_axis, syst_axis])
             register_hist(self.hists, "mass_met_reco",  [dataset_axis, mass_axis, met_pt_axis, syst_axis])
@@ -374,12 +367,9 @@ class QJetMassProcessor(processor.ProcessorABC):
             register_hist(self.hists, "ptasym", [dataset_axis, frac_axis, syst_axis])
 
             if self._do_gen:
-                # Gen-level Z/jet pT balance (2026-09-17): pT(jet)/pT(Z), the signed
-                # asymmetry and dphi(Z, jet), versus gen Z pT.  Filled TWICE: "_pre"
-                # after the kinematic gen selection only, and "_post" after the
-                # topology cuts (|asym| < 0.3, dphi > 1.57), which by construction
-                # sculpt the balance.  The pre-cut version is the honest generator
-                # comparison; the post-cut one shows what the analysis keeps.
+                # Gen Z/jet pT balance vs gen Z pT, filled "_pre" (kinematic gen selection
+                # only) and "_post" (plus |asym| < 0.3, dphi > 1.57). The topology cuts
+                # sculpt the balance, so "_pre" is the generator comparison.
                 for _stage in ("pre", "post"):
                     register_hist(self.hists, f"ptfrac_gen_{_stage}",
                                   [dataset_axis, ptz_balance_axis, ptfrac_axis, syst_axis])
@@ -2131,18 +2121,10 @@ class QJetMassProcessor(processor.ProcessorABC):
 
                 ######-----------_#############
 
-                #### Gen-level Z/jet pT-balance diagnostic (2026-09-17).  Filled
-                #### once per event, outside the mm/ee channel loop and only for
-                #### the nominal jet systematic: this is a generator comparison
-                #### (HERWIG vs PYTHIA), not an analysis input.
-                ####
-                #### "_pre" applies the KINEMATIC gen selection only (two gen
-                #### leptons, one gen AK8 jet, Z pT > 90, 71 < mZ < 111); the
-                #### topology cuts |pT asym| < 0.3 and dphi > 1.57 are exactly
-                #### cuts ON the balance, so including them would hide the very
-                #### difference we are asked to look at.  "_post" adds them.
-                #### No dR gen/reco matching either: matching is a detector
-                #### requirement and would fold jet reconstruction back in.
+                #### Gen Z/jet pT-balance diagnostic for the generator comparison: nominal
+                #### jets, once per event, no gen/reco matching. "_pre" uses the kinematic
+                #### gen selection (two leptons, one AK8 jet, Z pT > 90, 71 < mZ < 111);
+                #### "_post" adds the topology cuts.
                 if self._do_gen and jet_syst == "nominal" and "ptfrac_gen_pre" in self.hists:
                     _bal_gen_include = [
                         n for n in ['genWeight', 'isr', 'fsr', 'q2', 'pdf']
@@ -2202,11 +2184,9 @@ class QJetMassProcessor(processor.ProcessorABC):
                     print(f"JET SYST {jet_syst}")
                     if jet_syst == "nominal":
                         self.logging.debug(f"list of systematics {self.systematics}")
-                        # Some weight variations (e.g. ISR/FSR from PSWeight, q2, pdf)
-                        # are absent in certain samples -- Herwig has no PSWeight branch,
-                        # so "isr"/"fsr" never get registered above. Skip any weight
-                        # systematic whose modifier isn't actually present rather than
-                        # letting weights.weight(modifier=...) raise a KeyError.
+                        # Herwig has no PSWeight branch, so isr/fsr may be missing: skip any
+                        # weight systematic absent from weights.variations instead of letting
+                        # weights.weight(modifier=...) raise.
                         available_variations = set(weights.variations)
                         for syst in self.systematics:
                             if syst != "nominal" and syst not in available_variations:
@@ -2233,24 +2213,11 @@ class QJetMassProcessor(processor.ProcessorABC):
                             if self._do_gen:
                                 gen_jet_truth = gen_jet[sel_gen]
                                 groomed_gen_jet_truth = groomed_gen_jet[sel_gen]
-                                #### GEN-truth distributions carry the generator weight
-                                #### plus *theory* reweightings (ISR/FSR/q2/PDF), but NOT
-                                #### detector effects (pu, L1 prefiring, lepton SFs, HEM).
-                                #### Detector SFs belong on the response matrix / reco
-                                #### hists (weights_both / weights_reco) so that the
-                                #### unfolding efficiency = matched(full) / all_gen carries
-                                #### the detector-correction SFs and 1/eff properly corrects
-                                #### data back to the true gen-level spectrum.
-                                ####
-                                #### Theory weights, by contrast, are per-event reweightings
-                                #### of the physics itself: under an ISR/FSR/q2/PDF variation
-                                #### the *gen-level* prediction genuinely changes, so the gen
-                                #### truth, the matched response and the misses must all move
-                                #### consistently. Their nominal weight is 1.0 (see
-                                #### GetPSweights / GetQ2weights / GetPDFweights), so including
-                                #### them leaves the nominal gen spectrum unchanged -- only the
-                                #### Up/Down modifier shifts it. Detector systematics pass
-                                #### modifier=None here and so the gen truth stays nominal.
+                                #### Gen truth carries the generator weight plus theory reweightings
+                                #### (ISR/FSR/q2/PDF), never detector SFs: those belong on the response
+                                #### and reco hists, so the efficiency carries them. Theory weights are 1.0
+                                #### at nominal, so only their Up/Down shifts the gen truth, together with
+                                #### the response and the misses.
                                 _theory_gen_systs = {
                                     "isrUp", "isrDown", "fsrUp", "fsrDown",
                                     "q2Up", "q2Down", "pdfUp", "pdfDown",
@@ -2268,11 +2235,9 @@ class QJetMassProcessor(processor.ProcessorABC):
                                     modifier=_gen_modifier,
                                 )[sel_gen]
 
-                                # Joint gen groomed-vs-ungroomed mass (same events) for the
-                                # groomed<->ungroomed covariance. Built here while gen_jet_truth,
-                                # groomed_gen_jet_truth and weights_gen are all aligned to sel_gen,
-                                # with a SINGLE common valid mask so the two masses stay paired.
-                                # No-ops unless the hist is registered ("mass_cov" mode).
+                                # Joint gen groomed/ungroomed mass for their covariance, built while all
+                                # inputs are aligned to sel_gen, with one shared mask so the two masses
+                                # stay paired ("mass_cov" mode only).
                                 if self._mode == "mass_cov":
                                     _mu_cov = gen_jet_truth.mass
                                     _mg_cov = groomed_gen_jet_truth.mass
@@ -2423,18 +2388,11 @@ class QJetMassProcessor(processor.ProcessorABC):
                                     fill_hist(self.hists, "pt_flavor_jet0_gen", dataset = dataset, pt = ptgen, n = parton_flavor, systematic = syst, weight = weights_gen )
                                     fill_hist(self.hists, "y_flavor_jet0_gen", dataset = dataset, y = gen_jet_truth.rapidity, n = parton_flavor, systematic = syst, weight = weights_gen )
 
-                                    #### Second flavor definition: nearest outgoing
-                                    #### hard-scattering (matrix-element) parton within
-                                    #### dR < jetR. The central madgraphMLM-herwig7
-                                    #### NanoAODv9 samples have GenJetAK8.partonFlavour == 0
-                                    #### everywhere AND empty isHardProcess statusFlags
-                                    #### (both keyed on Pythia-specific status codes), so
-                                    #### neither ghost association nor GenPart flags work
-                                    #### there. LHEPart (the MLM matrix-element record,
-                                    #### status 1 = outgoing) is shared by construction
-                                    #### between the pythia8 and herwig7 productions and
-                                    #### is generator-independent; fall back to GenPart
-                                    #### isHardProcess for non-LHE samples.
+                                    #### Second flavor definition: nearest outgoing matrix-element parton
+                                    #### within dR < jetR, from LHEPart. MLM+Herwig7 samples have
+                                    #### partonFlavour == 0 and empty isHardProcess flags (both rely on Pythia
+                                    #### status codes), while LHEPart is the same in both productions. Non-LHE
+                                    #### samples fall back to GenPart isHardProcess.
                                     if hasattr(events0, "LHEPart"):
                                         lhe_parts = events0.LHEPart[sel_gen]
                                         abs_lhe_pdg = np.abs(lhe_parts.pdgId)
@@ -2489,11 +2447,9 @@ class QJetMassProcessor(processor.ProcessorABC):
                                             & (validation_abs_pdg != 21)
                                         ),
                                     }
-                                    # Carry the theory-varied gen weight (weights_gen picks
-                                    # up ISR/FSR/q2/PDF via the syst modifier) onto the
-                                    # systematic axis so the flavor split can be compared
-                                    # Up/Down. Detector systematics leave the gen weight
-                                    # nominal, matching the other gen-truth histograms.
+                                    # The theory-varied gen weight puts the flavor split on the systematic
+                                    # axis; detector systematics leave it nominal, as for the other gen-truth
+                                    # hists.
                                     validation_weights = weights_gen[valid_validation_jet]
                                     for flavor_name, flavor_mask in validation_flavor_masks.items():
                                         fill_hist(

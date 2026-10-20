@@ -688,11 +688,9 @@ def debug_jec_weightset(iov: str = "2018", mode: str = "AK8", is_data: bool = Fa
     }
 
 
-# ARC recommendation (SMP-25-010 / AN-24-162 L777): the JMAR JMS/JMR scale
-# factors are derived for the GROOMED (soft-drop) jet mass only. There is no
-# dedicated ungroomed calibration, so the ungroomed up/down uncertainty is
-# conservatively inflated by this factor (the deviation from the nominal SF is
-# scaled by it). Nominal is left unchanged. Default: x2 -> JMS 1%->2%, JMR 2%->4%.
+# ARC recommendation (AN-24-162 L777): the JMAR JMS/JMR scale factors cover
+# the groomed mass only, so the ungroomed up/down deviation from nominal is
+# scaled by this factor (x2: JMS 1% -> 2%, JMR 2% -> 4%). Nominal is unchanged.
 UNGROOMED_JMSJMR_INFLATION = 2.0
 
 
@@ -709,16 +707,9 @@ def _inflate_ungroomed_sf(nom, var_val):
 
 
 def jmssf(IOV, FatJet,  var = ''):
-    # Old per-year JMAR values (pre SoftDropJMSJMRULRun2 recommendation), kept
-    # for provenance -- these were still applied in the arc_r2 reskims. The
-    # GluonJetMass side switched to unity +- 1% in 15ae99c (2025-07-01); this
-    # port brings the zjet lineage in line with it.
-    # "2016APV":{"sf": 1.00, "sfup": 1.0094, "sfdown": 0.9906},
-    # "2016"   :{"sf": 1.00, "sfup": 1.0094, "sfdown": 0.9906},
-    # "2017"   :{"sf": 0.982, "sfup": 0.986, "sfdown": 0.978},
-    # "2018"   :{"sf": 0.999, "sfup": 1.001, "sfdown": 0.997}}
     # UL recommendation: SF = 1 with 1% uncertainty (groomed), see
     # https://twiki.cern.ch/twiki/bin/viewauth/CMS/SoftDropJMSJMRULRun2
+    # The older per-year values used in the arc_r2 reskims are in git history.
     jmsSF = {
 
         "2016APV":{"sf": 1.00, "sfup": 1.01, "sfdown": 0.99},
@@ -740,15 +731,9 @@ def jmssf(IOV, FatJet,  var = ''):
     return FatJet
 
 def jmrsf(IOV, FatJet, var = ''):
-    # Old per-year JMAR values (pre SoftDropJMSJMRULRun2 recommendation), kept
-    # for provenance -- these were still applied in the arc_r2 reskims,
-    # including the +-20% placeholder for 2016(APV).
-    # "2016APV":{"sf": 1.00, "sfup": 1.2, "sfdown": 0.8},
-    # "2016"   :{"sf": 1.00, "sfup": 1.2, "sfdown": 0.8},
-    # "2017"   :{"sf": 1.09, "sfup": 1.14, "sfdown": 1.04},
-    # "2018"   :{"sf": 1.108, "sfup": 1.142, "sfdown": 1.074}}
     # UL recommendation: SF = 1 with 2% uncertainty (groomed), see
     # https://twiki.cern.ch/twiki/bin/viewauth/CMS/SoftDropJMSJMRULRun2
+    # The older per-year values used in the arc_r2 reskims are in git history.
     jmrSF = {
 
         "2016APV":{"sf": 1.00, "sfup": 1.02, "sfdown": 0.98},
@@ -1091,16 +1076,10 @@ def HEMVeto(FatJets, runs, isMC=False, year="2018"):
 
 
 # =====================================================================
-# MET xy ("phi") correction  (UL, PF Type-1 MET)
-# ---------------------------------------------------------------------
-# Removes the nPV-dependent MET phi-modulation from the beamspot offset +
-# phi-nonuniform detector response, parametrized SEPARATELY for data (per
-# era, by run number) and MC (per IOV). Coefficients are the standard
-# Louis Thomas UL recipe (XYMETCorrection_withUL17andUL18andUL16.h,
-# non-puppi branch): METxcorr = -(a*npv + b), METycorr = -(c*npv + d);
-# corrected (x, y) = uncorrected (x, y) + (METxcorr, METycorr). npv is
-# capped at 100 as in the reference. Only used for validation MET plots --
-# MET is not a selection variable, so this does not touch the measurement.
+# MET xy correction (UL, PF Type-1 MET), from the standard UL recipe
+# XYMETCorrection_withUL17andUL18andUL16.h (non-puppi): METxcorr =
+# -(a*npv + b), METycorr = -(c*npv + d), npv capped at 100. Data per era by
+# run number, MC per IOV. Used only for validation MET plots.
 _MET_XY_MC = {  # (a, b, c, d)
     "2016APV": (-0.188743, 0.136539, 0.0127927, 0.117747),
     "2016":    (-0.153497, -0.231751, 0.00731978, 0.243323),
@@ -1424,9 +1403,8 @@ xsdb = {
     'QCD_HT1500to2000_TuneCP5_13TeV-madgraphMLM-pythia8': 109.4,
     'QCD_HT2000toInf_TuneCP5_13TeV-madgraphMLM-pythia8': 21.74,
     'QCD_Pt-15to7000_TuneCH3_Flat_13TeV_herwig7': 1329000000.0,
-    #### flat-pT pythia8 (pT-hat 15-7000, standalone shower, no MLM); XSDB
-    #### total for the pT-hat > 15 GeV slice. Added 2026-09-17 for the
-    #### merging-vs-shower test, where only per-pT-bin SHAPES are used.
+    #### flat-pT pythia8 (pT-hat 15-7000, standalone shower, no MLM): XSDB total
+    #### for pT-hat > 15 GeV. Only per-pT-bin shapes use it.
     'QCD_Pt-15to7000_TuneCP5_Flat2018_13TeV_pythia8': 1370000000.0,
     'WJetsToLNu_TuneCP5_13TeV-madgraphMLM-pythia8': 53940.0,
     'ZJetsToNuNu_HT-100To200_TuneCP5_13TeV-madgraphMLM-pythia8': 271.3,
@@ -1439,33 +1417,15 @@ xsdb = {
     'TTJets_TuneCP5_13TeV-madgraphMLM-pythia8': 471.7,
 }
 
-#### LEGACY (pre-2026-08-07) TABLE -- kept as the postprocess FALLBACK only.
-#### sumw = sum over EVERY event of EVERY file in the dataset of
-#### Events/LHEWeight_originalXWGTUP, which is the branch the hadronic
-#### processors USED to fill with. They now fill with genWeight and accumulate
-#### their own sumw on the fly (HadronicProcessorBase), so a fresh output is
-#### normalized from the accumulated genWeight sum and never reads this table.
-####
-#### BASIS WARNING: these numbers are LHE-weight sums, NOT genWeight sums. In
-#### every UL hadronic MC sample measured (madgraphMLM+pythia8, madgraphMLM+
-#### herwig7, flat-pT pythia8) genWeight is identically 1.0 while
-#### LHEWeight_originalXWGTUP is O(12) for QCD_HT700to1000 and O(4e4) for the
-#### herwig HT100to200 bin -- so mixing an accumulated genWeight sumw with these
-#### values (or vice versa) mis-scales by the mean LHE weight. The two bases are
-#### each self-consistent with the fills of their own era; postprocess logs
-#### loudly whenever it has to fall back here.
-####
-#### NOT Runs/genEventSumw: genWeight is identically 1.0 in these UL
-#### madgraphMLM NanoAODv9 samples, so genEventSumw is just the event count and
-#### is wrong by 4-5 orders of magnitude per HT bin. Recompute with
-#### tools/compute_sumw_qcd_mg.py, which reproduces the pre-existing
-#### QCD_HT2000toInf entries to a relative 1e-9 (2026-08-07).
+#### Legacy fallback only: per-dataset sums of LHEWeight_originalXWGTUP, the
+#### branch the hadronic processors used to fill with. Current outputs carry
+#### their own genWeight sumw and never read this table. Never mix the two
+#### bases: genWeight is 1.0 in these UL samples, so Runs/genEventSumw is
+#### just the event count. Recompute with tools/compute_sumw_qcd_mg.py.
 sumw_qcd_mg = {
     '2016APV': {
-        #### HT100to200 exists in the casa fileset (fileset_MG_pythia8.json) for
-        #### every era but had no entry here, so getXSweight fell back to 1.0 and
-        #### that dataset's hists carried raw generator weights -- 2.7% of the
-        #### 2018 dijet MC total, unnormalized. Added 2026-08-07.
+        #### HT100to200 is in the casa fileset for every era; without an entry
+        #### here getXSweight falls back to 1.0 and leaves it unnormalized.
         'QCD_HT100to200_TuneCP5_PSWeights_13TeV-madgraphMLM-pythia8': 1599781926577.627,
         'QCD_HT200to300_TuneCP5_PSWeights_13TeV-madgraphMLM-pythia8': 101566726040.5,
         'QCD_HT300to500_TuneCP5_PSWeights_13TeV-madgraphMLM-pythia8': 18372261702.0,

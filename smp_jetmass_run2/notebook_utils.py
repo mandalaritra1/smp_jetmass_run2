@@ -62,13 +62,12 @@ DATASET_OPTIONS = [
     "st",
     "powheg",
     "backgrounds",
-    # hadronic only: the central flat-pT QCD samples showered STANDALONE (no
-    # MadGraph, no MLM merging) -- the merging-vs-shower test (2026-09-17)
+    # hadronic only: central flat-pT QCD samples showered standalone (no
+    # MadGraph, no MLM merging), for the merging-vs-shower test
     "herwig_flat",
     "pythia_flat",
-    # zjet only: the NLO 5FS Matchbox Herwig7 CH3 DY sample (MG5 ME inside
-    # Herwig's Matchbox, no external LHE, no MLM), UL18 only -- the sample CMS
-    # GEN proposes as the MG+Herwig7 replacement (2026-09-18)
+    # zjet only: NLO 5FS Matchbox Herwig7 CH3 DY (MG5 ME inside Matchbox, no
+    # MLM), UL18 only; CMS GEN's proposed MG+Herwig7 replacement
     "herwig_matchbox",
 ]
 
@@ -241,18 +240,10 @@ class AnalysisPaths:
     samples_hadronic_dir: Path
 
 
-# PtZ-binned NLO (amcatnloFXFX, MatchEWPDG20) DY. Bins are stitched by normalizing
-# each to its own XSDB cross section in the processor postprocess (each bin is a
-# separate `dataset` axis entry -> summing them gives the ptZ spectrum). Lists for
-# all six bins are built by samples/zjet/mc/make_nlo_ptz_lists.sh (dasgoclient).
-#
-# The analysis selects jet pT > 200 GeV (first ptgen/ptreco bin is 200-290). In the
-# balanced Z+jet topology jet pT ~ ptZ, so the low-ptZ bins contribute ~nothing:
-# ptZ<100 cannot recoil against a 200 GeV jet. We therefore process only the bins
-# that overlap the phase space. ptZ-100To250 is KEPT (its 200-250 part populates the
-# first 200-290 jet-pT bin); 0To50 and 50To100 are dropped (pure wasted compute, the
-# two largest samples). To use all six (e.g. a full-spectrum cross-check), set
-# NLO_PTZ_BINS = NLO_PTZ_BINS_ALL.
+# PtZ-binned NLO DY, stitched in postprocess by normalizing each bin to its
+# own XSDB cross section. Lists come from samples/zjet/mc/make_nlo_ptz_lists.sh.
+# Only bins that can recoil against a 200 GeV jet are processed (100To250
+# feeds the 200-290 bin); set NLO_PTZ_BINS = NLO_PTZ_BINS_ALL for all six.
 NLO_PTZ_BINS_ALL = ["0To50", "50To100", "100To250", "250To400", "400To650", "650ToInf"]
 NLO_PTZ_BINS = ["100To250", "250To400", "400To650", "650ToInf"]
 
@@ -501,7 +492,7 @@ HADRONIC_MODES = {"minimal", "minimal_rho", "validation", "full", "mass_jk", "rh
                   "reweight_pythia_rho", "rho_skim"}
 # Modes only available for some hadronic channels. reweight_pythia_rho needs a
 # Herwig sample to build the h/p splines; that exists for dijet but not trijet.
-# rho_skim is implemented in dijet and trijet (2026-07-25) but not zjet.
+# rho_skim is implemented in dijet and trijet but not zjet.
 HADRONIC_CHANNEL_EXCLUDED_MODES = {"trijet": {"reweight_pythia_rho"}}
 
 
@@ -572,11 +563,9 @@ def build_hadronic_fileset(
             urls = []
             for path in files:
                 if path.startswith("root://"):
-                    # Some filesets (HERWIG, the flat-pT samples) carry fully
-                    # qualified root://cmsxrootd.fnal.gov URLs and have no
-                    # separate Casa JSON. Re-route their /store paths through
-                    # the Casa xcache or the CERN global redirector; at LPC
-                    # (or any other redirector) they are preserved as-is.
+                    # HERWIG and flat-pT filesets carry full root://cmsxrootd.fnal.gov URLs and
+                    # have no casa JSON: route their /store paths through xcache (casa) or the
+                    # global redirector (lxplus). Other redirectors keep them as-is.
                     store_marker = path.find("/store/")
                     if redirector in ("casa", "lxplus") and store_marker >= 0:
                         urls.append(
@@ -786,11 +775,9 @@ def normalize_worker_memory(worker_memory):
         return s
 
 
-#### Pool sizing: one worker per 2 chunks, floored at 4, capped by the config's
-#### n_workers. A 400-worker pool against a ~130-chunk graph does not go 400x
-#### faster -- dask parks the whole graph on one or two workers and throughput
-#### collapses to serial (2026-08-07: trijet 2017 HT2000toInf, 136 chunks,
-#### 38m33s at 0.2 chunk/s on 400 workers).
+#### Pool sizing: one worker per 2 chunks, at least 4, at most n_workers. A
+#### pool much larger than the chunk count does not run faster: dask parks
+#### the graph on one or two workers and throughput drops to serial.
 POOL_CHUNKS_PER_WORKER = 2
 POOL_MIN_WORKERS = 4
 
@@ -898,20 +885,10 @@ def ensure_client(
 
         cluster = CoffeaCasaCluster(memory=worker_memory or "6 GiB", cores=1)
         if n_workers:
-            #### adapt(n, n), NOT scale(n). Same fixed footprint -- no burst, no
-            #### scale-to-zero -- but adaptive keeps a reconciliation loop that
-            #### RESUBMITS workers as they retire. casa's condor workers exit at
-            #### walltime, and a multi-hour run outlives one worker lifetime:
-            #### with scale() the 2026-08-07 2017 dijet skim drained to 0 running
-            #### / 915 completed and the driver blocked for ~6 h on tasks nothing
-            #### would ever claim (scheduler stuck retrying a departed worker,
-            #### "KeyError: tls://...:38105" out of handle_request_refresh_who_has).
-            #### The 2018 runs never hit it only because they finished inside a
-            #### single worker lifetime.
-            #### n_workers is the CEILING, not the request. The real size is set
-            #### per fileset by size_pool_for_fileset() from the chunk count, so
-            #### a small bin never claims the full pool. Start at the floor and
-            #### let the first sizing call raise it.
+            #### adapt(n, n), not scale(n): casa workers exit at walltime and only
+            #### adapt resubmits them, so a run longer than one worker lifetime would
+            #### stall. n_workers is the ceiling; size_pool_for_fileset() sets the
+            #### real size per fileset.
             cluster.adapt(minimum=POOL_MIN_WORKERS, maximum=POOL_MIN_WORKERS)
             print(f"CoffeaCasaCluster up; worker cap {n_workers}, pool starts at "
                   f"{POOL_MIN_WORKERS} and is sized per fileset from its chunk count.")
@@ -962,11 +939,9 @@ def ensure_client(
 
         import socket
 
-        # lcg=True ships the *submitting* environment (the LCG view you sourced
-        # on lxplus, which must provide coffea/dask/awkward) to the batch workers;
-        # container_runtime='none' means run directly in that view rather than a
-        # Singularity/Docker image. The analysis package itself is shipped
-        # separately via client.upload_file (see upload_package_if_casa).
+        # lcg=True with container_runtime='none' runs the workers in the submitting
+        # LCG view, which must provide coffea/dask/awkward. The package itself ships
+        # via client.upload_file.
         log_dir = Path(
             os.environ.get(
                 "DASK_LXPLUS_LOG_DIR", str(Path.home() / "dask_lxplus_logs")
@@ -996,12 +971,9 @@ def ensure_client(
                 # HTCondor max walltime tier: espresso(20m)/microcentury(1h)/
                 # longlunch(2h)/workday(8h)/tomorrow(1d)/testmatch(3d)/nextweek(1w).
                 "MY.JobFlavour": f'"{job_flavour}"',
-                # Ship the grid proxy to each worker and export X509_USER_PROXY in
-                # its env. Without this the worker boots with no proxy, so it can't
-                # authenticate to any xrootd server and every /store read fails with
-                # "[3011] No servers are available to read the file" (which looks
-                # like a redirector problem but is really missing auth). Requires a
-                # valid proxy at submit time: voms-proxy-init -voms cms.
+                # Ship the grid proxy to each worker. Without it every /store read fails
+                # with "[3011] No servers are available to read the file", which looks like
+                # a redirector problem. Needs a valid proxy at submit time.
                 "use_x509userproxy": "true",
             },
         )
@@ -1027,14 +999,9 @@ def ensure_client(
         return client
 
     if resolved_mode == "dask-purdue":
-        # Purdue Analysis Facility (cms.geddes.rcac.purdue.edu), Dask Gateway
-        # backend. STATUS 2026-07-15: login works (CERN account) and this code
-        # follows their docs, but the mode is NOT yet usable: the facility's
-        # global pixi env did not actually provide coffea when we tried it, so
-        # the worker software environment still has to be figured out --
-        # probably a project pixi env in this repo pinning coffea==2026.5.0,
-        # passed via PURDUE_AF_PIXI_PROJECT. Left in place as the starting
-        # point for that work. Docs:
+        # Purdue Analysis Facility via Dask Gateway. Not usable yet: login works,
+        # but the workers still need a software env with coffea, probably a project
+        # pixi env passed via PURDUE_AF_PIXI_PROJECT. Docs:
         # https://purdue-af.readthedocs.io/en/latest/guide-dask-gateway.html
         try:
             from dask_gateway import Gateway
@@ -1056,12 +1023,9 @@ def ensure_client(
             # Forward the session environment (tokens, X509 proxy path).
             "env": dict(os.environ),
         }
-        # Workers import software from a shared pixi/conda env, NOT from an
-        # image. The global env (/work/pixi/global) had coffea 2025.12.0 when
-        # this was written -- older than the 2026.5.0 this repo is validated
-        # on -- so prefer pointing PURDUE_AF_PIXI_PROJECT at a project env
-        # that pins coffea. The analysis package itself still arrives via
-        # client.upload_file (upload_package_if_casa).
+        # Workers import software from a shared pixi/conda env, not an image. The
+        # global env had an older coffea than this repo uses, so point
+        # PURDUE_AF_PIXI_PROJECT at a project env that pins it.
         pixi_project = os.environ.get("PURDUE_AF_PIXI_PROJECT")
         conda_env = os.environ.get("PURDUE_AF_CONDA_ENV")
         if pixi_project:
@@ -1411,11 +1375,9 @@ def run_from_config(cfg, *, client=None, repo_root=None, log=print):
         raise
     finally:
         if own_client and client is not None:
-            # client.close() only disconnects -- the cluster (and its claimed
-            # batch slots, e.g. a fixed n_workers pool on lxplus) survives in
-            # this process until closed. client.cluster is None for clients
-            # connected by address (useDefault -> casa's prespawned cluster,
-            # which must NOT be torn down here).
+            # client.close() only disconnects; close the cluster too, or its batch
+            # slots stay claimed. client.cluster is None for clients connected by
+            # address (useDefault on casa), whose cluster must stay up.
             cluster = getattr(client, "cluster", None)
             client.close()
             if cluster is not None:
