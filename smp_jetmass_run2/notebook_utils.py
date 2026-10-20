@@ -195,6 +195,8 @@ ANALYSIS_CONFIG_DEFAULTS = {
     # optional DAS-name substring filter (hadronic): e.g. "HT1000to1500" to point a
     # quick test at a high-HT bin (low-HT bins select nothing in dijet/trijet).
     "dataset_filter": "",
+    # optional DAS-name substrings to drop (hadronic), e.g. ["QCD_HT100to200"]
+    "exclude_datasets": [],
 }
 
 
@@ -521,13 +523,15 @@ def build_hadronic_fileset(
     redirector: str = "casa",
     prepend: str = "root://xcache/",
     name_filter: str | None = None,
+    exclude: list[str] | tuple[str, ...] = (),
 ) -> dict[str, list[str]]:
     """Build a hadronic fileset from samples/hadronic/*.json.
 
     `name_filter`, if given, keeps only datasets whose DAS name contains that
     substring (e.g. "HT1000to1500") — useful to point a quick test at a high-HT
     bin, since the low-HT bins (HT200to300, ...) yield no events passing the
-    dijet/trijet pt>200 / 3-jet selection.
+    dijet/trijet pt>200 / 3-jet selection. `exclude` drops every dataset whose
+    DAS name contains one of its substrings.
     """
     if dataset not in HADRONIC_FILESETS:
         raise ValueError(
@@ -559,6 +563,8 @@ def build_hadronic_fileset(
             if qualifier and qualifier not in das:
                 continue
             if name_filter and name_filter not in das:
+                continue
+            if any(part in das for part in exclude):
                 continue
             urls = []
             for path in files:
@@ -780,35 +786,43 @@ def normalize_worker_memory(worker_memory):
 #### the graph on one or two workers and throughput drops to serial.
 POOL_CHUNKS_PER_WORKER = 2
 POOL_MIN_WORKERS = 4
+#### Header reads are xrootd round trips, so threads overlap them: serially,
+#### 640 files took ~4 min from the casa notebook pod.
+POOL_SCAN_THREADS = 32
+
+
+def _fileset_files(fileset):
+    return [f for files in fileset.values()
+            for f in (list(files) if isinstance(files, dict) else files)]
 
 
 def estimate_nchunks(fileset, chunksize, treename="Events", log=print):
     """Coffea chunk count for a fileset: sum of ceil(nevents / chunksize).
 
     Metadata-only -- uproot reads each file's header for num_entries, no
-    branches. Cheap enough to do on the driver before every submit. A file
-    that cannot be opened counts as one chunk rather than aborting the run;
-    the estimate only sets the pool size, so being a little off is harmless.
+    branches, POOL_SCAN_THREADS files at a time. A file that cannot be opened
+    counts as one chunk rather than aborting the run; the estimate only sets
+    the pool size, so being a little off is harmless.
     """
     import math
+    from concurrent.futures import ThreadPoolExecutor
 
     import uproot
 
-    total, nfiles, bad = 0, 0, 0
-    for _ds, files in fileset.items():
-        if isinstance(files, dict):
-            files = list(files)
-        for f in files:
-            try:
-                with uproot.open(f) as handle:
-                    total += math.ceil(handle[treename].num_entries / chunksize)
-                nfiles += 1
-            except Exception:
-                total += 1
-                bad += 1
+    def nchunks_of(f):
+        try:
+            with uproot.open(f) as handle:
+                return math.ceil(handle[treename].num_entries / chunksize)
+        except Exception:
+            return None
+
+    files = _fileset_files(fileset)
+    with ThreadPoolExecutor(max_workers=max(1, min(POOL_SCAN_THREADS, len(files)))) as pool:
+        counts = list(pool.map(nchunks_of, files))
+    bad = sum(c is None for c in counts)
     if bad:
         log(f"[pool] {bad} file(s) unreadable for num_entries; counted as 1 chunk each")
-    return total, nfiles
+    return sum(1 if c is None else c for c in counts), len(files) - bad
 
 
 def size_pool_for_fileset(client, fileset, chunksize, cap=None, label="", log=print):
@@ -822,13 +836,19 @@ def size_pool_for_fileset(client, fileset, chunksize, cap=None, label="", log=pr
     cluster = getattr(client, "cluster", None) if client is not None else None
     if cluster is None or not hasattr(cluster, "adapt"):
         return None
-    nchunks, nfiles = estimate_nchunks(fileset, chunksize, log=log)
-    n_req = max(POOL_MIN_WORKERS, nchunks // POOL_CHUNKS_PER_WORKER)
-    if cap:
-        n_req = min(cap, n_req)
+    nfiles = len(_fileset_files(fileset))
+    if cap and nfiles // POOL_CHUNKS_PER_WORKER >= cap:
+        #### every non-empty file is at least one chunk, so the cap binds anyway
+        n_req, chunks_msg = cap, f">= {nfiles} chunks (cap binds, no header scan)"
+    else:
+        nchunks, nfiles = estimate_nchunks(fileset, chunksize, log=log)
+        n_req = max(POOL_MIN_WORKERS, nchunks // POOL_CHUNKS_PER_WORKER)
+        if cap:
+            n_req = min(cap, n_req)
+        chunks_msg = f"~{nchunks} chunks"
     before = len(getattr(cluster, "scheduler_info", {}).get("workers", {}) or {})
     cluster.adapt(minimum=n_req, maximum=n_req)
-    log(f"[pool] {label}: {nfiles} files, ~{nchunks} chunks @ chunksize={chunksize} "
+    log(f"[pool] {label}: {nfiles} files, {chunks_msg} @ chunksize={chunksize} "
         f"-> adapt({n_req}, {n_req})  [pool was {before}]")
     return n_req
 
@@ -1117,6 +1137,7 @@ def run_once(
     rho_refine: int | None = None,
     worker_merge: int = 1,
     treereduce: bool = False,
+    jk_groups: int = 0,
 ):
     print("Running over:", list(fileset.keys())[:10], "..." if len(fileset) > 10 else "")
     mode = normalize_mode_for_channel(mode, channel)
@@ -1163,6 +1184,11 @@ def run_once(
         jet_systematics=jet_systematics,
         mode=mode,
     )
+    #### one-pass event-group jackknife (hadronic only; see HadronicProcessorBase)
+    if jk_groups:
+        if channel not in ("dijet", "trijet"):
+            raise ValueError("jk_groups is implemented for the hadronic channels only")
+        proc_kwargs["jk_groups"] = int(jk_groups)
     # reweight_source / rho_refine are only zjet knobs
     if channel == "zjet":
         proc_kwargs["reweight_source"] = reweight_source
@@ -1203,6 +1229,7 @@ def make_output_filename(
     output_dir: str | os.PathLike[str] | None = None,
     reweight_source: str = "herwig",
     rho_refine: int | None = None,
+    jk_groups: int = 0,
 ) -> str:
     base = "data" if data else dataset
     if channel and channel != "zjet":
@@ -1213,6 +1240,9 @@ def make_output_filename(
     # distinct file per rho-axis refinement (2x -> _r2, 4x -> _r4)
     if rho_refine and rho_refine != 1:
         base = f"{base}_r{rho_refine}"
+    # the nominal-only event-group jackknife run never overwrites the nominal
+    if jk_groups:
+        base = f"{base}_jkg{int(jk_groups)}"
     mode_token = ""
     if mode:
         output_mode = OUTPUT_MODE_TAGS.get(mode, mode)
@@ -1296,6 +1326,7 @@ def run_from_config(cfg, *, client=None, repo_root=None, log=print):
             rho_refine=cfg.get("rho_refine", None),
             worker_merge=cfg.get("worker_merge", 1),
             treereduce=cfg.get("treereduce", False),
+            jk_groups=cfg.get("jk_groups", 0),
         )
         tag = get_group_tag(index, cfg["era"], group_mode)
         fout = make_output_filename(
@@ -1304,6 +1335,7 @@ def run_from_config(cfg, *, client=None, repo_root=None, log=print):
             output_dir=paths.repo_root / "outputs",
             reweight_source=cfg.get("reweight_source", "herwig"),
             rho_refine=cfg.get("rho_refine", None),
+            jk_groups=cfg.get("jk_groups", 0),
         )
         save_output(out, fout)
         log(f"[{index + 1}] Saved: {fout}")
@@ -1316,6 +1348,7 @@ def run_from_config(cfg, *, client=None, repo_root=None, log=print):
                 paths.samples_hadronic_dir, dataset=dataset, era=cfg["era"],
                 redirector=cfg["redirector"], prepend=prependstr,
                 name_filter=(cfg.get("dataset_filter") or None),
+                exclude=cfg.get("exclude_datasets", ()),
             )
             _run_and_save(fileset, 0)
         elif dataset == "data":

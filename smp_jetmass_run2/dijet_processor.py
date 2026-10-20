@@ -51,7 +51,7 @@ class DijetProcessor(HadronicProcessorBase):
     def __init__(self, do_gen=True, mode="minimal", debug=False,
                  jet_systematics=None, systematics=None,
                  ptcut=185., ycut=None, jk=False, jk_range=None,
-                 trijet_veto=True, selection_mode="pair_split"):
+                 trijet_veto=True, selection_mode="pair_split", jk_groups=0):
         #### ptcut=185 is the pt-axis low edge, so the [185, 200] sink bin fills
         #### (see util_binning). Only the pair_split floors use it; reported bins
         #### start at 200.
@@ -86,6 +86,9 @@ class DijetProcessor(HadronicProcessorBase):
         self.jk_range = jk_range
         # jackknife active either via the jk flag or the *_jk modes (mirrors zjet)
         self._do_jk = bool(self.jk) or self._mode in ("mass_jk", "rho_jk", "rho_split")
+        #### jk_groups=N > 0: event-group jackknife, a separate nominal-only run
+        #### (HadronicProcessorBase._register_jk_group_hists).
+        self.jk_groups = self._check_jk_groups(jk_groups)
         #### rho_split (mirrors zjet minimal_rho_fine_split): two disjoint halves
         #### (chunk index % 2) carried on the jk axis in one pass, for the
         #### split-sample closure test. Nominal jets/weights only, like rho_jk.
@@ -114,6 +117,9 @@ class DijetProcessor(HadronicProcessorBase):
         if self._do_jk:
             # protect against doing unc for jk --> only need nominal and memory intensive
             jet_systematics = ["nominal"]
+        if self.jk_groups:
+            #### the event-group jackknife always runs nominal only, as its own job
+            jet_systematics, systematics = ["nominal"], ["nominal"]
         self.jet_systematics = jet_systematics
         self.systematics = systematics
         self.logging = Log(mode="debug" if debug else "info")
@@ -269,6 +275,17 @@ class DijetProcessor(HadronicProcessorBase):
                 register_hist(self.hists, 'response_matrix_rho_u', [dataset_axis, syst_cat, *jk_axes, pt_bin, pt_gen_bin, rho_bin, rho_gen_bin])
                 register_hist(self.hists, 'response_matrix_rho_g', [dataset_axis, syst_cat, *jk_axes, pt_bin, pt_gen_bin, rho_g_bin, rho_gen_g_bin])
                 register_hist(self.hists, 'response_matrix_rho_g_mfloor2', [dataset_axis, syst_cat, *jk_axes, pt_bin, pt_gen_bin, rho_g_bin, rho_gen_g_bin])
+            #### one-pass event-group jackknife copies (jk_groups > 0 only)
+            if self._mode in rho_modes:
+                self._register_jk_group_hists(register_hist, dataset_axis, {
+                    'ptjet_rhojet_u_reco': [pt_bin, rho_bin],
+                    'ptjet_rhojet_g_reco': [pt_bin, rho_g_bin],
+                    **({'ptjet_rhojet_u_gen': [pt_gen_bin, rho_gen_bin],
+                        'ptjet_rhojet_g_gen': [pt_gen_bin, rho_gen_g_bin],
+                        'response_matrix_rho_u': [pt_bin, pt_gen_bin, rho_bin, rho_gen_bin],
+                        'response_matrix_rho_g': [pt_bin, pt_gen_bin, rho_g_bin, rho_gen_g_bin]}
+                       if self.do_gen else {}),
+                })
 
         #### Diagnostics (validation / full only)
         if self._mode in ("validation", "full"):
@@ -952,6 +969,13 @@ class DijetProcessor(HadronicProcessorBase):
                         gen_rw_u, gen_rw_g = gen_weights * hw_u, gen_weights * hw_g
                     fill_hist(out, "ptjet_rhojet_u_gen", dataset=dataset, systematic=jetsyst, **jkkw, ptgen=gen_dijet_truth.pt, mpt_gen=self._rho(gen_dijet_truth.mass, gen_dijet_truth.pt), weight=gen_rw_u )
                     fill_hist(out, "ptjet_rhojet_g_gen", dataset=dataset, systematic=jetsyst, **jkkw, ptgen=gen_dijet_truth.pt[ok_g_truth], mpt_gen=self._rho(groomed_mgen_truth, ak.to_numpy(gen_dijet_truth.pt))[ok_g_truth], weight=gen_rw_g[ok_g_truth] )
+                    if self.jk_groups and jetsyst == "nominal":
+                        jk_gen = self._jk_labels(events_corr[sel.all("genTot_seq")], per_event=2)
+                        self._fill_jk(out, "ptjet_rhojet_u_gen", dataset, jk_gen, gen_rw_u,
+                                      ptgen=gen_dijet_truth.pt, mpt_gen=self._rho(gen_dijet_truth.mass, gen_dijet_truth.pt))
+                        self._fill_jk(out, "ptjet_rhojet_g_gen", dataset, jk_gen[ok_g_truth], gen_rw_g[ok_g_truth],
+                                      ptgen=gen_dijet_truth.pt[ok_g_truth],
+                                      mpt_gen=self._rho(groomed_mgen_truth, ak.to_numpy(gen_dijet_truth.pt))[ok_g_truth])
                     if jetsyst == "nominal":
                         floor_gen_g = ok_g_truth & (groomed_mgen_truth > 2.0)
                         fill_hist(out, "ptjet_rhojet_g_gen_mfloor2", dataset=dataset, systematic=jetsyst, **jkkw,
@@ -1100,6 +1124,14 @@ class DijetProcessor(HadronicProcessorBase):
                         reco_rw_u, reco_rw_g = reco_weights * hw_reco_u, reco_weights * hw_reco_g
                     fill_hist(out, "response_matrix_rho_u", dataset=dataset, systematic=jetsyst, **jkkw,  mpt_reco=self._rho(dijet.mass, dijet.pt), mpt_gen=self._rho(gen_dijet.mass, gen_dijet.pt), ptreco=dijet.pt, ptgen=gen_dijet.pt, weight=resp_rw_u)
                     fill_hist(out, "response_matrix_rho_g", dataset=dataset, systematic=jetsyst, **jkkw, mpt_reco=self._rho(dijet.msoftdrop, dijet.pt), mpt_gen=self._rho(groomed_gen_dijet.mass, gen_dijet.pt), ptreco=dijet.pt, ptgen=gen_dijet.pt, weight=resp_rw_g)
+                    if self.jk_groups and jetsyst == "nominal":
+                        jk_final = self._jk_labels(events_corr[sel.all("final_seq")], per_event=2)
+                        self._fill_jk(out, "response_matrix_rho_u", dataset, jk_final, resp_rw_u,
+                                      mpt_reco=self._rho(dijet.mass, dijet.pt), mpt_gen=self._rho(gen_dijet.mass, gen_dijet.pt),
+                                      ptreco=dijet.pt, ptgen=gen_dijet.pt)
+                        self._fill_jk(out, "response_matrix_rho_g", dataset, jk_final, resp_rw_g,
+                                      mpt_reco=self._rho(dijet.msoftdrop, dijet.pt), mpt_gen=self._rho(groomed_gen_dijet.mass, gen_dijet.pt),
+                                      ptreco=dijet.pt, ptgen=gen_dijet.pt)
                     if jetsyst == "nominal":
                         floor_response_g = (
                             ak.to_numpy(ak.fill_none(dijet.msoftdrop, np.nan)) > 2.0
@@ -1123,6 +1155,12 @@ class DijetProcessor(HadronicProcessorBase):
                     fill_hist(out, "ptjet_mjet_g_reco", dataset=dataset, systematic=jetsyst, **jkkw, ptreco=ptreco_np[ok_reco_g], mreco=mreco_g_filled[ok_reco_g], weight=reco_weights[ok_reco_g] )
                     fill_hist(out, "ptjet_rhojet_u_reco", dataset=dataset, systematic=jetsyst, **jkkw, ptreco=ptreco_np[ok_reco_u], mpt_reco=self._rho(mreco_u_filled, ptreco_np)[ok_reco_u], weight=reco_rw_u[ok_reco_u])
                     fill_hist(out, "ptjet_rhojet_g_reco", dataset=dataset, systematic=jetsyst, **jkkw, ptreco=ptreco_np[ok_reco_g], mpt_reco=self._rho(mreco_g_filled, ptreco_np)[ok_reco_g], weight=reco_rw_g[ok_reco_g] )
+                    if self.jk_groups and jetsyst == "nominal":
+                        jk_reco = self._jk_labels(events_corr[sel.all("recoTot_seq")], per_event=2)
+                        self._fill_jk(out, "ptjet_rhojet_u_reco", dataset, jk_reco[ok_reco_u], reco_rw_u[ok_reco_u],
+                                      ptreco=ptreco_np[ok_reco_u], mpt_reco=self._rho(mreco_u_filled, ptreco_np)[ok_reco_u])
+                        self._fill_jk(out, "ptjet_rhojet_g_reco", dataset, jk_reco[ok_reco_g], reco_rw_g[ok_reco_g],
+                                      ptreco=ptreco_np[ok_reco_g], mpt_reco=self._rho(mreco_g_filled, ptreco_np)[ok_reco_g])
                     if jetsyst == "nominal":
                         floor_reco_g = ok_reco_g & (mreco_g_filled > 2.0)
                         fill_hist(out, "ptjet_rhojet_g_reco_mfloor2", dataset=dataset, systematic=jetsyst, **jkkw,
@@ -1227,6 +1265,12 @@ class DijetProcessor(HadronicProcessorBase):
                                                weight=dijet_weights )
                     fill_hist(out, "ptjet_rhojet_u_reco", dataset=dataset, systematic=jetsyst, **jkkw, ptreco=dijet.pt, mpt_reco=self._rho(dijet.mass, dijet.pt), weight=dijet_weights)
                     fill_hist(out, "ptjet_rhojet_g_reco", dataset=dataset, systematic=jetsyst, **jkkw, ptreco=dijet.pt, mpt_reco=self._rho(dijet.msoftdrop, dijet.pt), weight=dijet_weights )
+                    if self.jk_groups and jetsyst == "nominal":
+                        jk_data = self._jk_labels(events_corr[sel.all("final_seq")], per_event=2)
+                        self._fill_jk(out, "ptjet_rhojet_u_reco", dataset, jk_data, dijet_weights,
+                                      ptreco=dijet.pt, mpt_reco=self._rho(dijet.mass, dijet.pt))
+                        self._fill_jk(out, "ptjet_rhojet_g_reco", dataset, jk_data, dijet_weights,
+                                      ptreco=dijet.pt, mpt_reco=self._rho(dijet.msoftdrop, dijet.pt))
                     if jetsyst == "nominal":
                         _data_mg = ak.to_numpy(ak.fill_none(dijet.msoftdrop, np.nan))
                         _data_floor_g = _data_mg > 2.0

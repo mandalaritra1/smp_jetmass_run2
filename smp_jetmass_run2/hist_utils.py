@@ -19,6 +19,17 @@ def register_hist(hdict, name, axes, label="Counts"):
     if name not in hdict:
         hdict[name] = Hist(*axes, storage="weight", label=label)
 
+def jk_group_axis(n_groups):
+    """Fixed axis of the one-pass event-group jackknife: groups 0..n-1, no flow."""
+    return hist.axis.Integer(0, int(n_groups), name="jk", label="Jackknife event group",
+                             underflow=False, overflow=False)
+
+
+def noflow_axis(ax):
+    """Same edges, name and label as `ax`, without under/overflow bins."""
+    return hist.axis.Variable(ax.edges, name=ax.name, label=ax.label, flow=False)
+
+
 def group(h: hist.Hist, oldname: str, newname: str, grouping: dict[str, list[str]]):
     hnew = hist.Hist(
         hist.axis.StrCategory(grouping, name=newname),

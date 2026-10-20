@@ -1,0 +1,23 @@
+{
+  "channel": "trijet",
+  "dataset": "mg_pythia8",
+  "era": "2016",
+  "mode": "minimal_rho",
+  "systematic_profile": "no_syst",
+  "executor_mode": "dask-casa",
+  "casa": true,
+  "test": false,
+  "useDefault": false,
+  "chunksize": 50000,
+  "chunksize_test": 50000,
+  "group_mode": "all_in_one",
+  "redirector": "casa",
+  "prependstr": "root://xcache/",
+  "worker_memory": "6 GiB",
+  "n_workers": 400,
+  "worker_merge": 4,
+  "treereduce": true,
+  "jk_groups": 100,
+  "exclude_datasets": ["QCD_HT100to200"],
+  "_comment": "Event-group jackknife input for the trijet rho unfolding statistics: a separate nominal-only minimal_rho run on the pair_split fiducial (running conditions as trijet_mg_pythia8_2016_minimal_rho_pairsplit_allsyst.json, never run together with all_syst; QCD_HT100to200 excluded, as in the nominal unfold inputs: it adds only reco-level fakes with huge weights). jk_groups=100 fills the six rho unfolding hists once more into <name>_jkgroups copies, each event in one of 100 groups (splitmix64 hash of run, lumi, event); the unfolding forms the delete-one replicas as total - group. The processor forces nominal weights and jets whenever jk_groups is set. Output minimal_rho_trijet_mg_pythia8_jkg100_2016.pkl; copy it to the unfold inputs under inputs/trijet/rho/<tag>/jackknife/mc/."
+}
